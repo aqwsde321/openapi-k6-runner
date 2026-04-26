@@ -349,7 +349,7 @@ MVP 구현 범위에서는 제외하지만, 제품 요구사항으로는 필수 
 
 ### 설정 방향
 
-단일 모듈 기본값:
+후속 단일 모듈 기본값:
 
 ```dotenv
 BASE_URL=https://api.example.com

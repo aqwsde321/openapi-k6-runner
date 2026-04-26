@@ -301,15 +301,13 @@ export interface ApiRegistry {
 
 ```dotenv
 BASE_URL=https://api.example.com
-OPENAPI_PATH=/v3/api-docs
 ```
 
 - k6 스크립트 생성 시 API 호출 URL의 기준 주소로 사용한다.
-- `OPENAPI_PATH`는 단일 모듈 기본 OpenAPI 문서 경로로 사용한다.
 - CLI 옵션으로 base URL을 직접 넘기는 방식은 MVP에서 제외한다.
 - OpenAPI 입력은 MVP에서 `--openapi`로 명시하는 것을 기본으로 한다.
 - OpenAPI `servers[0].url`은 `.env`의 `BASE_URL`이 없을 때만 fallback으로 사용한다.
-- `/v3/api-docs`는 기본 예시일 뿐이며 고정값으로 가정하지 않는다.
+- `OPENAPI_PATH`는 MVP CLI가 읽지 않으며, 후속 멀티모듈 설정에서 도입한다.
 
 ## 13. k6 출력 예시
 
@@ -415,7 +413,7 @@ AST와 DSL을 기준으로 n8n 스타일 workflow editor를 확장한다.
 
 멀티모듈 OpenAPI 지원은 MVP 이후 필수 확장으로 둔다. MVP는 단일 OpenAPI spec을 입력으로 받지만, 후속 단계에서는 module 단위로 OpenAPI registry를 분리해야 한다.
 
-단일 모듈 기본 설정:
+후속 단일 모듈 기본 설정 예시:
 
 ```dotenv
 BASE_URL=https://api.example.com
