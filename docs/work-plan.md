@@ -24,7 +24,7 @@
 | P-05 | k6 Generator | AST -> k6 script | 완료 |
 | P-06 | OpenAPI Snapshot/Catalog | snapshot 저장 및 endpoint catalog 생성 | 완료 |
 | P-07 | Fixture/Test | 대상 프로젝트형 fixture | 완료 |
-| P-08 | README/사용법 | 최소 실행 가이드 | 대기 |
+| P-08 | README/사용법 | 최소 실행 가이드 | 완료 |
 | P-09 | 멀티모듈 OpenAPI 설정 | module별 registry 선택 | 필수 후속 |
 | P-10 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
 
