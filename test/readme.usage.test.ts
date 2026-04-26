@@ -10,6 +10,7 @@ describe('README usage guide', () => {
     const readme = await readFile(path.join(repoRoot, 'README.md'), 'utf8');
 
     expect(readme).toContain('## 설치');
+    expect(readme).toContain('alias openapi-k6=\'node "/path/to/openapi-k6-runner/dist/cli/index.js"\'');
     expect(readme).toContain('## 빠른 시작');
     expect(readme).toContain('## 사용 위치');
     expect(readme).toContain('## Config');
