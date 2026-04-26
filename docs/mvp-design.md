@@ -465,6 +465,8 @@ src/
 - retry
 - validation
 - JavaScript expression
+- OpenAPI URL sync 자동화
+- endpoint catalog 생성
 
 ## 17. 확장 계획
 

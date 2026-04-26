@@ -37,7 +37,7 @@ load-tests/
 | F-12 | UI adapter 설계 | P1 | 문서만 |
 | F-13 | k6 실행 자동화 | P2 | X |
 | F-14 | 멀티모듈 OpenAPI 설정 | P1 | 필수 후속 |
-| F-15 | OpenAPI snapshot / catalog | P0 | O |
+| F-15 | OpenAPI snapshot / catalog | P0 | 필수 다음 단계 |
 
 ## 3. F-01 프로젝트/CLI 골격
 
@@ -405,6 +405,10 @@ steps:
 - 기존 단일 모듈 scenario는 수정 없이 동작한다.
 
 ## 17. F-15 OpenAPI snapshot / catalog
+
+### 상태
+
+현재 MVP compiler의 필수 입력은 snapshot OpenAPI 파일과 Scenario DSL이다. F-15는 그 snapshot과 `catalog.json`을 대상 프로젝트에 만드는 필수 다음 단계이며, 아직 완료된 MVP 기능으로 간주하지 않는다.
 
 ### 책임
 
