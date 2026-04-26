@@ -153,6 +153,23 @@ describe('scenario parser', () => {
     );
   });
 
+  it('omits blank optional api fields before resolver sees them', () => {
+    const scenario = parseScenarioSource(
+      [
+        'name: blank-fields',
+        'steps:',
+        '  - id: get-users',
+        '    api:',
+        '      operationId: "   "',
+        '      method: " GET "',
+        '      path: " /users "',
+        '',
+      ].join('\n'),
+    );
+
+    expect(scenario.steps[0]?.api).toEqual({ method: 'GET', path: '/users' });
+  });
+
   it('fails when api is missing from a step', () => {
     expect(() =>
       parseScenarioSource(

@@ -86,12 +86,12 @@ function parseStep(value: unknown, stepPath: string): Step {
 
 function parseApiReference(value: unknown, path: string): ApiReference {
   const api = expectRecord(value, `${path}: api must be an object`);
-  const operationId = optionalString(api.operationId, `${path}.operationId must be a string`);
-  const method = optionalString(api.method, `${path}.method must be a string`);
-  const endpointPath = optionalString(api.path, `${path}.path must be a string`);
-  const hasOperationId = operationId !== undefined && operationId.trim() !== '';
-  const hasMethod = method !== undefined && method.trim() !== '';
-  const hasPath = endpointPath !== undefined && endpointPath.trim() !== '';
+  const operationId = optionalNonEmptyString(api.operationId, `${path}.operationId must be a string`);
+  const method = optionalNonEmptyString(api.method, `${path}.method must be a string`);
+  const endpointPath = optionalNonEmptyString(api.path, `${path}.path must be a string`);
+  const hasOperationId = operationId !== undefined;
+  const hasMethod = method !== undefined;
+  const hasPath = endpointPath !== undefined;
 
   if (!hasOperationId && !(hasMethod && hasPath)) {
     throw new ScenarioParseError(
@@ -173,4 +173,15 @@ function optionalString(value: unknown, message: string): string | undefined {
   }
 
   return expectString(value, message);
+}
+
+function optionalNonEmptyString(value: unknown, message: string): string | undefined {
+  const parsed = optionalString(value, message);
+
+  if (parsed === undefined) {
+    return undefined;
+  }
+
+  const trimmed = parsed.trim();
+  return trimmed ? trimmed : undefined;
 }
