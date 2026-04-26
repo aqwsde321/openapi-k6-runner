@@ -8,9 +8,6 @@ const HTTP_METHOD_ORDER = [
   'put',
   'patch',
   'delete',
-  'options',
-  'head',
-  'trace',
 ] as const;
 
 const HTTP_METHODS = new Set<string>(HTTP_METHOD_ORDER);

@@ -170,6 +170,41 @@ describe('OpenAPI registry', () => {
     expect(operation).toMatchObject({ method: 'GET', path: '/health' });
   });
 
+  it('does not index HTTP methods outside the MVP generator scope', () => {
+    const registry = buildApiRegistry({
+      openapi: '3.0.3',
+      info: { title: 'Fixture API', version: '1.0.0' },
+      paths: {
+        '/health': {
+          head: {
+            operationId: 'headHealth',
+            responses: { 200: { description: 'OK' } },
+          },
+          options: {
+            operationId: 'optionsHealth',
+            responses: { 200: { description: 'OK' } },
+          },
+          trace: {
+            operationId: 'traceHealth',
+            responses: { 200: { description: 'OK' } },
+          },
+        },
+      },
+    });
+
+    expect(registry.byOperationId.has('headHealth')).toBe(false);
+    expect(registry.byOperationId.has('optionsHealth')).toBe(false);
+    expect(registry.byOperationId.has('traceHealth')).toBe(false);
+    expect(registry.byMethodPath.has('HEAD /health')).toBe(false);
+    expect(registry.byMethodPath.has('OPTIONS /health')).toBe(false);
+    expect(registry.byMethodPath.has('TRACE /health')).toBe(false);
+    expect(() =>
+      resolveApiOperation(registry, { operationId: 'headHealth' }, 'head-health'),
+    ).toThrowError(
+      new OpenApiResolveError('step "head-health": operationId "headHealth" was not found'),
+    );
+  });
+
   it('fails when an operationId is missing from the registry', () => {
     const registry = buildApiRegistry({
       openapi: '3.0.3',
