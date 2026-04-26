@@ -26,7 +26,8 @@
 | P-07 | Fixture/Test | 대상 프로젝트형 fixture | 완료 |
 | P-08 | README/사용법 | 최소 실행 가이드 | 완료 |
 | P-09 | 멀티모듈 OpenAPI 설정 | module별 registry 선택 | 완료 |
-| P-10 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
+| P-10 | Init Scaffold | 대상 프로젝트 load-tests 초기화 | 완료 |
+| P-11 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
 
 ## 3. P-00 문서 확정
 
@@ -293,7 +294,33 @@ CLI/compiler MVP가 동작하고 README 사용법이 정리된 뒤 진행한다.
 - module별 duplicate operationId 격리
 - 기존 단일 모듈 scenario 호환
 
-## 13. P-10 UI Adapter 설계
+## 13. P-10 Init Scaffold
+
+### 기능 기준
+
+- 대상 백엔드 프로젝트에서 `load-tests` 구조를 빠르게 만들 수 있는 CLI 보조 기능
+
+### 작업
+
+- `init` CLI 명령 추가
+- `load-tests/config.yaml` 생성
+- `load-tests/scenarios/smoke.yaml` 생성
+- `load-tests/openapi`, `load-tests/generated` 디렉터리 생성
+- 기존 파일 overwrite 방지와 `--force` 지원
+
+### 완료 기준
+
+- 처음 사용하는 프로젝트에서 한 명령으로 기본 구조를 만들 수 있다.
+- 생성된 config로 바로 `sync`를 실행할 수 있다.
+- 생성된 smoke scenario를 수정하거나 그대로 `generate` 입력으로 사용할 수 있다.
+
+### 테스트
+
+- scaffold 생성
+- 기존 파일 overwrite 방지
+- `--force` overwrite
+
+## 14. P-11 UI Adapter 설계
 
 ### 시점
 
@@ -311,7 +338,7 @@ CLI/compiler MVP가 동작한 뒤 진행한다.
 - UI 저장 flow를 Scenario DSL로 export할 수 있는 변환 규칙이 문서화된다.
 - 구현은 별도 단계에서 진행한다.
 
-## 14. 우선 구현 순서
+## 15. 우선 구현 순서
 
 1. P-01 CLI 골격
 2. P-02 Scenario Parser
@@ -322,12 +349,13 @@ CLI/compiler MVP가 동작한 뒤 진행한다.
 7. P-07 Fixture/Test
 8. P-08 README/사용법
 9. P-09 멀티모듈 OpenAPI 설정
+10. P-10 Init Scaffold
 
-## 15. 보류 결정
+## 16. 보류 결정
 
 | 항목 | 현재 결정 | 재검토 시점 |
 | --- | --- | --- |
-| UI 통합 | MVP 제외 | P-10 |
+| UI 통합 | MVP 제외 | P-11 |
 | Supabase 저장소 | 제외 | UI 구현 시 |
 | Swagger URL 자동 탐색 | 제외 | 멀티모듈 module 등록 시 |
 | Auth scheme 자동 적용 | 제외 | UI header 제안 시 |

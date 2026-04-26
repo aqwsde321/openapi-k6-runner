@@ -17,6 +17,7 @@ import {
 import { syncOpenApiSnapshot } from '../openapi/openapi.catalog.js';
 import { parseOpenApiFile } from '../openapi/openapi.parser.js';
 import { parseScenarioFile } from '../parser/scenario.parser.js';
+import { initLoadTests } from '../scaffold/load-test.init.js';
 
 type WritableLike = {
   write(chunk: string): unknown;
@@ -44,6 +45,15 @@ export interface SyncOptions {
   module?: string;
 }
 
+export interface InitOptions {
+  dir?: string;
+  module?: string;
+  baseUrl: string;
+  openapi: string;
+  smokePath?: string;
+  force?: boolean;
+}
+
 export interface GenerateResult {
   outputPath: string;
   scenarioPath: string;
@@ -58,6 +68,13 @@ export interface SyncResult {
   openapiPath: string;
   operationCount: number;
   moduleName?: string;
+}
+
+export interface InitResult {
+  directoryPath: string;
+  configPath: string;
+  scenarioPath: string;
+  readmePath: string;
 }
 
 function resolveCwd(context: CliContext): string {
@@ -249,6 +266,23 @@ export async function runSyncCommand(
   };
 }
 
+export async function runInitCommand(
+  options: InitOptions,
+  context: CliContext = {},
+): Promise<InitResult> {
+  const cwd = resolveCwd(context);
+
+  return initLoadTests({
+    cwd,
+    directory: options.dir,
+    module: options.module,
+    baseUrl: options.baseUrl,
+    openapi: options.openapi,
+    smokePath: options.smokePath,
+    force: options.force,
+  });
+}
+
 function writeLine(stream: WritableLike, message: string): void {
   stream.write(`${message}\n`);
 }
@@ -266,6 +300,22 @@ export function createProgram(context: CliContext = {}): Command {
     .configureOutput({
       writeOut: (value) => stdout.write(value),
       writeErr: (value) => stderr.write(value),
+    });
+
+  program
+    .command('init')
+    .description('Create a load-tests scaffold in the target project.')
+    .option('--dir <path>', 'Load test directory path', 'load-tests')
+    .option('-m, --module <name>', 'Initial module name', 'default')
+    .requiredOption('--base-url <url>', 'API base URL for generated k6 scripts')
+    .requiredOption('--openapi <path-or-url>', 'OpenAPI spec file path or URL')
+    .option('--smoke-path <path>', 'Smoke scenario GET endpoint path', '/health')
+    .option('--force', 'Overwrite existing scaffold files')
+    .action(async (options: InitOptions) => {
+      const result = await runInitCommand(options, context);
+      writeLine(stdout, `Initialized ${result.directoryPath}`);
+      writeLine(stdout, `Config ${result.configPath}`);
+      writeLine(stdout, `Scenario ${result.scenarioPath}`);
     });
 
   program

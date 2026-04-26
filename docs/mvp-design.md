@@ -430,6 +430,9 @@ src/
 ├── parser/
 │   └── scenario.parser.ts
 │
+├── scaffold/
+│   └── load-test.init.ts
+│
 ├── openapi/
 │   ├── openapi.catalog.ts
 │   ├── openapi.parser.ts
@@ -460,6 +463,7 @@ src/
 - OpenAPI operation resolve
 - OpenAPI snapshot/catalog 생성
 - module별 OpenAPI snapshot 선택
+- 대상 프로젝트 `load-tests` scaffold 생성
 
 ### 제외
 

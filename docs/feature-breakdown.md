@@ -39,6 +39,7 @@ load-tests/
 | F-13 | k6 실행 자동화 | P2 | X |
 | F-14 | 멀티모듈 OpenAPI 설정 | P1 | O |
 | F-15 | OpenAPI snapshot / catalog | P0 | O |
+| F-16 | 대상 프로젝트 init scaffold | P0 | O |
 
 ## 3. F-01 프로젝트/CLI 골격
 
@@ -475,3 +476,29 @@ interface ApiCatalogOperation {
 - snapshot 파일에서 catalog를 만들 수 있다.
 - catalog는 method/path, operationId, tags 기준으로 사람이 endpoint를 찾을 수 있다.
 - generate는 원격 URL이 아니라 snapshot 파일을 입력으로 사용할 수 있다.
+
+## 18. F-16 대상 프로젝트 init scaffold
+
+### 책임
+
+- 테스트 대상 백엔드 프로젝트에 `load-tests` 기본 구조를 생성한다.
+- `config.yaml`, smoke scenario, 사용 안내 README를 생성한다.
+- 기존 파일은 기본적으로 덮어쓰지 않는다.
+
+### 입력
+
+```text
+openapi-k6 init --module pharma --base-url https://dev-api.example.com --openapi https://dev-api.example.com/v3/api-docs --smoke-path /health
+```
+
+### 출력
+
+- `load-tests/config.yaml`
+- `load-tests/scenarios/smoke.yaml`
+- `load-tests/README.md`
+
+### 완료 기준
+
+- 생성된 config로 바로 `sync`를 실행할 수 있다.
+- 생성된 smoke scenario로 바로 `generate`를 실행할 수 있다.
+- `--force` 없이는 기존 파일을 덮어쓰지 않는다.

@@ -86,6 +86,83 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('"health status == 200": (res) => res.status === 200,');
   });
 
+  it('initializes a load-tests scaffold in the target project', async () => {
+    await runCli(
+      [
+        'init',
+        '--module',
+        'pharma',
+        '--base-url',
+        'https://dev-api.pharmaresearch.com',
+        '--openapi',
+        'https://dev-api.pharmaresearch.com/v3/api-docs',
+        '--smoke-path',
+        '/__dev/error-codes',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+    const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
+    const readme = await readFile(path.join(workspace, 'load-tests/README.md'), 'utf8');
+
+    expect(config).toBe([
+      'baseUrl: https://dev-api.pharmaresearch.com',
+      'defaultModule: pharma',
+      '',
+      'modules:',
+      '  pharma:',
+      '    openapi: https://dev-api.pharmaresearch.com/v3/api-docs',
+      '    snapshot: openapi/pharma.openapi.json',
+      '    catalog: openapi/pharma.catalog.json',
+      '',
+    ].join('\n'));
+    expect(scenario).toContain('path: /__dev/error-codes');
+    expect(readme).toContain('openapi-k6 sync --config load-tests/config.yaml --module pharma');
+  });
+
+  it('does not overwrite scaffold files unless --force is provided', async () => {
+    await runCli(
+      [
+        'init',
+        '--base-url',
+        'https://api.test.local',
+        '--openapi',
+        'https://api.test.local/v3/api-docs',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    await expect(
+      runCli(
+        [
+          'init',
+          '--base-url',
+          'https://changed.test.local',
+          '--openapi',
+          'https://changed.test.local/v3/api-docs',
+        ],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('already exists. Use --force to overwrite.');
+
+    await runCli(
+      [
+        'init',
+        '--base-url',
+        'https://changed.test.local',
+        '--openapi',
+        'https://changed.test.local/v3/api-docs',
+        '--force',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(config).toContain('baseUrl: https://changed.test.local');
+  });
+
   it('fails when --scenario is missing', async () => {
     await expect(
       runCli(
