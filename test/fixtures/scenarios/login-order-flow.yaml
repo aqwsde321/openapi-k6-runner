@@ -1,0 +1,41 @@
+name: login-order-flow
+
+steps:
+  - id: login
+    api:
+      operationId: loginUser
+    request:
+      body:
+        username: tester
+        password: secret
+    extract:
+      token:
+        from: $.token
+    condition: status == 200
+
+  - id: create-order
+    api:
+      operationId: createOrder
+    request:
+      headers:
+        Authorization: "Bearer {{token}}"
+      body:
+        sku: SKU-001
+        quantity: 1
+    extract:
+      orderId:
+        from: $.data.id
+    condition: status == 201
+
+  - id: get-order
+    api:
+      method: GET
+      path: /orders/{orderId}
+    request:
+      headers:
+        Authorization: "Bearer {{token}}"
+      pathParams:
+        orderId: "{{orderId}}"
+      query:
+        includeItems: true
+    condition: status < 300

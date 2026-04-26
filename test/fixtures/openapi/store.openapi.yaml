@@ -1,0 +1,73 @@
+openapi: 3.0.3
+info:
+  title: Store Fixture API
+  version: 1.0.0
+servers:
+  - url: https://openapi.fixture.local
+paths:
+  /auth/login:
+    post:
+      operationId: loginUser
+      tags:
+        - auth
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Logged in
+  /orders:
+    post:
+      operationId: createOrder
+      tags:
+        - orders
+      summary: Create order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sku
+                - quantity
+              properties:
+                sku:
+                  type: string
+                quantity:
+                  type: integer
+      responses:
+        "201":
+          description: Created
+  /orders/{orderId}:
+    parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getOrder
+      tags:
+        - orders
+      summary: Get order
+      parameters:
+        - name: includeItems
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: OK
