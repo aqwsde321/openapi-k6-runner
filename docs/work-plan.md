@@ -219,6 +219,7 @@
 
 - 설치 방법
 - `.env` 예시
+- 테스트 대상 프로젝트에 scenario/OpenAPI/`.env`를 두는 운영 구조
 - scenario 예시
 - OpenAPI 예시
 - generate 명령 예시

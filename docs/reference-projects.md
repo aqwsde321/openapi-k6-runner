@@ -161,7 +161,7 @@ MVP DSL은 `steps[]` 순서를 그대로 실행 순서로 사용한다. UI adapt
   - `{{API_HOST}}` 변수 치환
   - UI 환경 관리
 
-MVP CLI에서는 `.env BASE_URL`만 읽고 OpenAPI 입력은 `--openapi`로 명시한다. 후속 멀티모듈 확장에서는 단일 모듈 기본 경로 `OPENAPI_PATH`와 module별 `OPENAPI_<MODULE>_PATH` 규칙을 사용한다.
+MVP CLI에서는 실행한 현재 디렉터리의 `.env BASE_URL`만 읽고 OpenAPI 입력은 `--openapi`로 명시한다. 실제 시나리오 자산은 테스트 대상 백엔드 프로젝트에 두며, generator 저장소의 `.env`는 개발/검증용이다. 후속 멀티모듈 확장에서는 단일 모듈 기본 경로 `OPENAPI_PATH`와 module별 `OPENAPI_<MODULE>_PATH` 규칙을 사용한다.
 
 ### 그대로 가져오지 않을 것
 

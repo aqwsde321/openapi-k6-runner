@@ -6,6 +6,8 @@ MVP는 `Scenario DSL + OpenAPI Spec + .env`를 입력으로 받아 k6 JavaScript
 
 UI, Supabase 저장소, 브라우저 실행기는 MVP 구현 범위에서 제외한다. 다만 UI 확장을 고려해 내부 모델은 `Scenario`, `ApiRegistry`, `AST`로 분리한다.
 
+실제 운영에서는 이 입력 파일을 테스트 대상 백엔드 프로젝트에 둔다. generator 저장소의 `.env`는 도구 개발/검증용이며, 배포된 CLI는 실행한 현재 디렉터리의 `.env`와 상대 경로 입력을 사용한다.
+
 ## 2. 기능 목록
 
 | ID | 기능 | 우선순위 | MVP 포함 |
@@ -55,6 +57,7 @@ openapi-k6 generate -s scenario.yaml -o openapi.yaml -w output.js
 ### 책임
 
 - `.env`에서 `BASE_URL`을 읽는다.
+- `.env`는 CLI 실행 위치의 파일을 기준으로 한다.
 - `BASE_URL`이 없으면 OpenAPI `servers[0].url`을 fallback으로 사용한다.
 - generated k6 script에서는 `__ENV.BASE_URL`을 우선 사용한다.
 

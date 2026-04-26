@@ -287,6 +287,8 @@ export interface ApiRegistry {
 - OpenAPI Spec
 - `.env` 설정
 
+실제 사용 시 이 입력 파일들은 generator 저장소가 아니라 테스트 대상 백엔드 프로젝트에 두는 것을 기본으로 한다. CLI는 실행한 현재 디렉터리의 `.env`를 읽고, `--scenario`, `--openapi`, `--write` 경로도 현재 디렉터리 기준으로 해석한다. generator 저장소의 `.env`는 개발/검증용 로컬 설정이다.
+
 ### 처리 단계
 
 1. Parse: YAML 또는 JSON을 JavaScript object로 변환한다.
@@ -304,6 +306,7 @@ BASE_URL=https://api.example.com
 ```
 
 - k6 스크립트 생성 시 API 호출 URL의 기준 주소로 사용한다.
+- `.env`는 CLI를 실행하는 대상 프로젝트 루트에 둔다.
 - CLI 옵션으로 base URL을 직접 넘기는 방식은 MVP에서 제외한다.
 - OpenAPI 입력은 MVP에서 `--openapi`로 명시하는 것을 기본으로 한다.
 - OpenAPI `servers[0].url`은 `.env`의 `BASE_URL`이 없을 때만 fallback으로 사용한다.
