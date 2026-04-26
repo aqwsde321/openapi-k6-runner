@@ -1,5 +1,7 @@
 # 기능 세분화
 
+이 문서는 구현 기능의 계약을 정리한다. 실제 실행 방법은 루트 `README.md`를 기준으로 하고, 구현 순서 이력은 `docs/work-plan.md`에만 남긴다.
+
 ## 1. 기능 경계
 
 MVP는 `Scenario DSL + OpenAPI Spec + load-tests/config.yaml`을 입력으로 받아 k6 JavaScript 파일을 생성하는 CLI/compiler다.

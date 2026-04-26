@@ -287,8 +287,8 @@ pnpm run build
 
 ## 문서
 
-- [문서 색인](docs/README.md)
-- [MVP 설계](docs/mvp-design.md)
-- [기능 세분화](docs/feature-breakdown.md)
-- [참조 프로젝트 분석](docs/reference-projects.md)
-- [문서 기반 작업 계획](docs/work-plan.md)
+- [문서 색인](docs/README.md): 문서별 역할과 유지 기준
+- [MVP 설계](docs/mvp-design.md): 현재 아키텍처와 확정된 기술 결정
+- [기능 세분화](docs/feature-breakdown.md): 구현된 기능 계약과 후속 기능 경계
+- [참조 프로젝트 분석](docs/reference-projects.md): 과거 참조 프로젝트 분석 기록
+- [완료된 작업 계획](docs/work-plan.md): P-00부터 P-10까지의 구현 이력
