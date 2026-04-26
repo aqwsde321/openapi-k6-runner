@@ -121,6 +121,13 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('openapi-k6 sync');
     expect(readme).toContain('openapi-k6 generate \\');
     expect(readme).toContain('  -s smoke');
+    expect(readme).toContain('## 1. config.yaml 채우기');
+    expect(readme).toContain('## 2. smoke scenario 확인');
+    expect(readme).toContain('## 3. OpenAPI snapshot 생성');
+    expect(readme).toContain('## 4. k6 script 생성');
+    expect(readme).toContain('## 5. k6 실행');
+    expect(readme).toContain('catalog.json`에서 `operationId`, `method`, `path`, `tags`, `parameters`, `hasRequestBody`');
+    expect(readme).toContain('## 자주 쓰는 수정 위치');
   });
 
   it('initializes a placeholder scaffold with no required options', async () => {
@@ -201,6 +208,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('--scenario perf-tests/scenarios/smoke.yaml');
     expect(readme).toContain('--write perf-tests/generated/smoke.k6.js');
     expect(readme).toContain('k6 run perf-tests/generated/smoke.k6.js');
+    expect(readme).toContain('BASE_URL=https://api.example.com k6 run perf-tests/generated/smoke.k6.js');
     expect(readme).not.toContain('load-tests/');
   });
 
