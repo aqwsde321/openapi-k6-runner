@@ -29,7 +29,8 @@ export async function initLoadTests(
   options: InitLoadTestsOptions,
 ): Promise<InitLoadTestsResult> {
   const moduleName = normalizeModuleName(options.module ?? 'default');
-  const directoryPath = path.resolve(options.cwd, options.directory ?? 'load-tests');
+  const directory = normalizeDirectory(options.directory ?? 'load-tests');
+  const directoryPath = path.resolve(options.cwd, directory);
   const configPath = path.join(directoryPath, 'config.yaml');
   const scenarioPath = path.join(directoryPath, 'scenarios/smoke.yaml');
   const readmePath = path.join(directoryPath, 'README.md');
@@ -41,7 +42,7 @@ export async function initLoadTests(
 
   await writeTextFile(configPath, renderConfig(moduleName, options.baseUrl, options.openapi), options.force);
   await writeTextFile(scenarioPath, renderSmokeScenario(smokePath), options.force);
-  await writeTextFile(readmePath, renderReadme(moduleName), options.force);
+  await writeTextFile(readmePath, renderReadme(moduleName, directory), options.force);
 
   return {
     directoryPath,
@@ -49,6 +50,16 @@ export async function initLoadTests(
     scenarioPath,
     readmePath,
   };
+}
+
+function normalizeDirectory(value: string): string {
+  const directory = value.trim();
+
+  if (!directory) {
+    throw new InitLoadTestsError('dir must not be empty');
+  }
+
+  return directory;
 }
 
 function normalizeModuleName(value: string): string {
@@ -122,18 +133,22 @@ function renderSmokeScenario(smokePath: string): string {
   ].join('\n');
 }
 
-function renderReadme(moduleName: string): string {
+function renderReadme(moduleName: string, directory: string): string {
+  const configPath = `${directory}/config.yaml`;
+  const scenarioPath = `${directory}/scenarios/smoke.yaml`;
+  const outputPath = `${directory}/generated/smoke.k6.js`;
+
   return [
-    '# load-tests',
+    `# ${directory}`,
     '',
     '```bash',
-    `openapi-k6 sync --config load-tests/config.yaml --module ${moduleName}`,
+    `openapi-k6 sync --config ${configPath} --module ${moduleName}`,
     'openapi-k6 generate \\',
-    '  --config load-tests/config.yaml \\',
+    `  --config ${configPath} \\`,
     `  --module ${moduleName} \\`,
-    '  --scenario load-tests/scenarios/smoke.yaml \\',
-    '  --write load-tests/generated/smoke.k6.js',
-    'k6 run load-tests/generated/smoke.k6.js',
+    `  --scenario ${scenarioPath} \\`,
+    `  --write ${outputPath}`,
+    `k6 run ${outputPath}`,
     '```',
     '',
   ].join('\n');

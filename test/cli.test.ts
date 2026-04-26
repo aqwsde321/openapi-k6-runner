@@ -121,6 +121,33 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('openapi-k6 sync --config load-tests/config.yaml --module pharma');
   });
 
+  it('uses the configured scaffold directory in generated README commands', async () => {
+    await runCli(
+      [
+        'init',
+        '--dir',
+        'perf-tests',
+        '--module',
+        'pharma',
+        '--base-url',
+        'https://dev-api.pharmaresearch.com',
+        '--openapi',
+        'https://dev-api.pharmaresearch.com/v3/api-docs',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const readme = await readFile(path.join(workspace, 'perf-tests/README.md'), 'utf8');
+
+    expect(readme).toContain('# perf-tests');
+    expect(readme).toContain('openapi-k6 sync --config perf-tests/config.yaml --module pharma');
+    expect(readme).toContain('--config perf-tests/config.yaml');
+    expect(readme).toContain('--scenario perf-tests/scenarios/smoke.yaml');
+    expect(readme).toContain('--write perf-tests/generated/smoke.k6.js');
+    expect(readme).toContain('k6 run perf-tests/generated/smoke.k6.js');
+    expect(readme).not.toContain('load-tests/');
+  });
+
   it('does not overwrite scaffold files unless --force is provided', async () => {
     await runCli(
       [

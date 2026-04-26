@@ -19,7 +19,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('## k6 Script 생성');
     expect(readme).toContain('## k6 실행');
     expect(readme).toContain('baseUrl: https://dev-api.example.com');
-    expect(readme).toContain('defaultModule: bos');
+    expect(readme).toContain('defaultModule: pharma');
     expect(readme).toContain('modules:');
     expect(readme).toContain('openapi-k6 init \\');
     expect(readme).toContain('--smoke-path /__dev/error-codes');

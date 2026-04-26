@@ -49,15 +49,15 @@ backend-project/
 └── load-tests/
     ├── config.yaml
     ├── openapi/
-    │   ├── bos.openapi.json
-    │   └── bos.catalog.json
+    │   ├── pharma.openapi.json
+    │   └── pharma.catalog.json
     ├── scenarios/
     │   └── order-flow.yaml
     └── generated/
         └── order-flow.k6.js
 ```
 
-config 안의 상대 경로는 `config.yaml`이 있는 디렉터리 기준으로 해석합니다. 예를 들어 `load-tests/config.yaml`에서 `snapshot: openapi/bos.openapi.json`은 `load-tests/openapi/bos.openapi.json`을 의미합니다.
+config 안의 상대 경로는 `config.yaml`이 있는 디렉터리 기준으로 해석합니다. 예를 들어 `load-tests/config.yaml`에서 `snapshot: openapi/pharma.openapi.json`은 `load-tests/openapi/pharma.openapi.json`을 의미합니다.
 
 ## Config
 
@@ -65,13 +65,13 @@ config 안의 상대 경로는 `config.yaml`이 있는 디렉터리 기준으로
 
 ```yaml
 baseUrl: https://dev-api.example.com
-defaultModule: bos
+defaultModule: pharma
 
 modules:
-  bos:
+  pharma:
     openapi: https://dev-api.example.com/v3/api-docs
-    snapshot: openapi/bos.openapi.json
-    catalog: openapi/bos.catalog.json
+    snapshot: openapi/pharma.openapi.json
+    catalog: openapi/pharma.catalog.json
 ```
 
 멀티모듈 프로젝트는 module을 추가합니다.
@@ -118,8 +118,8 @@ openapi-k6 sync \
 
 `sync`는 config의 module 설정을 읽어 다음 파일을 생성합니다.
 
-- `load-tests/openapi/bos.openapi.json`: `generate` 입력으로 사용할 OpenAPI snapshot
-- `load-tests/openapi/bos.catalog.json`: scenario 작성 참고용 endpoint 목록
+- `load-tests/openapi/pharma.openapi.json`: `generate` 입력으로 사용할 OpenAPI snapshot
+- `load-tests/openapi/pharma.catalog.json`: scenario 작성 참고용 endpoint 목록
 
 `catalog.json`은 사람이 `operationId`, `method`, `path`, `tags`, `parameters`, `hasRequestBody`를 확인하기 위한 보조 파일입니다. `generate`는 `catalog.json`이 아니라 snapshot OpenAPI 파일을 다시 파싱합니다.
 
