@@ -4,6 +4,7 @@
 
 ```text
 fixtures/
+├── config.yaml
 ├── openapi/
 │   └── store.openapi.yaml
 ├── scenarios/
@@ -12,8 +13,9 @@ fixtures/
     └── login-order-flow.k6.js
 ```
 
-- `openapi/`: `openapi-k6 sync --openapi` 입력으로 사용하는 OpenAPI 원본
+- `config.yaml`: `load-tests/config.yaml` 예시
+- `openapi/`: `openapi-k6 sync --config` 입력으로 사용하는 OpenAPI 원본
 - `scenarios/`: `openapi-k6 generate --scenario` 입력으로 사용하는 Scenario DSL
 - `expected/`: 생성 결과를 고정하는 snapshot 파일
 
-Fixture 기반 테스트는 임시 workspace에 `load-tests/openapi`, `load-tests/scenarios`, `load-tests/generated`를 만들고, 실제 CLI 흐름과 같은 상대 경로로 실행한다.
+Fixture 기반 테스트는 임시 workspace에 `load-tests/config.yaml`, `load-tests/openapi`, `load-tests/scenarios`, `load-tests/generated`를 만들고, 실제 CLI 흐름과 같은 상대 경로로 실행한다.

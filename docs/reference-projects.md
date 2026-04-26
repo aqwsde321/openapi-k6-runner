@@ -103,7 +103,7 @@ src/core/types.ts
   - `/api-docs`
   - `/swagger.json`
 
-이 기능은 CLI MVP에는 넣지 않는다. MVP 이후 필수 멀티모듈 OpenAPI 설정과 UI module 등록 기능을 만들 때 참고한다.
+Swagger URL 자동 탐색은 CLI MVP에는 넣지 않는다. UI module 등록 기능을 만들 때 참고한다.
 
 #### 인증 스킴 감지
 
@@ -163,7 +163,7 @@ MVP DSL은 `steps[]` 순서를 그대로 실행 순서로 사용한다. UI adapt
   - `{{API_HOST}}` 변수 치환
   - UI 환경 관리
 
-MVP CLI에서는 실행한 현재 디렉터리의 `.env BASE_URL`만 읽고 OpenAPI 입력은 `--openapi`로 명시한다. 실제 시나리오 자산은 테스트 대상 백엔드 프로젝트에 두며, generator 저장소의 `.env`는 개발/검증용이다. 후속 멀티모듈 확장에서는 단일 모듈 기본 경로 `OPENAPI_PATH`와 module별 `OPENAPI_<MODULE>_PATH` 규칙을 사용한다.
+P-09 이후 CLI에서는 `load-tests/config.yaml`의 `baseUrl`과 module별 OpenAPI 경로를 읽는다. 기존 `.env BASE_URL`과 `--openapi` 입력은 단일 파일 호환 fallback으로만 유지한다. 실제 시나리오 자산은 테스트 대상 백엔드 프로젝트의 `load-tests` 아래에 둔다.
 
 ### 그대로 가져오지 않을 것
 
@@ -243,25 +243,29 @@ MVP DSL은 `{{token}}` context template만 사용한다.
 
 `swagger-flow-tester`의 `{step1.token}` 문법은 UI adapter에서 `extract + {{token}}` 형태로 변환한다.
 
-## 7. 후속 멀티모듈 OpenAPI 방향
+## 7. 멀티모듈 OpenAPI 방향
 
-멀티모듈 OpenAPI는 MVP 이후 필수 확장이다. `swagger-flow-tester`의 `modules` 개념은 그대로 가져오지 않고, compiler에서 사용할 수 있는 module registry 설정으로 정규화한다.
+멀티모듈 OpenAPI는 P-09에서 config 기반 module registry 설정으로 구현한다. `swagger-flow-tester`의 `modules` 개념은 그대로 가져오지 않고, compiler에서 사용할 수 있는 설정으로 정규화한다.
 
-```text
-module-config
-  defaultModule: optional
-  modules:
-    bos:
-      baseUrl: BASE_URL 또는 BASE_URL_BOS
-      openapiPath: OPENAPI_BOS_PATH
-    mall:
-      baseUrl: BASE_URL 또는 BASE_URL_MALL
-      openapiPath: OPENAPI_MALL_PATH
+```yaml
+baseUrl: https://api.example.com
+defaultModule: bos
+
+modules:
+  bos:
+    openapi: https://api.example.com/bos/v3/api-docs
+    snapshot: openapi/bos.openapi.json
+    catalog: openapi/bos.catalog.json
+
+  mall:
+    openapi: https://api.example.com/mall/v3/api-docs
+    snapshot: openapi/mall.openapi.json
+    catalog: openapi/mall.catalog.json
 ```
 
 확장 규칙:
 
-- MVP의 단일 OpenAPI registry를 `default` module registry로 간주한다.
+- 기존 단일 OpenAPI registry 사용은 `defaultModule` 하나가 설정된 config와 동일하게 간주한다.
 - `--module` 옵션은 사용할 OpenAPI registry를 선택한다.
 - Scenario DSL v2에서 `api.module`을 허용하면 step별 module 참조가 가능하다.
 - module이 생략되면 default module을 사용해 기존 DSL과 호환한다.

@@ -35,17 +35,14 @@ describe('target project fixture pipeline', () => {
 
   it('runs sync and generate with the target project fixture layout', async () => {
     await copyScenarioFixture('login-order-flow.yaml');
-    await writeFile(path.join(workspace, '.env'), 'BASE_URL=https://api.fixture.local\n', 'utf8');
+    await copyOpenApiFixture('store.openapi.yaml');
+    await copyConfigFixture();
 
     await runCli(
       [
         'sync',
-        '--openapi',
-        path.join(fixturesRoot, 'openapi/store.openapi.yaml'),
-        '--write',
-        'load-tests/openapi/dev.openapi.json',
-        '--catalog',
-        'load-tests/openapi/catalog.json',
+        '--config',
+        'load-tests/config.yaml',
       ],
       { cwd: workspace, stdout: createSink(), stderr: createSink() },
     );
@@ -53,10 +50,10 @@ describe('target project fixture pipeline', () => {
     await runCli(
       [
         'generate',
+        '--config',
+        'load-tests/config.yaml',
         '--scenario',
         'load-tests/scenarios/login-order-flow.yaml',
-        '--openapi',
-        'load-tests/openapi/dev.openapi.json',
         '--write',
         'load-tests/generated/login-order-flow.k6.js',
       ],
@@ -140,6 +137,20 @@ describe('target project fixture pipeline', () => {
     await cp(
       path.join(fixturesRoot, 'scenarios', fileName),
       path.join(workspace, 'load-tests/scenarios', fileName),
+    );
+  }
+
+  async function copyOpenApiFixture(fileName: string): Promise<void> {
+    await cp(
+      path.join(fixturesRoot, 'openapi', fileName),
+      path.join(workspace, 'load-tests/openapi', fileName),
+    );
+  }
+
+  async function copyConfigFixture(): Promise<void> {
+    await cp(
+      path.join(fixturesRoot, 'config.yaml'),
+      path.join(workspace, 'load-tests/config.yaml'),
     );
   }
 });

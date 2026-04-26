@@ -22,35 +22,67 @@ openapi-k6 --help
 
 ## 사용 위치
 
-실제 시나리오, OpenAPI snapshot, `.env`는 테스트 대상 백엔드 프로젝트에 두는 것을 기본으로 합니다.
+실제 config, 시나리오, OpenAPI snapshot은 테스트 대상 백엔드 프로젝트의 `load-tests` 아래에 둡니다.
 
 ```text
 backend-project/
-├── .env
 └── load-tests/
+    ├── config.yaml
     ├── openapi/
-    │   ├── dev.openapi.json
-    │   └── catalog.json
+    │   ├── bos.openapi.json
+    │   └── bos.catalog.json
     ├── scenarios/
     │   └── order-flow.yaml
     └── generated/
         └── order-flow.k6.js
 ```
 
-이 저장소의 `.env`는 generator 개발/검증용 로컬 설정입니다. 배포된 CLI는 실행한 현재 디렉터리의 `.env`를 읽습니다.
+config 안의 상대 경로는 `config.yaml`이 있는 디렉터리 기준으로 해석합니다. 예를 들어 `load-tests/config.yaml`에서 `snapshot: openapi/bos.openapi.json`은 `load-tests/openapi/bos.openapi.json`을 의미합니다.
 
-## .env
+## Config
 
-`backend-project/.env`:
+`load-tests/config.yaml`:
 
-```dotenv
-BASE_URL=https://dev-api.example.com
+```yaml
+baseUrl: https://dev-api.example.com
+defaultModule: bos
+
+modules:
+  bos:
+    openapi: https://dev-api.example.com/v3/api-docs
+    snapshot: openapi/bos.openapi.json
+    catalog: openapi/bos.catalog.json
 ```
 
-- `generate` 실행 시 `.env`의 `BASE_URL`을 읽어 generated k6 script의 fallback URL로 넣습니다.
-- k6 실행 시에는 `__ENV.BASE_URL`이 우선입니다.
-- k6는 `.env`를 자동으로 읽지 않으므로 실행 시 URL을 바꾸려면 `BASE_URL=... k6 run ...`처럼 넘깁니다.
-- `.env`가 없으면 OpenAPI `servers[0].url`을 fallback으로 사용합니다.
+멀티모듈 프로젝트는 module을 추가합니다.
+
+```yaml
+baseUrl: https://dev-api.example.com
+defaultModule: bos
+
+modules:
+  bos:
+    openapi: https://dev-api.example.com/bos/v3/api-docs
+    snapshot: openapi/bos.openapi.json
+    catalog: openapi/bos.catalog.json
+
+  vendor:
+    baseUrl: https://vendor-api.example.com
+    openapi: https://dev-api.example.com/vendor/v3/api-docs
+    snapshot: openapi/vendor.openapi.json
+    catalog: openapi/vendor.catalog.json
+```
+
+- `baseUrl`: generated k6 script의 fallback API base URL
+- `defaultModule`: `--module`이 없을 때 사용할 module
+- `modules.<name>.openapi`: `sync`가 읽을 OpenAPI URL 또는 파일
+- `modules.<name>.snapshot`: `sync`가 저장하고 `generate`가 읽을 OpenAPI snapshot
+- `modules.<name>.catalog`: `sync`가 저장할 endpoint catalog
+- `modules.<name>.baseUrl`: 특정 module만 다른 API base URL을 쓸 때 사용
+
+k6 실행 시에는 `__ENV.BASE_URL`이 config의 `baseUrl`보다 우선입니다. 실행 시 URL을 바꾸려면 `BASE_URL=... k6 run ...`처럼 넘깁니다.
+
+기존 단일 파일 사용을 위해 `--openapi`와 루트 `.env`의 `BASE_URL` fallback도 유지하지만, 새 프로젝트는 `load-tests/config.yaml` 사용을 기본으로 합니다.
 
 ## OpenAPI Snapshot
 
@@ -58,15 +90,16 @@ BASE_URL=https://dev-api.example.com
 
 ```bash
 openapi-k6 sync \
-  --openapi https://dev-api.example.com/v3/api-docs \
-  --write load-tests/openapi/dev.openapi.json \
-  --catalog load-tests/openapi/catalog.json
+  --config load-tests/config.yaml \
+  --module bos
 ```
 
-`sync`는 원격 OpenAPI URL 또는 로컬 OpenAPI 파일을 읽어 다음 파일을 생성합니다.
+`--module`을 생략하면 `defaultModule`을 사용합니다.
 
-- `load-tests/openapi/dev.openapi.json`: `generate` 입력으로 사용할 OpenAPI snapshot
-- `load-tests/openapi/catalog.json`: scenario 작성 참고용 endpoint 목록
+`sync`는 config의 module 설정을 읽어 다음 파일을 생성합니다.
+
+- `load-tests/openapi/bos.openapi.json`: `generate` 입력으로 사용할 OpenAPI snapshot
+- `load-tests/openapi/bos.catalog.json`: scenario 작성 참고용 endpoint 목록
 
 `catalog.json`은 사람이 `operationId`, `method`, `path`, `tags`, `parameters`, `hasRequestBody`를 확인하기 위한 보조 파일입니다. `generate`는 `catalog.json`이 아니라 snapshot OpenAPI 파일을 다시 파싱합니다.
 
@@ -157,6 +190,7 @@ steps:
 지원 범위:
 
 - API 참조: `operationId` 또는 `method + path`
+- module 선택: CLI의 `--module`; Scenario DSL 내부 `api.module`은 아직 지원하지 않음
 - template: `{{variableName}}`
 - extract JSONPath: `$.token`, `$.data.id`, `$.items[0].id`
 - condition: `status == 200`, `status != 500`, `status >= 200`, `status < 300`
@@ -169,8 +203,9 @@ steps:
 
 ```bash
 openapi-k6 generate \
+  --config load-tests/config.yaml \
+  --module bos \
   --scenario load-tests/scenarios/order-flow.yaml \
-  --openapi load-tests/openapi/dev.openapi.json \
   --write load-tests/generated/order-flow.k6.js
 ```
 

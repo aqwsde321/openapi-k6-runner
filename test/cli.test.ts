@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
@@ -103,9 +103,7 @@ describe('openapi-k6 CLI', () => {
         ['generate', '--scenario', 'scenario.yaml', '--write', 'generated/script.js'],
         { cwd: workspace, stdout: createSink(), stderr: createSink() },
       ),
-    ).rejects.toMatchObject({
-      code: 'commander.missingMandatoryOptionValue',
-    });
+    ).rejects.toThrow('--openapi is required unless --config provides modules.<name>.snapshot');
   });
 
   it('fails when --write is missing', async () => {
@@ -195,4 +193,179 @@ describe('openapi-k6 CLI', () => {
       }),
     ]);
   });
+
+  it('generates with the default module from config', async () => {
+    await writeGenerateFixtures(workspace, 'https://openapi-fallback.test.local');
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/openapi/app.openapi.yaml'),
+      [
+        'openapi: 3.0.3',
+        'info:',
+        '  title: App API',
+        '  version: 1.0.0',
+        'servers:',
+        '  - url: https://openapi-fallback.test.local',
+        'paths:',
+        '  /app-health:',
+        '    get:',
+        '      operationId: getHealth',
+        '      responses:',
+        '        "200":',
+        '          description: OK',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await runCli(
+      [
+        'generate',
+        '--config',
+        'load-tests/config.yaml',
+        '--scenario',
+        'scenario.yaml',
+        '--write',
+        'generated/script.js',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const output = await readFile(path.join(workspace, 'generated/script.js'), 'utf8');
+
+    expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://config-base.test.local";');
+    expect(output).toContain('const url0 = joinUrl(BASE_URL, `/app-health`);');
+  });
+
+  it('selects an isolated module registry with --module', async () => {
+    await writeGenerateFixtures(workspace);
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await writeModuleOpenApi('bos.openapi.yaml', '/bos-health', 'https://bos-openapi.test.local');
+    await writeModuleOpenApi('vendor.openapi.yaml', '/vendor-health', 'https://vendor-openapi.test.local');
+    await writeConfig([
+      'defaultModule: bos',
+      'modules:',
+      '  bos:',
+      '    baseUrl: https://bos-api.test.local',
+      '    snapshot: openapi/bos.openapi.yaml',
+      '    catalog: openapi/bos.catalog.json',
+      '  vendor:',
+      '    baseUrl: https://vendor-api.test.local',
+      '    snapshot: openapi/vendor.openapi.yaml',
+      '    catalog: openapi/vendor.catalog.json',
+      '',
+    ]);
+
+    await runCli(
+      [
+        'generate',
+        '--config',
+        'load-tests/config.yaml',
+        '--module',
+        'vendor',
+        '--scenario',
+        'scenario.yaml',
+        '--write',
+        'generated/vendor-script.js',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const output = await readFile(path.join(workspace, 'generated/vendor-script.js'), 'utf8');
+
+    expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://vendor-api.test.local";');
+    expect(output).toContain('const url0 = joinUrl(BASE_URL, `/vendor-health`);');
+    expect(output).not.toContain('/bos-health');
+  });
+
+  it('fails clearly when config module is unknown', async () => {
+    await writeGenerateFixtures(workspace);
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await writeModuleOpenApi('bos.openapi.yaml', '/bos-health', 'https://bos-openapi.test.local');
+    await writeConfig([
+      'defaultModule: bos',
+      'modules:',
+      '  bos:',
+      '    snapshot: openapi/bos.openapi.yaml',
+      '    catalog: openapi/bos.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        [
+          'generate',
+          '--config',
+          'load-tests/config.yaml',
+          '--module',
+          'unknown',
+          '--scenario',
+          'scenario.yaml',
+          '--write',
+          'generated/script.js',
+        ],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('module "unknown" was not found. Available modules: bos');
+  });
+
+  it('fails clearly when --module is used without --config', async () => {
+    await expect(
+      runCli(
+        [
+          'generate',
+          '--module',
+          'bos',
+          '--scenario',
+          'scenario.yaml',
+          '--openapi',
+          'openapi.yaml',
+          '--write',
+          'generated/script.js',
+        ],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('--module requires --config');
+  });
+
+  async function writeConfig(lines: string[]): Promise<void> {
+    await mkdir(path.join(workspace, 'load-tests'), { recursive: true });
+    await writeFile(path.join(workspace, 'load-tests/config.yaml'), lines.join('\n'), 'utf8');
+  }
+
+  async function writeModuleOpenApi(
+    fileName: string,
+    endpointPath: string,
+    serverUrl: string,
+  ): Promise<void> {
+    await writeFile(
+      path.join(workspace, 'load-tests/openapi', fileName),
+      [
+        'openapi: 3.0.3',
+        'info:',
+        `  title: ${fileName}`,
+        '  version: 1.0.0',
+        'servers:',
+        `  - url: ${serverUrl}`,
+        'paths:',
+        `  ${endpointPath}:`,
+        '    get:',
+        '      operationId: getHealth',
+        '      responses:',
+        '        "200":',
+        '          description: OK',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+  }
 });

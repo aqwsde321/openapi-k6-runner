@@ -25,7 +25,7 @@
 | P-06 | OpenAPI Snapshot/Catalog | snapshot 저장 및 endpoint catalog 생성 | 완료 |
 | P-07 | Fixture/Test | 대상 프로젝트형 fixture | 완료 |
 | P-08 | README/사용법 | 최소 실행 가이드 | 완료 |
-| P-09 | 멀티모듈 OpenAPI 설정 | module별 registry 선택 | 필수 후속 |
+| P-09 | 멀티모듈 OpenAPI 설정 | module별 registry 선택 | 완료 |
 | P-10 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
 
 ## 3. P-00 문서 확정
@@ -248,8 +248,8 @@
 ### 작업
 
 - 설치 방법
-- `.env` 예시
-- 테스트 대상 프로젝트에 scenario/OpenAPI/`.env`를 두는 운영 구조
+- `load-tests/config.yaml` 예시
+- 테스트 대상 프로젝트에 scenario/OpenAPI/config를 두는 운영 구조
 - scenario 예시
 - OpenAPI 예시
 - generate 명령 예시
@@ -271,7 +271,7 @@ CLI/compiler MVP가 동작하고 README 사용법이 정리된 뒤 진행한다.
 
 ### 작업
 
-- `.env` module path 규칙 확정
+- `load-tests/config.yaml` module path 규칙 확정
 - `--module` CLI option 추가
 - module별 OpenAPI spec resolve
 - module별 `ApiRegistry` 생성 또는 선택
@@ -281,7 +281,7 @@ CLI/compiler MVP가 동작하고 README 사용법이 정리된 뒤 진행한다.
 ### 완료 기준
 
 - 단일 모듈 scenario는 기존 방식으로 계속 동작한다.
-- `--module bos`로 module별 OpenAPI spec을 선택할 수 있다.
+- `--module bos`로 module별 OpenAPI snapshot을 선택할 수 있다.
 - module별 registry가 섞이지 않는다.
 - module이 없거나 잘못되면 명확한 에러가 발생한다.
 

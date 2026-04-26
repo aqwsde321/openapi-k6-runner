@@ -1,0 +1,8 @@
+baseUrl: https://api.fixture.local
+defaultModule: store
+
+modules:
+  store:
+    openapi: openapi/store.openapi.yaml
+    snapshot: openapi/dev.openapi.json
+    catalog: openapi/catalog.json

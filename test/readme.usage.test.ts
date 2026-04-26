@@ -11,18 +11,21 @@ describe('README usage guide', () => {
 
     expect(readme).toContain('## 설치');
     expect(readme).toContain('## 사용 위치');
-    expect(readme).toContain('## .env');
+    expect(readme).toContain('## Config');
     expect(readme).toContain('## OpenAPI Snapshot');
     expect(readme).toContain('## OpenAPI 예시');
     expect(readme).toContain('## Scenario 예시');
     expect(readme).toContain('## k6 Script 생성');
     expect(readme).toContain('## k6 실행');
-    expect(readme).toContain('BASE_URL=https://dev-api.example.com');
+    expect(readme).toContain('baseUrl: https://dev-api.example.com');
+    expect(readme).toContain('defaultModule: bos');
+    expect(readme).toContain('modules:');
     expect(readme).toContain('openapi-k6 sync \\');
-    expect(readme).toContain('--catalog load-tests/openapi/catalog.json');
+    expect(readme).toContain('--config load-tests/config.yaml');
+    expect(readme).toContain('--module bos');
     expect(readme).toContain('openapi-k6 generate \\');
+    expect(readme).toContain('--config load-tests/config.yaml');
     expect(readme).toContain('--scenario load-tests/scenarios/order-flow.yaml');
-    expect(readme).toContain('--openapi load-tests/openapi/dev.openapi.json');
     expect(readme).toContain('--write load-tests/generated/order-flow.k6.js');
     expect(readme).toContain('k6 run load-tests/generated/order-flow.k6.js');
     expect(readme).toContain('condition`은 흐름 분기가 아니라 k6 `check`');

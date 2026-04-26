@@ -2,19 +2,20 @@
 
 ## 1. 기능 경계
 
-MVP는 `Scenario DSL + OpenAPI Spec + .env`를 입력으로 받아 k6 JavaScript 파일을 생성하는 CLI/compiler다.
+MVP는 `Scenario DSL + OpenAPI Spec + load-tests/config.yaml`을 입력으로 받아 k6 JavaScript 파일을 생성하는 CLI/compiler다.
 
 UI, Supabase 저장소, 브라우저 실행기는 MVP 구현 범위에서 제외한다. 다만 UI 확장을 고려해 내부 모델은 `Scenario`, `ApiRegistry`, `AST`로 분리한다.
 
-실제 운영에서는 이 입력 파일을 테스트 대상 백엔드 프로젝트에 둔다. generator 저장소의 `.env`는 도구 개발/검증용이며, 배포된 CLI는 실행한 현재 디렉터리의 `.env`와 상대 경로 입력을 사용한다.
+실제 운영에서는 이 입력 파일을 테스트 대상 백엔드 프로젝트에 둔다. 배포된 CLI는 `load-tests/config.yaml`과 상대 경로 입력을 사용한다. 루트 `.env`의 `BASE_URL`은 기존 단일 파일 실행을 위한 fallback으로만 유지한다.
 
 대상 프로젝트에는 원격 OpenAPI URL 대신 snapshot 파일과 endpoint catalog를 보관한다.
 
 ```text
 load-tests/
+├── config.yaml
 ├── openapi/
-│   ├── dev.openapi.json
-│   └── catalog.json
+│   ├── bos.openapi.json
+│   └── bos.catalog.json
 ├── scenarios/
 └── generated/
 ```
@@ -36,7 +37,7 @@ load-tests/
 | F-11 | Fixture 기반 테스트 | P0 | O |
 | F-12 | UI adapter 설계 | P1 | 문서만 |
 | F-13 | k6 실행 자동화 | P2 | X |
-| F-14 | 멀티모듈 OpenAPI 설정 | P1 | 필수 후속 |
+| F-14 | 멀티모듈 OpenAPI 설정 | P1 | O |
 | F-15 | OpenAPI snapshot / catalog | P0 | O |
 
 ## 3. F-01 프로젝트/CLI 골격
@@ -68,21 +69,25 @@ openapi-k6 generate -s scenario.yaml -o openapi.yaml -w output.js
 
 ### 책임
 
-- `.env`에서 `BASE_URL`을 읽는다.
-- `.env`는 CLI 실행 위치의 파일을 기준으로 한다.
+- `load-tests/config.yaml`에서 `baseUrl`과 module별 OpenAPI 경로를 읽는다.
+- config 안의 상대 경로는 config 파일 위치를 기준으로 해석한다.
+- 루트 `.env`의 `BASE_URL`은 기존 단일 파일 실행 fallback으로만 읽는다.
 - `BASE_URL`이 없으면 OpenAPI `servers[0].url`을 fallback으로 사용한다.
 - generated k6 script에서는 `__ENV.BASE_URL`을 우선 사용한다.
 
 ### 우선순위
 
 1. k6 실행 시 `__ENV.BASE_URL`
-2. 컴파일 시 `.env`의 `BASE_URL`
-3. OpenAPI `servers[0].url`
-4. 없으면 컴파일 에러
+2. config module의 `baseUrl`
+3. config top-level `baseUrl`
+4. 컴파일 시 `.env`의 `BASE_URL`
+5. OpenAPI `servers[0].url`
+6. 없으면 컴파일 에러
 
 ### 완료 기준
 
-- `.env`가 없어도 OpenAPI server fallback이 동작한다.
+- config가 없어도 기존 `--openapi` 단일 파일 방식이 동작한다.
+- config와 `.env`가 없어도 OpenAPI server fallback이 동작한다.
 - 둘 다 없으면 명확한 에러가 발생한다.
 - `.env` 파일 자체는 커밋하지 않는다.
 
@@ -361,30 +366,46 @@ MVP에서 condition은 흐름 분기 조건이 아니라 check/assertion이다. 
 
 ### MVP 상태
 
-MVP 구현 범위에서는 제외하지만, 제품 요구사항으로는 필수 후속 기능이다.
+P-09에서 구현된 MVP 기능이다. module 선택은 CLI의 `--module`로 수행하며, Scenario DSL 내부 `api.module`은 아직 지원하지 않는다.
 
-### 설정 방향
+### 설정
 
-후속 단일 모듈 기본값:
+단일 모듈 기본값:
 
-```dotenv
-BASE_URL=https://api.example.com
-OPENAPI_PATH=/v3/api-docs
+```yaml
+baseUrl: https://api.example.com
+defaultModule: bos
+
+modules:
+  bos:
+    openapi: https://api.example.com/v3/api-docs
+    snapshot: openapi/bos.openapi.json
+    catalog: openapi/bos.catalog.json
 ```
 
-멀티모듈 확장값:
+멀티모듈:
 
-```dotenv
-BASE_URL=https://api.example.com
-OPENAPI_BOS_PATH=/bos/v3/api-docs
-OPENAPI_MALL_PATH=/mall/v3/api-docs
-OPENAPI_ADMIN_PATH=/admin/v3/api-docs
+```yaml
+baseUrl: https://api.example.com
+defaultModule: bos
+
+modules:
+  bos:
+    openapi: https://api.example.com/bos/v3/api-docs
+    snapshot: openapi/bos.openapi.json
+    catalog: openapi/bos.catalog.json
+
+  mall:
+    openapi: https://api.example.com/mall/v3/api-docs
+    snapshot: openapi/mall.openapi.json
+    catalog: openapi/mall.catalog.json
 ```
 
 ### CLI 방향
 
 ```text
-openapi-k6 generate --module bos -s scenario.yaml -w output.js
+openapi-k6 sync --config load-tests/config.yaml --module bos
+openapi-k6 generate --config load-tests/config.yaml --module bos -s scenario.yaml -w output.js
 ```
 
 ### DSL 확장 방향
@@ -399,7 +420,7 @@ steps:
 
 ### 완료 기준
 
-- module 이름으로 OpenAPI spec을 선택할 수 있다.
+- module 이름으로 OpenAPI snapshot을 선택할 수 있다.
 - module별 registry가 분리된다.
 - module이 생략되면 default module을 사용한다.
 - 기존 단일 모듈 scenario는 수정 없이 동작한다.
@@ -419,13 +440,13 @@ P-06에서 구현한 MVP 보조 기능이다. compiler의 필수 입력은 snaps
 ### 입력
 
 ```text
-openapi-k6 sync --openapi https://dev-api.example.com/v3/api-docs --write load-tests/openapi/dev.openapi.json --catalog load-tests/openapi/catalog.json
+openapi-k6 sync --config load-tests/config.yaml --module bos
 ```
 
 ### 출력
 
-- `load-tests/openapi/dev.openapi.json`
-- `load-tests/openapi/catalog.json`
+- `load-tests/openapi/bos.openapi.json`
+- `load-tests/openapi/bos.catalog.json`
 
 ### catalog 최소 필드
 
