@@ -27,3 +27,19 @@ export interface StepRequest {
 export interface ExtractRule {
   from: string;
 }
+
+export interface ApiOperation {
+  operationId?: string;
+  method: string;
+  path: string;
+  serverUrl?: string;
+  parameters: unknown[];
+  requestBody?: unknown;
+  responses?: unknown;
+}
+
+export interface ApiRegistry {
+  byOperationId: Map<string, ApiOperation>;
+  byMethodPath: Map<string, ApiOperation>;
+  defaultServerUrl?: string;
+}
