@@ -22,10 +22,11 @@
 | P-03 | OpenAPI Registry | OpenAPI operation resolve 가능 | 완료 |
 | P-04 | AST Builder | DSL + OpenAPI -> AST | 완료 |
 | P-05 | k6 Generator | AST -> k6 script | 완료 |
-| P-06 | Fixture/Test | 단위 테스트와 fixture | 대기 |
-| P-07 | README/사용법 | 최소 실행 가이드 | 대기 |
-| P-08 | 멀티모듈 OpenAPI 설정 | module별 registry 선택 | 필수 후속 |
-| P-09 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
+| P-06 | OpenAPI Snapshot/Catalog | snapshot 저장 및 endpoint catalog 생성 | 대기 |
+| P-07 | Fixture/Test | 대상 프로젝트형 fixture | 대기 |
+| P-08 | README/사용법 | 최소 실행 가이드 | 대기 |
+| P-09 | 멀티모듈 OpenAPI 설정 | module별 registry 선택 | 필수 후속 |
+| P-10 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
 
 ## 3. P-00 문서 확정
 
@@ -194,7 +195,36 @@
 - JSONPath 지원 범위
 - condition 지원 범위
 
-## 9. P-06 Fixture/Test 정리
+## 9. P-06 OpenAPI Snapshot/Catalog
+
+### 기능 기준
+
+- F-15 OpenAPI snapshot / catalog
+
+### 작업
+
+- `sync` 또는 `inspect` 계열 CLI 명령 추가
+- 원격 OpenAPI URL을 snapshot 파일로 저장
+- snapshot 파일을 파싱해 `catalog.json` 생성
+- catalog에 method/path, operationId, tags, summary, parameters, requestBody 여부 포함
+- 대상 프로젝트 권장 구조인 `load-tests/openapi` 기준 예시 작성
+
+### 완료 기준
+
+- OpenAPI URL에서 `load-tests/openapi/dev.openapi.json`을 생성할 수 있다.
+- snapshot 파일에서 `load-tests/openapi/catalog.json`을 생성할 수 있다.
+- catalog를 보고 scenario YAML 작성에 필요한 endpoint 정보를 확인할 수 있다.
+- `generate`는 snapshot OpenAPI 파일을 입력으로 사용한다.
+
+### 테스트
+
+- OpenAPI fixture에서 catalog 생성
+- tags/summary/operationId 보존
+- requestBody 여부 표시
+- 지원 method만 catalog 포함
+- snapshot 파일 쓰기
+
+## 10. P-07 Fixture/Test 정리
 
 ### 기능 기준
 
@@ -213,7 +243,7 @@
 - 최소 happy path 테스트가 있다.
 - 주요 실패 케이스 테스트가 있다.
 
-## 10. P-07 README/사용법
+## 11. P-08 README/사용법
 
 ### 작업
 
@@ -229,7 +259,7 @@
 
 - 처음 보는 사용자가 README만 보고 script를 생성할 수 있다.
 
-## 11. P-08 멀티모듈 OpenAPI 설정
+## 12. P-09 멀티모듈 OpenAPI 설정
 
 ### 시점
 
@@ -263,7 +293,7 @@ CLI/compiler MVP가 동작하고 README 사용법이 정리된 뒤 진행한다.
 - module별 duplicate operationId 격리
 - 기존 단일 모듈 scenario 호환
 
-## 12. P-09 UI Adapter 설계
+## 13. P-10 UI Adapter 설계
 
 ### 시점
 
@@ -281,22 +311,23 @@ CLI/compiler MVP가 동작한 뒤 진행한다.
 - UI 저장 flow를 Scenario DSL로 export할 수 있는 변환 규칙이 문서화된다.
 - 구현은 별도 단계에서 진행한다.
 
-## 13. 우선 구현 순서
+## 14. 우선 구현 순서
 
 1. P-01 CLI 골격
 2. P-02 Scenario Parser
 3. P-03 OpenAPI Registry
 4. P-04 AST Builder
 5. P-05 k6 Generator
-6. P-06 Fixture/Test
-7. P-07 README/사용법
-8. P-08 멀티모듈 OpenAPI 설정
+6. P-06 OpenAPI Snapshot/Catalog
+7. P-07 Fixture/Test
+8. P-08 README/사용법
+9. P-09 멀티모듈 OpenAPI 설정
 
-## 14. 보류 결정
+## 15. 보류 결정
 
 | 항목 | 현재 결정 | 재검토 시점 |
 | --- | --- | --- |
-| UI 통합 | MVP 제외 | P-09 |
+| UI 통합 | MVP 제외 | P-10 |
 | Supabase 저장소 | 제외 | UI 구현 시 |
 | Swagger URL 자동 탐색 | 제외 | 멀티모듈 module 등록 시 |
 | Auth scheme 자동 적용 | 제외 | UI header 제안 시 |

@@ -63,7 +63,6 @@ MVP 구현에서는 코드를 그대로 복사하지 않는다. 필요한 책임
 
 - `.mjs` 기반 구조
 - JSON 중심 parser
-- 문서 생성용 catalog output
 - TypeScript schema generator
 - 프로젝트 설정 파일 구조
 
@@ -75,7 +74,10 @@ src/openapi/openapi.resolver.ts
 src/core/types.ts
 ```
 
-`openapi-projector`의 catalog 개념은 `ApiRegistry`로 축소한다.
+`openapi-projector`의 catalog 개념은 두 갈래로 재구성한다.
+
+- compiler 내부에서는 `ApiRegistry`로 축소한다.
+- 대상 프로젝트 운영에서는 `load-tests/openapi/catalog.json`으로 다시 노출해 scenario 작성자가 endpoint를 고를 수 있게 한다.
 
 ## 4. swagger-flow-tester 분석
 
@@ -217,9 +219,11 @@ k6 Script
 
 ### D-02 API Registry
 
-`openapi-projector`의 endpoint catalog 개념을 축소해 `ApiRegistry`를 만든다.
+`openapi-projector`의 endpoint catalog 개념을 compiler 내부에서는 `ApiRegistry`로 축소한다.
 
 Registry는 code generation에 필요한 최소 필드만 가진다.
+
+대상 프로젝트 운영용 `catalog.json`은 `ApiRegistry`와 별개로 사람이 읽기 쉬운 endpoint 목록이다. 이 catalog는 method/path, operationId, tags, summary, parameters, requestBody 여부를 포함한다.
 
 ### D-03 UI metadata
 

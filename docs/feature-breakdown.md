@@ -8,6 +8,17 @@ UI, Supabase 저장소, 브라우저 실행기는 MVP 구현 범위에서 제외
 
 실제 운영에서는 이 입력 파일을 테스트 대상 백엔드 프로젝트에 둔다. generator 저장소의 `.env`는 도구 개발/검증용이며, 배포된 CLI는 실행한 현재 디렉터리의 `.env`와 상대 경로 입력을 사용한다.
 
+대상 프로젝트에는 원격 OpenAPI URL 대신 snapshot 파일과 endpoint catalog를 보관한다.
+
+```text
+load-tests/
+├── openapi/
+│   ├── dev.openapi.json
+│   └── catalog.json
+├── scenarios/
+└── generated/
+```
+
 ## 2. 기능 목록
 
 | ID | 기능 | 우선순위 | MVP 포함 |
@@ -26,6 +37,7 @@ UI, Supabase 저장소, 브라우저 실행기는 MVP 구현 범위에서 제외
 | F-12 | UI adapter 설계 | P1 | 문서만 |
 | F-13 | k6 실행 자동화 | P2 | X |
 | F-14 | 멀티모듈 OpenAPI 설정 | P1 | 필수 후속 |
+| F-15 | OpenAPI snapshot / catalog | P0 | O |
 
 ## 3. F-01 프로젝트/CLI 골격
 
@@ -391,3 +403,50 @@ steps:
 - module별 registry가 분리된다.
 - module이 생략되면 default module을 사용한다.
 - 기존 단일 모듈 scenario는 수정 없이 동작한다.
+
+## 17. F-15 OpenAPI snapshot / catalog
+
+### 책임
+
+- 원격 OpenAPI URL을 대상 프로젝트의 snapshot 파일로 저장한다.
+- OpenAPI snapshot을 파싱해 사람이 읽기 쉬운 endpoint catalog를 생성한다.
+- scenario YAML 작성자가 `operationId`, `method`, `path`, `tags`를 쉽게 확인할 수 있게 한다.
+
+### 입력
+
+```text
+openapi-k6 sync --openapi https://dev-api.example.com/v3/api-docs --write load-tests/openapi/dev.openapi.json --catalog load-tests/openapi/catalog.json
+```
+
+### 출력
+
+- `load-tests/openapi/dev.openapi.json`
+- `load-tests/openapi/catalog.json`
+
+### catalog 최소 필드
+
+```ts
+interface ApiCatalog {
+  generatedAt: string;
+  source: string;
+  operations: ApiCatalogOperation[];
+}
+
+interface ApiCatalogOperation {
+  method: string;
+  path: string;
+  operationId?: string;
+  tags: string[];
+  summary?: string;
+  description?: string;
+  parameters: unknown[];
+  hasRequestBody: boolean;
+}
+```
+
+### 완료 기준
+
+- OpenAPI URL에서 snapshot 파일을 만들 수 있다.
+- snapshot 파일에서 catalog를 만들 수 있다.
+- catalog는 method/path, operationId, tags 기준으로 사람이 endpoint를 찾을 수 있다.
+- generate는 원격 URL이 아니라 snapshot 파일을 입력으로 사용할 수 있다.
