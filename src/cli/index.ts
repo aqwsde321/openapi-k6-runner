@@ -5,6 +5,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { buildAst } from '../compiler/ast.builder.js';
+import { generateK6Script } from '../compiler/k6.generator.js';
+import { parseOpenApiFile } from '../openapi/openapi.parser.js';
+import { parseScenarioFile } from '../parser/scenario.parser.js';
+
 type WritableLike = {
   write(chunk: string): unknown;
 };
@@ -25,11 +30,28 @@ export interface GenerateResult {
   outputPath: string;
   scenarioPath: string;
   openapiPath: string;
-  baseUrl?: string;
+  baseUrl: string;
 }
 
 function resolveCwd(context: CliContext): string {
   return context.cwd ? path.resolve(context.cwd) : process.cwd();
+}
+
+function resolveOpenApiInput(cwd: string, value: string): string {
+  if (isHttpUrl(value)) {
+    return value;
+  }
+
+  return path.resolve(cwd, value);
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 async function loadBaseUrl(cwd: string): Promise<string | undefined> {
@@ -52,43 +74,32 @@ async function loadBaseUrl(cwd: string): Promise<string | undefined> {
   }
 }
 
-function renderPlaceholderScript(result: GenerateResult): string {
-  const baseUrlLiteral = JSON.stringify(result.baseUrl ?? '');
-
-  return [
-    "import http from 'k6/http';",
-    '',
-    `const BASE_URL = __ENV.BASE_URL || ${baseUrlLiteral};`,
-    '',
-    'export default function () {',
-    '  // P-01 placeholder: Scenario/OpenAPI parsing is implemented in later phases.',
-    `  // scenario: ${result.scenarioPath}`,
-    `  // openapi: ${result.openapiPath}`,
-    '',
-    '  if (!BASE_URL) {',
-    "    throw new Error('BASE_URL is not configured.');",
-    '  }',
-    '',
-    '  http.get(BASE_URL);',
-    '}',
-    '',
-  ].join('\n');
-}
-
 export async function runGenerateCommand(
   options: GenerateOptions,
   context: CliContext = {},
 ): Promise<GenerateResult> {
   const cwd = resolveCwd(context);
+  const scenarioPath = path.resolve(cwd, options.scenario);
+  const openapiPath = resolveOpenApiInput(cwd, options.openapi);
+  const scenario = await parseScenarioFile(scenarioPath);
+  const registry = await parseOpenApiFile(openapiPath);
+  const baseUrl = (await loadBaseUrl(cwd)) ?? registry.defaultServerUrl;
+
+  if (!baseUrl) {
+    throw new Error('BASE_URL is not configured and OpenAPI servers[0].url is missing.');
+  }
+
+  const ast = buildAst(scenario, registry);
+  const script = generateK6Script(ast, { baseUrl });
   const result: GenerateResult = {
     outputPath: path.resolve(cwd, options.write),
-    scenarioPath: path.resolve(cwd, options.scenario),
-    openapiPath: path.resolve(cwd, options.openapi),
-    baseUrl: await loadBaseUrl(cwd),
+    scenarioPath,
+    openapiPath,
+    baseUrl,
   };
 
   await fs.mkdir(path.dirname(result.outputPath), { recursive: true });
-  await fs.writeFile(result.outputPath, renderPlaceholderScript(result), 'utf8');
+  await fs.writeFile(result.outputPath, script, 'utf8');
 
   return result;
 }
@@ -114,7 +125,7 @@ export function createProgram(context: CliContext = {}): Command {
 
   program
     .command('generate')
-    .description('Generate a k6 script placeholder for the configured scenario.')
+    .description('Generate a k6 script for the configured scenario.')
     .requiredOption('-s, --scenario <path>', 'Scenario DSL file path')
     .requiredOption('-o, --openapi <path>', 'OpenAPI spec file path')
     .requiredOption('-w, --write <path>', 'Output k6 script path')

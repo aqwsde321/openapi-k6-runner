@@ -269,12 +269,13 @@ MVP에서 condition은 흐름 분기 조건이 아니라 check/assertion이다. 
 ### 책임
 
 - AST를 k6 JavaScript 파일로 변환한다.
-- method별 `http.get/post/put/patch/delete` 호출을 생성한다.
+- method별 `http.get/post/put/patch/del` 호출을 생성한다.
 - pathParams, query, headers, body를 k6 호출 형태로 만든다.
 
 ### 생성 규칙
 
 - `GET/DELETE`는 body 없이 호출한다.
+- k6 API에서 `DELETE`는 `http.del`로 생성한다.
 - `POST/PUT/PATCH`는 body를 JSON 문자열로 전달한다.
 - `Content-Type: application/json`은 body가 있을 때 기본 추가한다.
 - query는 URL query string으로 붙인다.
