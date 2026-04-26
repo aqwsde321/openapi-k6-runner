@@ -288,7 +288,7 @@ pnpm run build
 ## 문서
 
 - [문서 색인](docs/README.md)
-- [MVP 설계](docs/mvp-design.md)
-- [기능 범위](docs/feature-breakdown.md)
-- [참조 프로젝트 분석](docs/reference-projects.md)
-- [작업 계획](docs/work-plan.md)
+- [MVP 설계](docs/spec/mvp-design.md)
+- [기능 세분화](docs/spec/feature-breakdown.md)
+- [작업 계획](docs/planning/work-plan.md)
+- [참조 프로젝트 분석](docs/reference/reference-projects.md)

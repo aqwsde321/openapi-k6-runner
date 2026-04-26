@@ -1,6 +1,6 @@
 # 완료된 작업 계획
 
-이 문서는 P-00부터 P-10까지의 구현 이력을 보존한다. 현재 사용법은 루트 `README.md`, 현재 설계는 `docs/mvp-design.md`, 기능 계약은 `docs/feature-breakdown.md`를 기준으로 한다.
+이 문서는 P-00부터 P-10까지의 구현 이력을 보존한다. 현재 사용법은 루트 [README](../../README.md), 현재 설계는 [MVP 설계](../spec/mvp-design.md), 기능 계약은 [기능 세분화](../spec/feature-breakdown.md)를 기준으로 한다.
 
 ## 1. 진행 방식 기록
 
