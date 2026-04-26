@@ -118,7 +118,32 @@ describe('openapi-k6 CLI', () => {
       '',
     ].join('\n'));
     expect(scenario).toContain('path: /__dev/error-codes');
-    expect(readme).toContain('openapi-k6 sync --config load-tests/config.yaml --module pharma');
+    expect(readme).toContain('openapi-k6 sync');
+    expect(readme).toContain('openapi-k6 generate \\');
+    expect(readme).toContain('  -s smoke');
+  });
+
+  it('initializes a placeholder scaffold with no required options', async () => {
+    await runCli(
+      ['init'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+    const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
+
+    expect(config).toBe([
+      'baseUrl: TODO',
+      'defaultModule: default',
+      '',
+      'modules:',
+      '  default:',
+      '    openapi: TODO',
+      '    snapshot: openapi/default.openapi.json',
+      '    catalog: openapi/default.catalog.json',
+      '',
+    ].join('\n'));
+    expect(scenario).toContain('path: /health');
   });
 
   it('uses the configured scaffold directory in generated README commands', async () => {
@@ -201,24 +226,26 @@ describe('openapi-k6 CLI', () => {
     });
   });
 
-  it('fails when --openapi is missing', async () => {
+  it('fails when neither --openapi nor default config is available', async () => {
     await expect(
       runCli(
         ['generate', '--scenario', 'scenario.yaml', '--write', 'generated/script.js'],
         { cwd: workspace, stdout: createSink(), stderr: createSink() },
       ),
-    ).rejects.toThrow('--openapi is required unless --config provides modules.<name>.snapshot');
+    ).rejects.toThrow('load-tests/config.yaml was not found. Run openapi-k6 init or pass --config.');
   });
 
-  it('fails when --write is missing', async () => {
-    await expect(
-      runCli(
-        ['generate', '--scenario', 'scenario.yaml', '--openapi', 'openapi.yaml'],
-        { cwd: workspace, stdout: createSink(), stderr: createSink() },
-      ),
-    ).rejects.toMatchObject({
-      code: 'commander.missingMandatoryOptionValue',
-    });
+  it('uses a default generated output path when --write is omitted', async () => {
+    await writeGenerateFixtures(workspace);
+
+    await runCli(
+      ['generate', '--scenario', 'scenario.yaml', '--openapi', 'openapi.yaml'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const output = await readFile(path.join(workspace, 'load-tests/generated/scenario.k6.js'), 'utf8');
+
+    expect(output).toContain('const res0 = http.get(url0);');
   });
 
   it('includes BASE_URL from .env in the generated output', async () => {
@@ -298,6 +325,20 @@ describe('openapi-k6 CLI', () => {
     ]);
   });
 
+  it('fails clearly when sync sees TODO config values from init', async () => {
+    await runCli(
+      ['init'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    await expect(
+      runCli(
+        ['sync'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('modules.default.openapi is not configured. Replace TODO before running sync.');
+  });
+
   it('generates with the default module from config', async () => {
     await writeGenerateFixtures(workspace, 'https://openapi-fallback.test.local');
     await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
@@ -345,6 +386,44 @@ describe('openapi-k6 CLI', () => {
     );
 
     const output = await readFile(path.join(workspace, 'generated/script.js'), 'utf8');
+
+    expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://config-base.test.local";');
+    expect(output).toContain('const url0 = joinUrl(BASE_URL, `/app-health`);');
+  });
+
+  it('generates by scenario name using default config and output paths', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await runCli(
+      ['generate', '-s', 'smoke'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const output = await readFile(path.join(workspace, 'load-tests/generated/smoke.k6.js'), 'utf8');
 
     expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://config-base.test.local";');
     expect(output).toContain('const url0 = joinUrl(BASE_URL, `/app-health`);');

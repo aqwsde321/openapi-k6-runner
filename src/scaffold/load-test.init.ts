@@ -5,8 +5,8 @@ export interface InitLoadTestsOptions {
   cwd: string;
   directory?: string;
   module?: string;
-  baseUrl: string;
-  openapi: string;
+  baseUrl?: string;
+  openapi?: string;
   smokePath?: string;
   force?: boolean;
 }
@@ -105,14 +105,14 @@ async function writeTextFile(
   }
 }
 
-function renderConfig(moduleName: string, baseUrl: string, openapi: string): string {
+function renderConfig(moduleName: string, baseUrl: string | undefined, openapi: string | undefined): string {
   return [
-    `baseUrl: ${baseUrl}`,
+    `baseUrl: ${baseUrl ?? 'TODO'}`,
     `defaultModule: ${moduleName}`,
     '',
     'modules:',
     `  ${moduleName}:`,
-    `    openapi: ${openapi}`,
+    `    openapi: ${openapi ?? 'TODO'}`,
     `    snapshot: openapi/${moduleName}.openapi.json`,
     `    catalog: openapi/${moduleName}.catalog.json`,
     '',
@@ -137,17 +137,26 @@ function renderReadme(moduleName: string, directory: string): string {
   const configPath = `${directory}/config.yaml`;
   const scenarioPath = `${directory}/scenarios/smoke.yaml`;
   const outputPath = `${directory}/generated/smoke.k6.js`;
+  const usesDefaultDirectory = directory === 'load-tests';
 
   return [
     `# ${directory}`,
     '',
+    '1. Edit `config.yaml` and replace TODO values.',
+    '',
     '```bash',
-    `openapi-k6 sync --config ${configPath} --module ${moduleName}`,
+    usesDefaultDirectory
+      ? 'openapi-k6 sync'
+      : `openapi-k6 sync --config ${configPath} --module ${moduleName}`,
     'openapi-k6 generate \\',
-    `  --config ${configPath} \\`,
-    `  --module ${moduleName} \\`,
-    `  --scenario ${scenarioPath} \\`,
-    `  --write ${outputPath}`,
+    ...(usesDefaultDirectory
+      ? ['  -s smoke']
+      : [
+          `  --config ${configPath} \\`,
+          `  --module ${moduleName} \\`,
+          `  --scenario ${scenarioPath} \\`,
+          `  --write ${outputPath}`,
+        ]),
     `k6 run ${outputPath}`,
     '```',
     '',

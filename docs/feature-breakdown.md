@@ -47,7 +47,7 @@ load-tests/
 
 - TypeScript CLI 프로젝트를 초기화한다.
 - `generate` 명령을 제공한다.
-- 입력 파일 경로와 출력 파일 경로를 받는다.
+- Scenario 입력을 받고, OpenAPI 입력과 출력 경로는 config 또는 CLI 옵션으로 결정한다.
 
 ### 입력
 
@@ -55,15 +55,21 @@ load-tests/
 openapi-k6 generate -s scenario.yaml -o openapi.yaml -w output.js
 ```
 
+기본 `load-tests/config.yaml`을 사용하는 현재 흐름에서는 다음 축약형을 우선 사용한다.
+
+```text
+openapi-k6 generate -s smoke
+```
+
 ### 출력
 
-- 지정된 경로의 k6 JavaScript 파일
+- 지정된 경로 또는 기본 `load-tests/generated/<scenario>.k6.js`의 k6 JavaScript 파일
 - 실패 시 사람이 읽을 수 있는 에러 메시지
 
 ### 완료 기준
 
 - CLI 명령이 존재한다.
-- 필수 옵션 누락 시 실패한다.
+- 필수 scenario 옵션 누락 시 실패한다.
 - 성공 시 output 파일을 생성한다.
 
 ## 4. F-02 설정 로딩
@@ -405,9 +411,11 @@ modules:
 ### CLI 방향
 
 ```text
-openapi-k6 sync --config load-tests/config.yaml --module bos
-openapi-k6 generate --config load-tests/config.yaml --module bos -s scenario.yaml -w output.js
+openapi-k6 sync
+openapi-k6 generate -s smoke
 ```
+
+기본 흐름은 `load-tests/config.yaml`과 `defaultModule`을 사용한다. 기본 경로가 아니거나 특정 module을 지정해야 할 때만 `--config`, `--module`을 명시한다.
 
 ### DSL 확장 방향
 
@@ -441,7 +449,7 @@ P-06에서 구현한 MVP 보조 기능이다. compiler의 필수 입력은 snaps
 ### 입력
 
 ```text
-openapi-k6 sync --config load-tests/config.yaml --module bos
+openapi-k6 sync
 ```
 
 ### 출력
@@ -488,7 +496,7 @@ interface ApiCatalogOperation {
 ### 입력
 
 ```text
-openapi-k6 init --module pharma --base-url https://dev-api.example.com --openapi https://dev-api.example.com/v3/api-docs --smoke-path /health
+openapi-k6 init
 ```
 
 ### 출력
@@ -499,6 +507,7 @@ openapi-k6 init --module pharma --base-url https://dev-api.example.com --openapi
 
 ### 완료 기준
 
-- 생성된 config로 바로 `sync`를 실행할 수 있다.
-- 생성된 smoke scenario로 바로 `generate`를 실행할 수 있다.
+- 생성된 config의 `TODO` 값을 채우면 `sync`를 실행할 수 있다.
+- 생성된 smoke scenario의 path를 채우거나 선택한 endpoint로 바꾸면 `generate`를 실행할 수 있다.
+- `sync`와 `generate`는 남은 `TODO` 값을 발견하면 명확한 에러를 낸다.
 - `--force` 없이는 기존 파일을 덮어쓰지 않는다.

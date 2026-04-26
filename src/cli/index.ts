@@ -23,6 +23,10 @@ type WritableLike = {
   write(chunk: string): unknown;
 };
 
+const DEFAULT_CONFIG_PATH = 'load-tests/config.yaml';
+const DEFAULT_LOAD_TEST_DIR = 'load-tests';
+const TODO_VALUE = 'TODO';
+
 export interface CliContext {
   cwd?: string;
   stdout?: WritableLike;
@@ -32,7 +36,7 @@ export interface CliContext {
 export interface GenerateOptions {
   scenario: string;
   openapi?: string;
-  write: string;
+  write?: string;
   config?: string;
   module?: string;
 }
@@ -48,8 +52,8 @@ export interface SyncOptions {
 export interface InitOptions {
   dir?: string;
   module?: string;
-  baseUrl: string;
-  openapi: string;
+  baseUrl?: string;
+  openapi?: string;
   smokePath?: string;
   force?: boolean;
 }
@@ -101,12 +105,30 @@ function isHttpUrl(value: string): boolean {
 async function loadOptionalConfig(
   cwd: string,
   configPath: string | undefined,
+  useDefaultConfig: boolean,
 ): Promise<LoadTestConfig | undefined> {
-  if (configPath === undefined) {
+  if (configPath === undefined && !useDefaultConfig) {
     return undefined;
   }
 
-  return loadTestConfig(path.resolve(cwd, configPath));
+  const resolvedConfigPath = path.resolve(cwd, configPath ?? DEFAULT_CONFIG_PATH);
+
+  try {
+    return await loadTestConfig(resolvedConfigPath);
+  } catch (error) {
+    if (
+      configPath === undefined &&
+      useDefaultConfig &&
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === 'ENOENT'
+    ) {
+      throw new Error(`${DEFAULT_CONFIG_PATH} was not found. Run openapi-k6 init or pass --config.`);
+    }
+
+    throw error;
+  }
 }
 
 async function loadBaseUrl(cwd: string): Promise<string | undefined> {
@@ -150,13 +172,21 @@ function resolveConfiguredOpenApiInput(
   cliValue: string | undefined,
   configValue: string | undefined,
   message: string,
+  configFieldLabel: string,
+  commandName: string,
 ): string {
   if (cliValue !== undefined) {
     return resolveOpenApiInput(cwd, cliValue);
   }
 
-  if (config !== undefined && configValue !== undefined) {
+  if (config !== undefined && isConfiguredValue(configValue)) {
     return resolveConfigFilePath(config, configValue);
+  }
+
+  if (config !== undefined) {
+    throw new Error(
+      `${config.path}: ${configFieldLabel} is not configured. Replace TODO before running ${commandName}.`,
+    );
   }
 
   throw new Error(message);
@@ -168,16 +198,68 @@ function resolveConfiguredFilePath(
   cliValue: string | undefined,
   configValue: string | undefined,
   message: string,
+  configFieldLabel: string,
+  commandName: string,
 ): string {
   if (cliValue !== undefined) {
     return path.resolve(cwd, cliValue);
   }
 
-  if (config !== undefined && configValue !== undefined) {
+  if (config !== undefined && isConfiguredValue(configValue)) {
     return resolveConfigFilePath(config, configValue);
   }
 
+  if (config !== undefined) {
+    throw new Error(
+      `${config.path}: ${configFieldLabel} is not configured. Replace TODO before running ${commandName}.`,
+    );
+  }
+
   throw new Error(message);
+}
+
+function isConfiguredValue(value: string | undefined): value is string {
+  return value !== undefined && value.trim() !== '' && value.trim().toUpperCase() !== TODO_VALUE;
+}
+
+function normalizeConfiguredValue(value: string | undefined): string | undefined {
+  return isConfiguredValue(value) ? value.trim() : undefined;
+}
+
+function resolveScenarioPath(cwd: string, config: LoadTestConfig | undefined, value: string): string {
+  if (isScenarioName(value)) {
+    return path.join(resolveLoadTestDir(cwd, config), 'scenarios', `${value}.yaml`);
+  }
+
+  return path.resolve(cwd, value);
+}
+
+function resolveOutputPath(
+  cwd: string,
+  config: LoadTestConfig | undefined,
+  scenario: string,
+  write: string | undefined,
+): string {
+  if (write !== undefined) {
+    return path.resolve(cwd, write);
+  }
+
+  const scenarioName = isScenarioName(scenario)
+    ? scenario
+    : path.basename(scenario, path.extname(scenario));
+
+  return path.join(resolveLoadTestDir(cwd, config), 'generated', `${scenarioName}.k6.js`);
+}
+
+function resolveLoadTestDir(cwd: string, config: LoadTestConfig | undefined): string {
+  return config?.dir ?? path.resolve(cwd, DEFAULT_LOAD_TEST_DIR);
+}
+
+function isScenarioName(value: string): boolean {
+  return !path.isAbsolute(value) &&
+    !value.includes('/') &&
+    !value.includes('\\') &&
+    path.extname(value) === '';
 }
 
 export async function runGenerateCommand(
@@ -185,21 +267,24 @@ export async function runGenerateCommand(
   context: CliContext = {},
 ): Promise<GenerateResult> {
   const cwd = resolveCwd(context);
-  const config = await loadOptionalConfig(cwd, options.config);
+  const config = await loadOptionalConfig(cwd, options.config, options.openapi === undefined);
   const moduleConfig = selectConfigModule(config, options.module);
-  const scenarioPath = path.resolve(cwd, options.scenario);
+  const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
+  const moduleName = moduleConfig?.name ?? '<none>';
   const openapiPath = resolveConfiguredOpenApiInput(
     cwd,
     config,
     options.openapi,
     moduleConfig?.snapshot,
     '--openapi is required unless --config provides modules.<name>.snapshot',
+    `modules.${moduleName}.snapshot`,
+    'generate',
   );
   const scenario = await parseScenarioFile(scenarioPath);
   const registry = await parseOpenApiFile(openapiPath);
   const baseUrl =
-    moduleConfig?.baseUrl ??
-    config?.baseUrl ??
+    normalizeConfiguredValue(moduleConfig?.baseUrl) ??
+    normalizeConfiguredValue(config?.baseUrl) ??
     (await loadBaseUrl(cwd)) ??
     registry.defaultServerUrl;
 
@@ -210,7 +295,7 @@ export async function runGenerateCommand(
   const ast = buildAst(scenario, registry);
   const script = generateK6Script(ast, { baseUrl });
   const result: GenerateResult = {
-    outputPath: path.resolve(cwd, options.write),
+    outputPath: resolveOutputPath(cwd, config, options.scenario, options.write),
     scenarioPath,
     openapiPath,
     baseUrl,
@@ -228,14 +313,21 @@ export async function runSyncCommand(
   context: CliContext = {},
 ): Promise<SyncResult> {
   const cwd = resolveCwd(context);
-  const config = await loadOptionalConfig(cwd, options.config);
+  const config = await loadOptionalConfig(
+    cwd,
+    options.config,
+    options.openapi === undefined || options.write === undefined || options.catalog === undefined,
+  );
   const moduleConfig = selectConfigModule(config, options.module);
+  const moduleName = moduleConfig?.name ?? '<none>';
   const openapiPath = resolveConfiguredOpenApiInput(
     cwd,
     config,
     options.openapi,
     moduleConfig?.openapi,
     '--openapi is required unless --config provides modules.<name>.openapi',
+    `modules.${moduleName}.openapi`,
+    'sync',
   );
   const snapshotPath = resolveConfiguredFilePath(
     cwd,
@@ -243,6 +335,8 @@ export async function runSyncCommand(
     options.write,
     moduleConfig?.snapshot,
     '--write is required unless --config provides modules.<name>.snapshot',
+    `modules.${moduleName}.snapshot`,
+    'sync',
   );
   const catalogPath = resolveConfiguredFilePath(
     cwd,
@@ -250,6 +344,8 @@ export async function runSyncCommand(
     options.catalog,
     moduleConfig?.catalog,
     '--catalog is required unless --config provides modules.<name>.catalog',
+    `modules.${moduleName}.catalog`,
+    'sync',
   );
   const result = await syncOpenApiSnapshot({
     openapi: openapiPath,
@@ -307,8 +403,8 @@ export function createProgram(context: CliContext = {}): Command {
     .description('Create a load-tests scaffold in the target project.')
     .option('--dir <path>', 'Load test directory path', 'load-tests')
     .option('-m, --module <name>', 'Initial module name', 'default')
-    .requiredOption('--base-url <url>', 'API base URL for generated k6 scripts')
-    .requiredOption('--openapi <path-or-url>', 'OpenAPI spec file path or URL')
+    .option('--base-url <url>', 'API base URL for generated k6 scripts')
+    .option('--openapi <path-or-url>', 'OpenAPI spec file path or URL')
     .option('--smoke-path <path>', 'Smoke scenario GET endpoint path', '/health')
     .option('--force', 'Overwrite existing scaffold files')
     .action(async (options: InitOptions) => {
@@ -321,9 +417,9 @@ export function createProgram(context: CliContext = {}): Command {
   program
     .command('generate')
     .description('Generate a k6 script for the configured scenario.')
-    .requiredOption('-s, --scenario <path>', 'Scenario DSL file path')
+    .requiredOption('-s, --scenario <path-or-name>', 'Scenario DSL file path or load-tests scenario name')
     .option('-o, --openapi <path>', 'OpenAPI spec file path')
-    .requiredOption('-w, --write <path>', 'Output k6 script path')
+    .option('-w, --write <path>', 'Output k6 script path (defaults to load-tests/generated/<scenario>.k6.js)')
     .option('--config <path>', 'Load test config file path')
     .option('-m, --module <name>', 'Module name from config')
     .action(async (options: GenerateOptions) => {
