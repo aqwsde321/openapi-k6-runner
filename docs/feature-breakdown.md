@@ -23,6 +23,7 @@ UI, Supabase 저장소, 브라우저 실행기는 MVP 구현 범위에서 제외
 | F-11 | Fixture 기반 테스트 | P0 | O |
 | F-12 | UI adapter 설계 | P1 | 문서만 |
 | F-13 | k6 실행 자동화 | P2 | X |
+| F-14 | 멀티모듈 OpenAPI 설정 | P1 | 필수 후속 |
 
 ## 3. F-01 프로젝트/CLI 골격
 
@@ -333,3 +334,56 @@ MVP에서 condition은 흐름 분기 조건이 아니라 check/assertion이다. 
 ### MVP 상태
 
 제외한다. 사용자는 생성된 script를 직접 k6로 실행한다.
+
+## 16. F-14 멀티모듈 OpenAPI 설정
+
+### 책임
+
+- 여러 OpenAPI module을 등록하고 선택할 수 있는 설정 모델을 제공한다.
+- module별 OpenAPI 문서 경로를 관리한다.
+- module 선택 결과를 `ApiRegistry` 생성과 resolver 입력으로 연결한다.
+
+### MVP 상태
+
+MVP 구현 범위에서는 제외하지만, 제품 요구사항으로는 필수 후속 기능이다.
+
+### 설정 방향
+
+단일 모듈 기본값:
+
+```dotenv
+BASE_URL=https://api.example.com
+OPENAPI_PATH=/v3/api-docs
+```
+
+멀티모듈 확장값:
+
+```dotenv
+BASE_URL=https://api.example.com
+OPENAPI_BOS_PATH=/bos/v3/api-docs
+OPENAPI_MALL_PATH=/mall/v3/api-docs
+OPENAPI_ADMIN_PATH=/admin/v3/api-docs
+```
+
+### CLI 방향
+
+```text
+openapi-k6 generate --module bos -s scenario.yaml -w output.js
+```
+
+### DSL 확장 방향
+
+```yaml
+steps:
+  - id: get-order
+    api:
+      module: bos
+      operationId: getOrder
+```
+
+### 완료 기준
+
+- module 이름으로 OpenAPI spec을 선택할 수 있다.
+- module별 registry가 분리된다.
+- module이 생략되면 default module을 사용한다.
+- 기존 단일 모듈 scenario는 수정 없이 동작한다.

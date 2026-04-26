@@ -24,7 +24,8 @@
 | P-05 | k6 Generator | AST -> k6 script | 대기 |
 | P-06 | Fixture/Test | 단위 테스트와 fixture | 대기 |
 | P-07 | README/사용법 | 최소 실행 가이드 | 대기 |
-| P-08 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
+| P-08 | 멀티모듈 OpenAPI 설정 | module별 registry 선택 | 필수 후속 |
+| P-09 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
 
 ## 3. P-00 문서 확정
 
@@ -227,7 +228,41 @@
 
 - 처음 보는 사용자가 README만 보고 script를 생성할 수 있다.
 
-## 11. P-08 UI Adapter 설계
+## 11. P-08 멀티모듈 OpenAPI 설정
+
+### 시점
+
+CLI/compiler MVP가 동작하고 README 사용법이 정리된 뒤 진행한다.
+
+### 기능 기준
+
+- F-14 멀티모듈 OpenAPI 설정
+
+### 작업
+
+- `.env` module path 규칙 확정
+- `--module` CLI option 추가
+- module별 OpenAPI spec resolve
+- module별 `ApiRegistry` 생성 또는 선택
+- Scenario DSL v2의 `api.module` 도입 여부 결정
+- default module fallback 규칙 작성
+
+### 완료 기준
+
+- 단일 모듈 scenario는 기존 방식으로 계속 동작한다.
+- `--module bos`로 module별 OpenAPI spec을 선택할 수 있다.
+- module별 registry가 섞이지 않는다.
+- module이 없거나 잘못되면 명확한 에러가 발생한다.
+
+### 테스트
+
+- default module resolve
+- `--module` 기반 OpenAPI path 선택
+- unknown module error
+- module별 duplicate operationId 격리
+- 기존 단일 모듈 scenario 호환
+
+## 12. P-09 UI Adapter 설계
 
 ### 시점
 
@@ -245,7 +280,7 @@ CLI/compiler MVP가 동작한 뒤 진행한다.
 - UI 저장 flow를 Scenario DSL로 export할 수 있는 변환 규칙이 문서화된다.
 - 구현은 별도 단계에서 진행한다.
 
-## 12. 우선 구현 순서
+## 13. 우선 구현 순서
 
 1. P-01 CLI 골격
 2. P-02 Scenario Parser
@@ -254,14 +289,15 @@ CLI/compiler MVP가 동작한 뒤 진행한다.
 5. P-05 k6 Generator
 6. P-06 Fixture/Test
 7. P-07 README/사용법
+8. P-08 멀티모듈 OpenAPI 설정
 
-## 13. 보류 결정
+## 14. 보류 결정
 
 | 항목 | 현재 결정 | 재검토 시점 |
 | --- | --- | --- |
-| UI 통합 | MVP 제외 | P-08 |
+| UI 통합 | MVP 제외 | P-09 |
 | Supabase 저장소 | 제외 | UI 구현 시 |
-| Swagger URL 자동 탐색 | 제외 | UI module 관리 시 |
+| Swagger URL 자동 탐색 | 제외 | 멀티모듈 module 등록 시 |
 | Auth scheme 자동 적용 | 제외 | UI header 제안 시 |
 | k6 실행 자동화 | 제외 | generator 안정화 후 |
 | branch/loop/retry | 제외 | MVP 완료 후 |

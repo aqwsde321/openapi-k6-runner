@@ -101,7 +101,7 @@ src/core/types.ts
   - `/api-docs`
   - `/swagger.json`
 
-이 기능은 CLI MVP에는 넣지 않는다. UI에서 module 등록 기능을 만들 때 참고한다.
+이 기능은 CLI MVP에는 넣지 않는다. MVP 이후 필수 멀티모듈 OpenAPI 설정과 UI module 등록 기능을 만들 때 참고한다.
 
 #### 인증 스킴 감지
 
@@ -161,7 +161,7 @@ MVP DSL은 `steps[]` 순서를 그대로 실행 순서로 사용한다. UI adapt
   - `{{API_HOST}}` 변수 치환
   - UI 환경 관리
 
-MVP CLI에서는 `.env BASE_URL`만 사용한다.
+MVP CLI에서는 `.env BASE_URL`을 사용하고, 단일 모듈 기본 OpenAPI 경로는 `OPENAPI_PATH`로 문서화한다. 멀티모듈 확장에서는 module별 `OPENAPI_<MODULE>_PATH` 규칙을 사용한다.
 
 ### 그대로 가져오지 않을 것
 
@@ -239,7 +239,31 @@ MVP DSL은 `{{token}}` context template만 사용한다.
 
 `swagger-flow-tester`의 `{step1.token}` 문법은 UI adapter에서 `extract + {{token}}` 형태로 변환한다.
 
-## 7. 후속 UI 통합 방향
+## 7. 후속 멀티모듈 OpenAPI 방향
+
+멀티모듈 OpenAPI는 MVP 이후 필수 확장이다. `swagger-flow-tester`의 `modules` 개념은 그대로 가져오지 않고, compiler에서 사용할 수 있는 module registry 설정으로 정규화한다.
+
+```text
+module-config
+  defaultModule: optional
+  modules:
+    bos:
+      baseUrl: BASE_URL 또는 BASE_URL_BOS
+      openapiPath: OPENAPI_BOS_PATH
+    mall:
+      baseUrl: BASE_URL 또는 BASE_URL_MALL
+      openapiPath: OPENAPI_MALL_PATH
+```
+
+확장 규칙:
+
+- MVP의 단일 OpenAPI registry를 `default` module registry로 간주한다.
+- `--module` 옵션은 사용할 OpenAPI registry를 선택한다.
+- Scenario DSL v2에서 `api.module`을 허용하면 step별 module 참조가 가능하다.
+- module이 생략되면 default module을 사용해 기존 DSL과 호환한다.
+- Swagger/OpenAPI URL 자동 탐색은 module 등록 시점에만 사용한다.
+
+## 8. 후속 UI 통합 방향
 
 UI를 붙일 때는 `swagger-flow-tester`를 그대로 합치기보다 다음 계층을 추가한다.
 
@@ -257,11 +281,12 @@ ui-flow.adapter.ts
 - binding은 이전 step의 extract와 이후 step의 template으로 변환한다.
 - canvas 좌표와 UI 상태는 Scenario DSL에 포함하지 않는다.
 
-## 8. 리스크
+## 9. 리스크
 
 | 리스크 | 설명 | 대응 |
 | --- | --- | --- |
 | UI 모델 과결합 | React/Zustand 상태를 compiler에 섞을 가능성 | UI adapter를 별도 계층으로 유지 |
+| module registry 혼합 | 서로 다른 module의 operationId가 섞일 가능성 | module별 registry를 분리하고 `--module` 또는 `api.module`로 선택 |
 | k6 런타임 제약 | npm JSONPath 라이브러리를 k6에서 바로 사용하기 어려움 | generated helper 또는 제한된 JSONPath compile |
 | condition 의미 혼동 | check인지 branch인지 불명확 | MVP에서는 check로 고정 |
 | OpenAPI validation 범위 확대 | request schema validation까지 커질 수 있음 | MVP에서는 endpoint resolve까지만 |
