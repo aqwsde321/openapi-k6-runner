@@ -18,7 +18,7 @@
 | --- | --- | --- | --- |
 | P-00 | MVP 설계/기능 세분화 | 문서 확정 | 완료 |
 | P-01 | CLI 골격 | TypeScript CLI 실행 가능 | 완료 |
-| P-02 | Parser | Scenario DSL parse 가능 | 대기 |
+| P-02 | Parser | Scenario DSL parse 가능 | 완료 |
 | P-03 | OpenAPI Registry | OpenAPI operation resolve 가능 | 대기 |
 | P-04 | AST Builder | DSL + OpenAPI -> AST | 대기 |
 | P-05 | k6 Generator | AST -> k6 script | 대기 |
