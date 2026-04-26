@@ -146,6 +146,37 @@ describe('openapi-k6 CLI', () => {
     expect(scenario).toContain('path: /health');
   });
 
+  it('stores relative OpenAPI paths from the generated config directory', async () => {
+    await writeGenerateFixtures(workspace);
+
+    await runCli(
+      [
+        'init',
+        '--base-url',
+        'https://api.test.local',
+        '--openapi',
+        'openapi.yaml',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(config).toContain('    openapi: ../openapi.yaml');
+
+    await runCli(
+      ['sync'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const snapshot = await readFile(
+      path.join(workspace, 'load-tests/openapi/default.openapi.json'),
+      'utf8',
+    );
+
+    expect(JSON.parse(snapshot).openapi).toBe('3.0.3');
+  });
+
   it('uses the configured scaffold directory in generated README commands', async () => {
     await runCli(
       [
@@ -171,6 +202,27 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('--write perf-tests/generated/smoke.k6.js');
     expect(readme).toContain('k6 run perf-tests/generated/smoke.k6.js');
     expect(readme).not.toContain('load-tests/');
+  });
+
+  it('shell-quotes scaffold README commands when the directory contains spaces', async () => {
+    await runCli(
+      [
+        'init',
+        '--dir',
+        'perf tests',
+        '--module',
+        'pharma',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const readme = await readFile(path.join(workspace, 'perf tests/README.md'), 'utf8');
+
+    expect(readme).toContain("openapi-k6 sync --config 'perf tests/config.yaml' --module pharma");
+    expect(readme).toContain("--config 'perf tests/config.yaml'");
+    expect(readme).toContain("--scenario 'perf tests/scenarios/smoke.yaml'");
+    expect(readme).toContain("--write 'perf tests/generated/smoke.k6.js'");
+    expect(readme).toContain("k6 run 'perf tests/generated/smoke.k6.js'");
   });
 
   it('does not overwrite scaffold files unless --force is provided', async () => {

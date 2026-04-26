@@ -40,7 +40,9 @@ export async function initLoadTests(
   await fs.mkdir(path.join(directoryPath, 'scenarios'), { recursive: true });
   await fs.mkdir(path.join(directoryPath, 'generated'), { recursive: true });
 
-  await writeTextFile(configPath, renderConfig(moduleName, options.baseUrl, options.openapi), options.force);
+  const openapi = normalizeOpenApiForConfig(options.cwd, directoryPath, options.openapi);
+
+  await writeTextFile(configPath, renderConfig(moduleName, options.baseUrl, openapi), options.force);
   await writeTextFile(scenarioPath, renderSmokeScenario(smokePath), options.force);
   await writeTextFile(readmePath, renderReadme(moduleName, directory), options.force);
 
@@ -82,6 +84,39 @@ function normalizeEndpointPath(value: string): string {
   }
 
   return endpointPath;
+}
+
+function normalizeOpenApiForConfig(
+  cwd: string,
+  configDirectoryPath: string,
+  value: string | undefined,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const openapi = value.trim();
+
+  if (!openapi || isHttpUrl(openapi) || path.isAbsolute(openapi)) {
+    return openapi || undefined;
+  }
+
+  const relativePath = path.relative(configDirectoryPath, path.resolve(cwd, openapi));
+
+  return normalizePathSeparators(relativePath || '.');
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function normalizePathSeparators(value: string): string {
+  return value.split(path.sep).join('/');
 }
 
 async function writeTextFile(
@@ -137,6 +172,9 @@ function renderReadme(moduleName: string, directory: string): string {
   const configPath = `${directory}/config.yaml`;
   const scenarioPath = `${directory}/scenarios/smoke.yaml`;
   const outputPath = `${directory}/generated/smoke.k6.js`;
+  const configArg = shellQuote(configPath);
+  const scenarioArg = shellQuote(scenarioPath);
+  const outputArg = shellQuote(outputPath);
   const usesDefaultDirectory = directory === 'load-tests';
 
   return [
@@ -147,18 +185,26 @@ function renderReadme(moduleName: string, directory: string): string {
     '```bash',
     usesDefaultDirectory
       ? 'openapi-k6 sync'
-      : `openapi-k6 sync --config ${configPath} --module ${moduleName}`,
+      : `openapi-k6 sync --config ${configArg} --module ${moduleName}`,
     'openapi-k6 generate \\',
     ...(usesDefaultDirectory
       ? ['  -s smoke']
       : [
-          `  --config ${configPath} \\`,
+          `  --config ${configArg} \\`,
           `  --module ${moduleName} \\`,
-          `  --scenario ${scenarioPath} \\`,
-          `  --write ${outputPath}`,
+          `  --scenario ${scenarioArg} \\`,
+          `  --write ${outputArg}`,
         ]),
-    `k6 run ${outputPath}`,
+    `k6 run ${outputArg}`,
     '```',
     '',
   ].join('\n');
+}
+
+function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_./:-]+$/.test(value)) {
+    return value;
+  }
+
+  return `'${value.replace(/'/g, "'\\''")}'`;
 }
