@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import { buildAst } from '../compiler/ast.builder.js';
 import { generateK6Script } from '../compiler/k6.generator.js';
+import { syncOpenApiSnapshot } from '../openapi/openapi.catalog.js';
 import { parseOpenApiFile } from '../openapi/openapi.parser.js';
 import { parseScenarioFile } from '../parser/scenario.parser.js';
 
@@ -26,11 +27,24 @@ export interface GenerateOptions {
   write: string;
 }
 
+export interface SyncOptions {
+  openapi: string;
+  write: string;
+  catalog: string;
+}
+
 export interface GenerateResult {
   outputPath: string;
   scenarioPath: string;
   openapiPath: string;
   baseUrl: string;
+}
+
+export interface SyncResult {
+  snapshotPath: string;
+  catalogPath: string;
+  openapiPath: string;
+  operationCount: number;
 }
 
 function resolveCwd(context: CliContext): string {
@@ -104,6 +118,28 @@ export async function runGenerateCommand(
   return result;
 }
 
+export async function runSyncCommand(
+  options: SyncOptions,
+  context: CliContext = {},
+): Promise<SyncResult> {
+  const cwd = resolveCwd(context);
+  const openapiPath = resolveOpenApiInput(cwd, options.openapi);
+  const snapshotPath = path.resolve(cwd, options.write);
+  const catalogPath = path.resolve(cwd, options.catalog);
+  const result = await syncOpenApiSnapshot({
+    openapi: openapiPath,
+    write: snapshotPath,
+    catalog: catalogPath,
+  });
+
+  return {
+    openapiPath,
+    snapshotPath: result.snapshotPath,
+    catalogPath: result.catalogPath,
+    operationCount: result.operationCount,
+  };
+}
+
 function writeLine(stream: WritableLike, message: string): void {
   stream.write(`${message}\n`);
 }
@@ -132,6 +168,18 @@ export function createProgram(context: CliContext = {}): Command {
     .action(async (options: GenerateOptions) => {
       const result = await runGenerateCommand(options, context);
       writeLine(stdout, `Generated ${result.outputPath}`);
+    });
+
+  program
+    .command('sync')
+    .description('Write an OpenAPI snapshot and endpoint catalog.')
+    .requiredOption('-o, --openapi <path-or-url>', 'OpenAPI spec file path or URL')
+    .requiredOption('-w, --write <path>', 'Output OpenAPI snapshot path')
+    .requiredOption('-c, --catalog <path>', 'Output endpoint catalog path')
+    .action(async (options: SyncOptions) => {
+      const result = await runSyncCommand(options, context);
+      writeLine(stdout, `Synced ${result.snapshotPath}`);
+      writeLine(stdout, `Catalog ${result.catalogPath} (${result.operationCount} operations)`);
     });
 
   return program;

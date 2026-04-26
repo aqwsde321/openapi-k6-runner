@@ -28,13 +28,18 @@ BASE_URL=https://dev-api.example.com
 생성 명령은 대상 프로젝트 루트에서 실행합니다.
 
 ```bash
+openapi-k6 sync \
+  --openapi https://dev-api.example.com/v3/api-docs \
+  --write load-tests/openapi/dev.openapi.json \
+  --catalog load-tests/openapi/catalog.json
+
 openapi-k6 generate \
   --scenario load-tests/scenarios/order-flow.yaml \
   --openapi load-tests/openapi/dev.openapi.json \
   --write load-tests/generated/order-flow.k6.js
 ```
 
-현재는 OpenAPI URL을 `curl` 등으로 snapshot 파일에 저장한 뒤 `generate`에 넘깁니다. 다음 단계에서는 OpenAPI snapshot과 `catalog.json`을 만드는 `sync`/`inspect` 계열 명령을 추가합니다.
+`sync`는 원격 OpenAPI URL 또는 로컬 OpenAPI 파일을 snapshot으로 저장하고, scenario 작성 참고용 `catalog.json`을 생성합니다. `generate`는 원격 URL이 아니라 snapshot 파일을 입력으로 사용하는 것을 기본으로 합니다.
 
 이 저장소의 `.env`는 generator 개발/검증용 로컬 설정입니다.
 

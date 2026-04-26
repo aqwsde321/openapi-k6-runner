@@ -44,6 +44,23 @@ export interface ApiRegistry {
   defaultServerUrl?: string;
 }
 
+export interface ApiCatalog {
+  generatedAt: string;
+  source: string;
+  operations: ApiCatalogOperation[];
+}
+
+export interface ApiCatalogOperation {
+  method: string;
+  path: string;
+  operationId?: string;
+  tags: string[];
+  summary?: string;
+  description?: string;
+  parameters: unknown[];
+  hasRequestBody: boolean;
+}
+
 export interface ASTScenario {
   name: string;
   steps: ASTStep[];

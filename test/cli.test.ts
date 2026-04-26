@@ -161,4 +161,38 @@ describe('openapi-k6 CLI', () => {
 
     expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://server-fallback.test.local";');
   });
+
+  it('creates OpenAPI snapshot and catalog files with sync command', async () => {
+    await writeGenerateFixtures(workspace);
+
+    await runCli(
+      [
+        'sync',
+        '--openapi',
+        'openapi.yaml',
+        '--write',
+        'load-tests/openapi/dev.openapi.json',
+        '--catalog',
+        'load-tests/openapi/catalog.json',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const snapshot = JSON.parse(
+      await readFile(path.join(workspace, 'load-tests/openapi/dev.openapi.json'), 'utf8'),
+    ) as Record<string, unknown>;
+    const catalog = JSON.parse(
+      await readFile(path.join(workspace, 'load-tests/openapi/catalog.json'), 'utf8'),
+    ) as { operations: Array<Record<string, unknown>> };
+
+    expect(snapshot.openapi).toBe('3.0.3');
+    expect(catalog.operations).toEqual([
+      expect.objectContaining({
+        method: 'GET',
+        path: '/health',
+        operationId: 'getHealth',
+        hasRequestBody: false,
+      }),
+    ]);
+  });
 });

@@ -22,7 +22,7 @@
 | P-03 | OpenAPI Registry | OpenAPI operation resolve 가능 | 완료 |
 | P-04 | AST Builder | DSL + OpenAPI -> AST | 완료 |
 | P-05 | k6 Generator | AST -> k6 script | 완료 |
-| P-06 | OpenAPI Snapshot/Catalog | snapshot 저장 및 endpoint catalog 생성 | 대기 |
+| P-06 | OpenAPI Snapshot/Catalog | snapshot 저장 및 endpoint catalog 생성 | 완료 |
 | P-07 | Fixture/Test | 대상 프로젝트형 fixture | 대기 |
 | P-08 | README/사용법 | 최소 실행 가이드 | 대기 |
 | P-09 | 멀티모듈 OpenAPI 설정 | module별 registry 선택 | 필수 후속 |

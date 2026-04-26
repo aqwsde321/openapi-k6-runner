@@ -176,4 +176,4 @@ function normalizeOptionalString(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
-export { HTTP_METHODS };
+export { HTTP_METHOD_ORDER, HTTP_METHODS };

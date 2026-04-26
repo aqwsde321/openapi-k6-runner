@@ -349,18 +349,7 @@ BASE_URL=https://api.example.com
 
 원격 OpenAPI URL은 generate 실행 때마다 직접 파싱하지 않고, 대상 프로젝트의 snapshot 파일로 고정해 사용하는 것을 권장한다.
 
-현재 수동 흐름:
-
-```bash
-curl -o load-tests/openapi/dev.openapi.json https://dev-api.example.com/v3/api-docs
-
-openapi-k6 generate \
-  --scenario load-tests/scenarios/order-flow.yaml \
-  --openapi load-tests/openapi/dev.openapi.json \
-  --write load-tests/generated/order-flow.k6.js
-```
-
-후속 자동화 명령 방향:
+snapshot/catalog 생성:
 
 ```bash
 openapi-k6 sync \
@@ -382,7 +371,8 @@ openapi-k6 sync \
       "operationId": "getOrder",
       "tags": ["orders"],
       "summary": "Get order",
-      "parameters": []
+      "parameters": [],
+      "hasRequestBody": false
     }
   ]
 }
@@ -431,6 +421,7 @@ src/
 │   └── scenario.parser.ts
 │
 ├── openapi/
+│   ├── openapi.catalog.ts
 │   ├── openapi.parser.ts
 │   └── openapi.resolver.ts
 │
@@ -457,6 +448,7 @@ src/
 - `status` 기반 condition
 - OpenAPI parse/dereference
 - OpenAPI operation resolve
+- OpenAPI snapshot/catalog 생성
 
 ### 제외
 
@@ -465,8 +457,6 @@ src/
 - retry
 - validation
 - JavaScript expression
-- OpenAPI URL sync 자동화
-- endpoint catalog 생성
 
 ## 17. 확장 계획
 
