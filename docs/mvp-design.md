@@ -211,6 +211,7 @@ export interface ASTStep {
   id: string;
   method: string;
   path: string;
+  pathParameters: unknown[];
   request: NonNullable<Step['request']>;
   extract?: Step['extract'];
   condition?: string;
@@ -218,6 +219,7 @@ export interface ASTStep {
 ```
 
 `Step.request`는 DSL에서 생략할 수 있지만, AST 생성 시 빈 request 객체로 정규화한다. 따라서 code generator는 항상 `ASTStep.request`가 존재한다고 가정한다.
+`ASTStep.pathParameters`에는 OpenAPI `parameters` 중 `in: path`인 metadata만 보존하고, DSL에서 지정한 실제 값은 `request.pathParams`에 유지한다.
 
 ## 9. OpenAPI 활용 범위
 

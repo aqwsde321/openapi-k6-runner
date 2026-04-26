@@ -43,3 +43,18 @@ export interface ApiRegistry {
   byMethodPath: Map<string, ApiOperation>;
   defaultServerUrl?: string;
 }
+
+export interface ASTScenario {
+  name: string;
+  steps: ASTStep[];
+}
+
+export interface ASTStep {
+  id: string;
+  method: string;
+  path: string;
+  pathParameters: unknown[];
+  request: StepRequest;
+  extract?: Record<string, ExtractRule>;
+  condition?: string;
+}

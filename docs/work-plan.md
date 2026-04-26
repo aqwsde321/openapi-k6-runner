@@ -20,7 +20,7 @@
 | P-01 | CLI 골격 | TypeScript CLI 실행 가능 | 완료 |
 | P-02 | Parser | Scenario DSL parse 가능 | 완료 |
 | P-03 | OpenAPI Registry | OpenAPI operation resolve 가능 | 완료 |
-| P-04 | AST Builder | DSL + OpenAPI -> AST | 대기 |
+| P-04 | AST Builder | DSL + OpenAPI -> AST | 완료 |
 | P-05 | k6 Generator | AST -> k6 script | 대기 |
 | P-06 | Fixture/Test | 단위 테스트와 fixture | 대기 |
 | P-07 | README/사용법 | 최소 실행 가이드 | 대기 |

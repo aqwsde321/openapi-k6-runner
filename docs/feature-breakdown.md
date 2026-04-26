@@ -167,6 +167,7 @@ interface ASTStep {
   id: string;
   method: string;
   path: string;
+  pathParameters: unknown[];
   request: {
     headers?: Record<string, unknown>;
     query?: Record<string, unknown>;
@@ -183,6 +184,7 @@ interface ASTStep {
 - 모든 step이 실행 순서대로 AST에 포함된다.
 - request가 없는 step도 빈 request로 정규화된다.
 - OpenAPI path parameter 이름과 DSL `pathParams`를 함께 보존한다.
+- OpenAPI path parameter metadata는 `pathParameters`에, DSL 값은 `request.pathParams`에 보존한다.
 
 ## 9. F-07 Template Compiler
 
