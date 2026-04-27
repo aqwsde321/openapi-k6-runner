@@ -221,6 +221,7 @@ interface ASTStep {
 ### 책임
 
 - DSL 값 안의 `{{variableName}}`를 k6 script에서 `context.variableName` 참조로 변환한다.
+- DSL 값 안의 `{{env.NAME}}`를 k6 script에서 `__ENV.NAME` 참조로 변환한다.
 - JavaScript expression은 지원하지 않는다.
 
 ### 지원 범위
@@ -228,21 +229,25 @@ interface ASTStep {
 - 문자열 전체가 template인 경우
 - 문자열 일부에 template이 포함된 경우
 - object/array 내부 template 재귀 변환
+- 환경변수 template은 `env.` prefix와 대문자/숫자/underscore 이름을 사용한다.
 
 ### 예시
 
 ```yaml
 Authorization: "Bearer {{token}}"
+password: "{{env.LOGIN_PASSWORD}}"
 ```
 
 ```javascript
 `Bearer ${context.token}`
+__ENV.LOGIN_PASSWORD
 ```
 
 ### 완료 기준
 
 - 존재하지 않는 변수는 런타임에서 빈 문자열로 대체하지 않는다.
 - 생성된 script에서 context 접근이 명확히 보인다.
+- secret 값은 YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조할 수 있다.
 
 ## 10. F-08 JSONPath Extract
 
@@ -504,12 +509,15 @@ openapi-k6 init
 ### 출력
 
 - `load-tests/config.yaml`
+- `load-tests/.env.example`
+- `load-tests/.gitignore`
 - `load-tests/scenarios/smoke.yaml`
 - `load-tests/README.md`
 
 ### 완료 기준
 
 - 생성된 config의 `TODO` 값을 채우면 `sync`를 실행할 수 있다.
+- `.env.example`에는 secret placeholder만 있고 실제 `.env`는 ignore된다.
 - 생성된 smoke scenario의 path를 채우거나 선택한 endpoint로 바꾸면 `generate`를 실행할 수 있다.
 - `sync`와 `generate`는 남은 `TODO` 값을 발견하면 명확한 에러를 낸다.
 - `--force` 없이는 기존 파일을 덮어쓰지 않는다.

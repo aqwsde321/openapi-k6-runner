@@ -82,12 +82,43 @@ describe('k6 generator', () => {
 
   it('compiles template values recursively without replacing missing values with empty strings', () => {
     expect(compileValueExpression('{{token}}')).toBe('context.token');
+    expect(compileValueExpression('{{env.API_TOKEN}}')).toBe('__ENV.API_TOKEN');
     expect(compileValueExpression('Bearer {{token}}')).toBe('`Bearer ${context.token}`');
+    expect(compileValueExpression('Bearer {{env.API_TOKEN}}')).toBe('`Bearer ${__ENV.API_TOKEN}`');
     expect(compileValueExpression({
       headers: ['X-Trace-{{traceId}}'],
-      body: { userId: '{{userId}}' },
-    })).toBe('{ "headers": [`X-Trace-${context.traceId}`], "body": { "userId": context.userId } }');
+      body: { userId: '{{userId}}', password: '{{env.USER_PASSWORD}}' },
+    })).toBe('{ "headers": [`X-Trace-${context.traceId}`], "body": { "userId": context.userId, "password": __ENV.USER_PASSWORD } }');
     expect(() => compileValueExpression('Bearer {{bad-name}}')).toThrowError(TemplateCompileError);
+    expect(() => compileValueExpression('{{env.bad-name}}')).toThrowError(TemplateCompileError);
+  });
+
+  it('generates k6 runtime environment references from env templates', async () => {
+    const script = generateK6Script(
+      {
+        name: 'env-login',
+        steps: [
+          {
+            id: 'login',
+            method: 'POST',
+            path: '/login',
+            pathParameters: [],
+            request: {
+              headers: { 'X-Client': '{{env.CLIENT_ID}}' },
+              body: {
+                loginId: '{{env.LOGIN_ID}}',
+                password: '{{env.LOGIN_PASSWORD}}',
+              },
+            },
+          },
+        ],
+      },
+      { baseUrl: 'https://api.test.local' },
+    );
+
+    expect(script).toContain('const body0 = JSON.stringify({ "loginId": __ENV.LOGIN_ID, "password": __ENV.LOGIN_PASSWORD });');
+    expect(script).toContain('const params0 = { headers: { "Content-Type": "application/json", "X-Client": __ENV.CLIENT_ID } };');
+    await expectValidJavaScript(workspace, script);
   });
 
   it('compiles MVP JSONPath expressions and rejects unsupported expressions', () => {

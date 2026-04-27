@@ -105,6 +105,8 @@ describe('openapi-k6 CLI', () => {
     );
 
     const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+    const envExample = await readFile(path.join(workspace, 'load-tests/.env.example'), 'utf8');
+    const gitignore = await readFile(path.join(workspace, 'load-tests/.gitignore'), 'utf8');
     const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
     const readme = await readFile(path.join(workspace, 'load-tests/README.md'), 'utf8');
 
@@ -135,6 +137,17 @@ describe('openapi-k6 CLI', () => {
       '    catalog: openapi/pharma.catalog.json',
       '',
     ].join('\n'));
+    expect(envExample).toBe([
+      '# Copy this file to .env and fill values for local k6 runs.',
+      '# k6 does not auto-load .env files. Export these variables before running k6.',
+      'BASE_URL=https://dev-api.pharmaresearch.com',
+      '',
+      '# Example scenario secrets. Add or rename variables as needed.',
+      'LOGIN_ID=',
+      'LOGIN_PASSWORD=',
+      '',
+    ].join('\n'));
+    expect(gitignore).toBe('.env\n');
     expect(scenario).toContain('path: /__dev/error-codes');
     expect(readme).toContain('openapi-k6 sync');
     expect(readme).toContain('openapi-k6 generate \\');
@@ -151,6 +164,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('새 테스트가 필요하면 `scenarios/<name>.yaml` 파일을 추가하고 `openapi-k6 generate -s <name>`');
     expect(readme).toContain('`openapi/*.catalog.json`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`');
     expect(readme).toContain('`generated/*.k6.js`는 직접 고치지 말고 scenario를 수정한 뒤 다시 generate합니다.');
+    expect(readme).toContain('비밀번호 같은 secret은 YAML에 직접 쓰지 말고 `{{env.NAME}}`으로 참조합니다.');
+    expect(readme).toContain('실제 secret 값은 `.env`에 두고 커밋하지 않습니다.');
     expect(readme).toContain('config 상대 경로는 `config.yaml` 위치 기준입니다.');
     expect(readme).toContain('AI가 확인해야 할 핵심 파일');
     expect(readme).toContain('## AI에게 테스트 요청 예시');
@@ -165,10 +180,13 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('### operationId 기반 예시');
     expect(readme).toContain('### method + path 기반 예시');
     expect(readme).toContain('Authorization: "Bearer {{token}}"');
+    expect(readme).toContain('password: "{{env.LOGIN_PASSWORD}}"');
+    expect(readme).toContain('지원되는 template:');
     expect(readme).toContain('openapi-k6 generate -s login-flow');
     expect(readme).toContain('## 3. OpenAPI snapshot 생성');
     expect(readme).toContain('## 4. k6 script 생성');
     expect(readme).toContain('## 5. k6 실행');
+    expect(readme).toContain('source load-tests/.env');
     expect(readme).toContain('catalog.json`에서 `operationId`, `method`, `path`, `tags`, `parameters`, `hasRequestBody`');
     expect(readme).toContain('## 자주 쓰는 수정 위치');
     expect(readme).toContain('## 제거 방법');
@@ -183,6 +201,7 @@ describe('openapi-k6 CLI', () => {
     );
 
     const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+    const envExample = await readFile(path.join(workspace, 'load-tests/.env.example'), 'utf8');
     const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
 
     expect(config).toBe([
@@ -212,6 +231,7 @@ describe('openapi-k6 CLI', () => {
       '    catalog: openapi/default.catalog.json',
       '',
     ].join('\n'));
+    expect(envExample).toContain('BASE_URL=http://localhost:8080');
     expect(scenario).toContain('path: /health');
   });
 
@@ -273,6 +293,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('--write perf-tests/generated/login-flow.k6.js');
     expect(readme).toContain('k6 run perf-tests/generated/smoke.k6.js');
     expect(readme).toContain('BASE_URL=https://api.example.com k6 run perf-tests/generated/smoke.k6.js');
+    expect(readme).toContain('source perf-tests/.env');
     expect(readme).toContain('rm -rf perf-tests');
     expect(readme).not.toContain('load-tests/');
   });
@@ -296,6 +317,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain("--scenario 'perf tests/scenarios/smoke.yaml'");
     expect(readme).toContain("--write 'perf tests/generated/smoke.k6.js'");
     expect(readme).toContain("k6 run 'perf tests/generated/smoke.k6.js'");
+    expect(readme).toContain("source 'perf tests/.env'");
   });
 
   it('does not overwrite scaffold files unless --force is provided', async () => {

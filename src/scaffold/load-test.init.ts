@@ -15,6 +15,8 @@ export interface InitLoadTestsOptions {
 export interface InitLoadTestsResult {
   directoryPath: string;
   configPath: string;
+  envExamplePath: string;
+  gitignorePath: string;
   scenarioPath: string;
   readmePath: string;
 }
@@ -33,6 +35,8 @@ export async function initLoadTests(
   const directory = normalizeDirectory(options.directory ?? 'load-tests');
   const directoryPath = path.resolve(options.cwd, directory);
   const configPath = path.join(directoryPath, 'config.yaml');
+  const envExamplePath = path.join(directoryPath, '.env.example');
+  const gitignorePath = path.join(directoryPath, '.gitignore');
   const scenarioPath = path.join(directoryPath, 'scenarios/smoke.yaml');
   const readmePath = path.join(directoryPath, 'README.md');
   const smokePath = normalizeEndpointPath(options.smokePath ?? '/health');
@@ -44,12 +48,16 @@ export async function initLoadTests(
   const openapi = normalizeOpenApiForConfig(options.cwd, directoryPath, options.openapi);
 
   await writeTextFile(configPath, renderConfig(moduleName, options.baseUrl, openapi), options.force);
+  await writeTextFile(envExamplePath, renderEnvExample(options.baseUrl), options.force);
+  await writeTextFile(gitignorePath, renderGitignore(), options.force);
   await writeTextFile(scenarioPath, renderSmokeScenario(smokePath), options.force);
   await writeTextFile(readmePath, renderReadme(moduleName, directory, options.cliPath), options.force);
 
   return {
     directoryPath,
     configPath,
+    envExamplePath,
+    gitignorePath,
     scenarioPath,
     readmePath,
   };
@@ -185,17 +193,39 @@ function renderSmokeScenario(smokePath: string): string {
   ].join('\n');
 }
 
+function renderEnvExample(baseUrl: string | undefined): string {
+  return [
+    '# Copy this file to .env and fill values for local k6 runs.',
+    '# k6 does not auto-load .env files. Export these variables before running k6.',
+    `BASE_URL=${baseUrl ?? 'http://localhost:8080'}`,
+    '',
+    '# Example scenario secrets. Add or rename variables as needed.',
+    'LOGIN_ID=',
+    'LOGIN_PASSWORD=',
+    '',
+  ].join('\n');
+}
+
+function renderGitignore(): string {
+  return [
+    '.env',
+    '',
+  ].join('\n');
+}
+
 function renderReadme(moduleName: string, directory: string, cliPath: string | undefined): string {
   const configPath = `${directory}/config.yaml`;
   const scenarioPath = `${directory}/scenarios/smoke.yaml`;
   const outputPath = `${directory}/generated/smoke.k6.js`;
   const workflowScenarioPath = `${directory}/scenarios/login-flow.yaml`;
   const workflowOutputPath = `${directory}/generated/login-flow.k6.js`;
+  const envPath = `${directory}/.env`;
   const configArg = shellQuote(configPath);
   const scenarioArg = shellQuote(scenarioPath);
   const outputArg = shellQuote(outputPath);
   const workflowScenarioArg = shellQuote(workflowScenarioPath);
   const workflowOutputArg = shellQuote(workflowOutputPath);
+  const envArg = shellQuote(envPath);
   const aliasCommand = renderAliasCommand(cliPath);
   const buildDirectory = inferBuildDirectory(cliPath);
   const usesDefaultDirectory = directory === 'load-tests';
@@ -242,8 +272,9 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '4. `openapi/*.catalog.json`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`를 확인합니다.',
     '5. `scenarios/smoke.yaml`을 실제 endpoint에 맞게 수정합니다.',
     '6. `openapi-k6 generate`로 k6 script를 다시 생성합니다.',
-    '7. 필요하면 `k6 run`으로 생성된 script를 실행합니다.',
-    '8. 새 테스트가 필요하면 `scenarios/<name>.yaml` 파일을 추가하고 `openapi-k6 generate -s <name>`으로 생성합니다.',
+    '7. secret이 필요한 scenario는 `.env.example`을 `.env`로 복사하고 값을 채웁니다.',
+    '8. 필요하면 `k6 run`으로 생성된 script를 실행합니다.',
+    '9. 새 테스트가 필요하면 `scenarios/<name>.yaml` 파일을 추가하고 `openapi-k6 generate -s <name>`으로 생성합니다.',
     '',
     '작업 규칙:',
     '',
@@ -251,12 +282,15 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '- `openapi/*.openapi.json`은 원격 OpenAPI snapshot이므로 직접 고치지 말고 `sync`로 갱신합니다.',
     '- `catalog.json`은 참고용입니다. generator 입력은 catalog가 아니라 snapshot OpenAPI입니다.',
     '- 인증이 필요한 API는 `scenarios/*.yaml`의 `request.headers`에 header template을 명시합니다.',
+    '- 비밀번호 같은 secret은 YAML에 직접 쓰지 말고 `{{env.NAME}}`으로 참조합니다.',
+    '- 실제 secret 값은 `.env`에 두고 커밋하지 않습니다. `.env.example`에는 placeholder만 둡니다.',
     '- `condition`은 흐름 분기가 아니라 k6 `check`입니다. 실패해도 다음 step은 계속 실행됩니다.',
     '- config 상대 경로는 `config.yaml` 위치 기준입니다.',
     '',
     'AI가 확인해야 할 핵심 파일:',
     '',
     `- \`${directory}/config.yaml\`: base URL, OpenAPI URL, snapshot/catalog 경로`,
+    `- \`${directory}/.env.example\`: local secret 환경변수 예시`,
     `- \`${directory}/openapi/${moduleName}.catalog.json\`: endpoint 목록`,
     `- \`${directory}/scenarios/smoke.yaml\`: scenario DSL`,
     `- \`${directory}/generated/smoke.k6.js\`: 생성된 k6 script`,
@@ -301,6 +335,8 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     `${directory}/`,
     '├── README.md',
     '├── config.yaml',
+    '├── .env.example',
+    '├── .gitignore',
     '├── openapi/',
     `│   ├── ${moduleName}.openapi.json`,
     `│   └── ${moduleName}.catalog.json`,
@@ -372,8 +408,8 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '      operationId: loginUser',
     '    request:',
     '      body:',
-    '        username: test-user',
-    '        password: test-password',
+    '        username: "{{env.LOGIN_ID}}"',
+    '        password: "{{env.LOGIN_PASSWORD}}"',
     '    extract:',
     '      token:',
     '        from: $.token',
@@ -412,6 +448,11 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '- `query`: query string',
     '- `pathParams`: OpenAPI path template의 `{name}` 값',
     '- `body`: JSON request body',
+    '',
+    '지원되는 template:',
+    '',
+    '- `{{variableName}}`: 이전 step의 `extract`로 저장한 context 값',
+    '- `{{env.NAME}}`: k6 실행 시 export된 환경변수 값. secret에 사용합니다.',
     '',
     '지원되는 condition:',
     '',
@@ -479,6 +520,16 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     `BASE_URL=https://api.example.com k6 run ${outputArg}`,
     '```',
     '',
+    'scenario에서 `{{env.NAME}}`을 사용한다면 `.env.example`을 `.env`로 복사한 뒤 실행 전에 export합니다.',
+    '',
+    '```bash',
+    `cp ${shellQuote(`${directory}/.env.example`)} ${envArg}`,
+    'set -a',
+    `source ${envArg}`,
+    'set +a',
+    `k6 run ${outputArg}`,
+    '```',
+    '',
     '## 자주 쓰는 수정 위치',
     '',
     '- endpoint 변경: `scenarios/smoke.yaml`의 `api.path`',
@@ -498,7 +549,7 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     `rm -rf ${shellQuote(directory)}`,
     '```',
     '',
-    `주의: 이 명령은 \`${directory}/config.yaml\`, \`${directory}/scenarios/\`, \`${directory}/openapi/\`, \`${directory}/generated/\`를 모두 삭제합니다.`,
+    `주의: 이 명령은 \`${directory}/config.yaml\`, \`${directory}/.env.example\`, \`${directory}/.gitignore\`, \`${directory}/scenarios/\`, \`${directory}/openapi/\`, \`${directory}/generated/\`를 모두 삭제합니다.`,
     '필요한 scenario, snapshot, catalog가 있으면 먼저 백업합니다.',
     '',
   ].join('\n');

@@ -33,6 +33,8 @@ load-tests/generated/*.k6.js
 backend-project/
 └── load-tests/
     ├── config.yaml
+    ├── .env.example
+    ├── .gitignore
     ├── openapi/
     │   ├── pharma.openapi.json
     │   └── pharma.catalog.json
@@ -85,8 +87,8 @@ steps:
       operationId: loginUser
     request:
       body:
-        username: tester
-        password: secret
+        username: "{{env.LOGIN_ID}}"
+        password: "{{env.LOGIN_PASSWORD}}"
     extract:
       token:
         from: $.token
@@ -109,6 +111,7 @@ DSL 원칙:
 - step은 배열 순서대로 실행한다.
 - 모든 step은 같은 `context`를 공유한다.
 - `{{token}}`은 `context.token` 참조로 컴파일한다.
+- `{{env.LOGIN_PASSWORD}}`는 k6 런타임 환경변수 `__ENV.LOGIN_PASSWORD` 참조로 컴파일한다.
 - `condition`은 k6 `check`이며 흐름 분기가 아니다.
 - condition 실패와 관계없이 다음 step은 실행된다.
 

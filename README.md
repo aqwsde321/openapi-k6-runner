@@ -110,6 +110,8 @@ load-tests/README.md와 load-tests/openapi/*.catalog.json을 읽고,
 backend-project/
 └── load-tests/
     ├── config.yaml
+    ├── .env.example
+    ├── .gitignore
     ├── openapi/
     │   ├── pharma.openapi.json
     │   └── pharma.catalog.json
@@ -245,8 +247,8 @@ steps:
       operationId: loginUser
     request:
       body:
-        username: tester
-        password: secret
+        username: "{{env.LOGIN_ID}}"
+        password: "{{env.LOGIN_PASSWORD}}"
     extract:
       token:
         from: $.token
@@ -284,11 +286,14 @@ steps:
 
 - API 참조: `operationId` 또는 `method + path`
 - module 선택: CLI의 `--module`; Scenario DSL 내부 `api.module`은 아직 지원하지 않음
-- template: `{{variableName}}`
+- context template: `{{variableName}}`
+- env template: `{{env.LOGIN_PASSWORD}}`
 - extract JSONPath: `$.token`, `$.data.id`, `$.items[0].id`
 - condition: `status == 200`, `status != 500`, `status >= 200`, `status < 300`
 
 `condition`은 흐름 분기가 아니라 k6 `check`로 생성됩니다. 실패해도 다음 step 실행은 계속됩니다.
+
+비밀번호 같은 secret은 YAML에 직접 쓰지 말고 `{{env.NAME}}`으로 참조합니다. 생성된 k6 script에서는 `__ENV.NAME`으로 컴파일됩니다.
 
 ## k6 Script 생성
 
@@ -312,6 +317,15 @@ k6 run load-tests/generated/smoke.k6.js
 
 ```bash
 BASE_URL=https://dev-api.example.com k6 run load-tests/generated/smoke.k6.js
+```
+
+scenario에서 `{{env.NAME}}`을 사용한다면 k6 실행 전에 환경변수를 export합니다.
+
+```bash
+set -a
+source load-tests/.env
+set +a
+k6 run load-tests/generated/login-flow.k6.js
 ```
 
 ## 개발 검증

@@ -6,8 +6,8 @@ steps:
       operationId: loginUser
     request:
       body:
-        username: tester
-        password: secret
+        username: "{{env.LOGIN_ID}}"
+        password: "{{env.LOGIN_PASSWORD}}"
     extract:
       token:
         from: $.token

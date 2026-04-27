@@ -25,7 +25,7 @@ export default function () {
   const context = {};
 
   const url0 = joinUrl(BASE_URL, `/auth/login`);
-  const body0 = JSON.stringify({ "username": "tester", "password": "secret" });
+  const body0 = JSON.stringify({ "username": __ENV.LOGIN_ID, "password": __ENV.LOGIN_PASSWORD });
   const params0 = { headers: { "Content-Type": "application/json" } };
   const res0 = http.post(url0, body0, params0);
   const res0Json = res0.json();

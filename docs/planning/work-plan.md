@@ -1,6 +1,6 @@
 # 완료된 작업 계획
 
-이 문서는 P-00부터 P-10까지의 구현 이력을 보존한다. 현재 사용법은 루트 [README](../../README.md), 현재 설계는 [MVP 설계](../spec/mvp-design.md), 기능 계약은 [기능 세분화](../spec/feature-breakdown.md)를 기준으로 한다.
+이 문서는 P-00부터 P-11까지의 구현 이력을 보존한다. 현재 사용법은 루트 [README](../../README.md), 현재 설계는 [MVP 설계](../spec/mvp-design.md), 기능 계약은 [기능 세분화](../spec/feature-breakdown.md)를 기준으로 한다.
 
 ## 1. 진행 방식 기록
 
@@ -29,7 +29,8 @@
 | P-08 | README/사용법 | 최소 실행 가이드 | 완료 |
 | P-09 | 멀티모듈 OpenAPI 설정 | module별 registry 선택 | 완료 |
 | P-10 | Init Scaffold | 대상 프로젝트 load-tests 초기화 | 완료 |
-| P-11 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
+| P-11 | Env Secret Template | `{{env.NAME}}` -> `__ENV.NAME` | 완료 |
+| P-12 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
 
 ## 3. P-00 문서 확정
 
@@ -324,7 +325,37 @@ CLI/compiler MVP가 동작하고 README 사용법이 정리된 뒤 진행한다.
 - `--force` overwrite
 - TODO config validation
 
-## 14. P-11 UI Adapter 설계
+## 14. P-11 Env Secret Template
+
+### 시점
+
+실제 백엔드 프로젝트에 `load-tests`를 적용한 뒤, scenario YAML에 secret이 직접 남는 문제가 확인되어 진행한다.
+
+### 기능 기준
+
+- F-07 Template Compiler
+- 대상 프로젝트 init scaffold
+
+### 작업
+
+- `{{env.NAME}}` template을 k6 `__ENV.NAME` 참조로 컴파일
+- generated script 문법 검증 테스트 추가
+- `init` scaffold에 `.env.example`과 `.gitignore` 생성
+- README와 생성 README에 `.env` export 방법 문서화
+
+### 완료 기준
+
+- `{{env.LOGIN_PASSWORD}}`가 generated script에서 `__ENV.LOGIN_PASSWORD`로 생성된다.
+- context template인 `{{token}}`은 기존처럼 `context.token`으로 유지된다.
+- 실제 `.env`는 커밋되지 않고 `.env.example`만 scaffold에 포함된다.
+
+### 테스트
+
+- env template compiler 단위 테스트
+- generated k6 script 문법 테스트
+- init scaffold `.env.example`/`.gitignore` 생성 테스트
+
+## 15. P-12 UI Adapter 설계
 
 ### 시점
 
@@ -342,7 +373,7 @@ CLI/compiler MVP가 동작한 뒤 진행한다.
 - UI 저장 flow를 Scenario DSL로 export할 수 있는 변환 규칙이 문서화된다.
 - 구현은 별도 단계에서 진행한다.
 
-## 15. 완료된 구현 순서
+## 16. 완료된 구현 순서
 
 1. P-01 CLI 골격
 2. P-02 Scenario Parser
@@ -354,12 +385,13 @@ CLI/compiler MVP가 동작한 뒤 진행한다.
 8. P-08 README/사용법
 9. P-09 멀티모듈 OpenAPI 설정
 10. P-10 Init Scaffold
+11. P-11 Env Secret Template
 
-## 16. 보류 결정
+## 17. 보류 결정
 
 | 항목 | 현재 결정 | 재검토 시점 |
 | --- | --- | --- |
-| UI 통합 | MVP 제외 | P-11 |
+| UI 통합 | MVP 제외 | P-12 |
 | Supabase 저장소 | 제외 | UI 구현 시 |
 | Swagger URL 자동 탐색 | 제외 | 멀티모듈 module 등록 시 |
 | Auth scheme 자동 적용 | 제외 | UI header 제안 시 |

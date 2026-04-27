@@ -1,5 +1,8 @@
-const TEMPLATE_PATTERN = /{{\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*}}/g;
-const FULL_TEMPLATE_PATTERN = /^{{\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*}}$/;
+const CONTEXT_REFERENCE = '[A-Za-z_$][A-Za-z0-9_$]*';
+const ENV_REFERENCE = 'env\\.[A-Z_][A-Z0-9_]*';
+const TEMPLATE_REFERENCE = `(?:${ENV_REFERENCE}|${CONTEXT_REFERENCE})`;
+const TEMPLATE_PATTERN = new RegExp(`{{\\s*(${TEMPLATE_REFERENCE})\\s*}}`, 'g');
+const FULL_TEMPLATE_PATTERN = new RegExp(`^{{\\s*(${TEMPLATE_REFERENCE})\\s*}}$`);
 
 export class TemplateCompileError extends Error {
   constructor(message: string) {
@@ -39,7 +42,7 @@ function compileStringExpression(value: string): string {
   const fullTemplate = FULL_TEMPLATE_PATTERN.exec(value);
 
   if (fullTemplate) {
-    return `context.${fullTemplate[1]}`;
+    return compileTemplateReference(fullTemplate[1]);
   }
 
   if (!value.includes('{{')) {
@@ -54,7 +57,7 @@ function compileStringExpression(value: string): string {
 
   while ((match = TEMPLATE_PATTERN.exec(value)) !== null) {
     expression += compileLiteralTemplatePart(value, value.slice(cursor, match.index));
-    expression += `\${context.${match[1]}}`;
+    expression += `\${${compileTemplateReference(match[1])}}`;
     cursor = match.index + match[0].length;
   }
 
@@ -65,6 +68,14 @@ function compileStringExpression(value: string): string {
   expression += compileLiteralTemplatePart(value, value.slice(cursor));
   expression += '`';
   return expression;
+}
+
+function compileTemplateReference(reference: string): string {
+  if (reference.startsWith('env.')) {
+    return `__ENV.${reference.slice('env.'.length)}`;
+  }
+
+  return `context.${reference}`;
 }
 
 function compileLiteralTemplatePart(source: string, value: string): string {

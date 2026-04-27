@@ -33,6 +33,8 @@ describe('README usage guide', () => {
     expect(readme).toContain('openapi-k6 sync');
     expect(readme).toContain('openapi-k6 generate -s smoke');
     expect(readme).toContain('k6 run load-tests/generated/smoke.k6.js');
+    expect(readme).toContain('{{env.LOGIN_PASSWORD}}');
+    expect(readme).toContain('source load-tests/.env');
     expect(readme).toContain('condition`은 흐름 분기가 아니라 k6 `check`');
   });
 });
