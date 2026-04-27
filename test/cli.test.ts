@@ -121,6 +121,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('openapi-k6 sync');
     expect(readme).toContain('openapi-k6 generate \\');
     expect(readme).toContain('  -s smoke');
+    expect(readme).toContain('## 0. openapi-k6 명령 준비');
+    expect(readme).toContain('alias openapi-k6=\'node "/path/to/openapi-k6-runner/dist/cli/index.js"\'');
+    expect(readme).toContain('alias는 현재 터미널 세션에만 적용됩니다.');
     expect(readme).toContain('OpenAPI 기반 k6 기본 동작 확인용 테스트 자산입니다.');
     expect(readme).toContain('## AI 작업 가이드');
     expect(readme).toContain('새 테스트가 필요하면 `scenarios/<name>.yaml` 파일을 추가하고 `openapi-k6 generate -s <name>`');
