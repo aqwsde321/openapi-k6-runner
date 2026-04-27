@@ -171,6 +171,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('## 5. k6 실행');
     expect(readme).toContain('catalog.json`에서 `operationId`, `method`, `path`, `tags`, `parameters`, `hasRequestBody`');
     expect(readme).toContain('## 자주 쓰는 수정 위치');
+    expect(readme).toContain('## 제거 방법');
+    expect(readme).toContain('rm -rf load-tests');
+    expect(readme).toContain('필요한 scenario, snapshot, catalog가 있으면 먼저 백업합니다.');
   });
 
   it('initializes a placeholder scaffold with no required options', async () => {
@@ -270,6 +273,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('--write perf-tests/generated/login-flow.k6.js');
     expect(readme).toContain('k6 run perf-tests/generated/smoke.k6.js');
     expect(readme).toContain('BASE_URL=https://api.example.com k6 run perf-tests/generated/smoke.k6.js');
+    expect(readme).toContain('rm -rf perf-tests');
     expect(readme).not.toContain('load-tests/');
   });
 

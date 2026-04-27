@@ -486,6 +486,21 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '- 대상 API 변경: `config.yaml`의 `baseUrl`, `modules.<name>.openapi`',
     '- module 추가: `config.yaml`의 `modules` 항목 추가 후 `openapi-k6 sync --module <name>`',
     '',
+    '## 제거 방법',
+    '',
+    `이 scaffold를 제거하려면 대상 프로젝트 루트에서 \`${directory}/\` 폴더를 삭제합니다.`,
+    '',
+    '삭제 전에 현재 위치와 삭제 대상을 확인합니다.',
+    '',
+    '```bash',
+    'pwd',
+    `ls ${shellQuote(directory)}`,
+    `rm -rf ${shellQuote(directory)}`,
+    '```',
+    '',
+    `주의: 이 명령은 \`${directory}/config.yaml\`, \`${directory}/scenarios/\`, \`${directory}/openapi/\`, \`${directory}/generated/\`를 모두 삭제합니다.`,
+    '필요한 scenario, snapshot, catalog가 있으면 먼저 백업합니다.',
+    '',
   ].join('\n');
 }
 
