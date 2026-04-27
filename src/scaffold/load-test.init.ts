@@ -9,6 +9,7 @@ export interface InitLoadTestsOptions {
   openapi?: string;
   smokePath?: string;
   force?: boolean;
+  cliPath?: string;
 }
 
 export interface InitLoadTestsResult {
@@ -44,7 +45,7 @@ export async function initLoadTests(
 
   await writeTextFile(configPath, renderConfig(moduleName, options.baseUrl, openapi), options.force);
   await writeTextFile(scenarioPath, renderSmokeScenario(smokePath), options.force);
-  await writeTextFile(readmePath, renderReadme(moduleName, directory), options.force);
+  await writeTextFile(readmePath, renderReadme(moduleName, directory, options.cliPath), options.force);
 
   return {
     directoryPath,
@@ -168,7 +169,7 @@ function renderSmokeScenario(smokePath: string): string {
   ].join('\n');
 }
 
-function renderReadme(moduleName: string, directory: string): string {
+function renderReadme(moduleName: string, directory: string, cliPath: string | undefined): string {
   const configPath = `${directory}/config.yaml`;
   const scenarioPath = `${directory}/scenarios/smoke.yaml`;
   const outputPath = `${directory}/generated/smoke.k6.js`;
@@ -179,6 +180,7 @@ function renderReadme(moduleName: string, directory: string): string {
   const outputArg = shellQuote(outputPath);
   const workflowScenarioArg = shellQuote(workflowScenarioPath);
   const workflowOutputArg = shellQuote(workflowOutputPath);
+  const aliasCommand = renderAliasCommand(cliPath);
   const usesDefaultDirectory = directory === 'load-tests';
 
   return [
@@ -203,11 +205,13 @@ function renderReadme(moduleName: string, directory: string): string {
     'pnpm run build',
     '',
     '# 대상 백엔드 프로젝트 터미널',
-    'alias openapi-k6=\'node "/path/to/openapi-k6-runner/dist/cli/index.js"\'',
+    aliasCommand,
     'openapi-k6 --help',
     '```',
     '',
-    '`/path/to/openapi-k6-runner`는 각자 clone한 generator 저장소 경로로 바꿉니다. alias는 현재 터미널 세션에만 적용됩니다.',
+    'alias의 경로는 현재 `init`을 실행한 CLI 경로입니다. generator 저장소를 옮기거나 다시 clone하면 alias도 다시 설정합니다.',
+    '',
+    'alias는 현재 터미널 세션에만 적용됩니다. 새 터미널에서는 같은 alias를 다시 설정해야 합니다.',
     '',
     '## AI 작업 가이드',
     '',
@@ -430,6 +434,13 @@ function renderReadme(moduleName: string, directory: string): string {
     '- module 추가: `config.yaml`의 `modules` 항목 추가 후 `openapi-k6 sync --module <name>`',
     '',
   ].join('\n');
+}
+
+function renderAliasCommand(cliPath: string | undefined): string {
+  const resolvedCliPath = cliPath ?? '/path/to/openapi-k6-runner/dist/cli/index.js';
+  const command = `node ${shellQuote(resolvedCliPath)}`;
+
+  return `alias openapi-k6=${shellQuote(command)}`;
 }
 
 function shellQuote(value: string): string {

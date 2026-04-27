@@ -31,6 +31,7 @@ export interface CliContext {
   cwd?: string;
   stdout?: WritableLike;
   stderr?: WritableLike;
+  cliPath?: string;
 }
 
 export interface GenerateOptions {
@@ -376,7 +377,12 @@ export async function runInitCommand(
     openapi: options.openapi,
     smokePath: options.smokePath,
     force: options.force,
+    cliPath: resolveCliPath(context),
   });
+}
+
+function resolveCliPath(context: CliContext): string {
+  return path.resolve(context.cliPath ?? fileURLToPath(import.meta.url));
 }
 
 function writeLine(stream: WritableLike, message: string): void {

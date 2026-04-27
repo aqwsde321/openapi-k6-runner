@@ -87,6 +87,8 @@ describe('openapi-k6 CLI', () => {
   });
 
   it('initializes a load-tests scaffold in the target project', async () => {
+    const cliPath = path.join(workspace, 'openapi-k6-runner/dist/cli/index.js');
+
     await runCli(
       [
         'init',
@@ -99,7 +101,7 @@ describe('openapi-k6 CLI', () => {
         '--smoke-path',
         '/__dev/error-codes',
       ],
-      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      { cwd: workspace, stdout: createSink(), stderr: createSink(), cliPath },
     );
 
     const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
@@ -122,7 +124,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('openapi-k6 generate \\');
     expect(readme).toContain('  -s smoke');
     expect(readme).toContain('## 0. openapi-k6 명령 준비');
-    expect(readme).toContain('alias openapi-k6=\'node "/path/to/openapi-k6-runner/dist/cli/index.js"\'');
+    expect(readme).toContain(`alias openapi-k6='node ${cliPath}'`);
+    expect(readme).toContain('alias의 경로는 현재 `init`을 실행한 CLI 경로입니다.');
     expect(readme).toContain('alias는 현재 터미널 세션에만 적용됩니다.');
     expect(readme).toContain('OpenAPI 기반 k6 기본 동작 확인용 테스트 자산입니다.');
     expect(readme).toContain('## AI 작업 가이드');
