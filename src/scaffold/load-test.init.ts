@@ -197,6 +197,7 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
   const workflowScenarioArg = shellQuote(workflowScenarioPath);
   const workflowOutputArg = shellQuote(workflowOutputPath);
   const aliasCommand = renderAliasCommand(cliPath);
+  const buildDirectory = inferBuildDirectory(cliPath);
   const usesDefaultDirectory = directory === 'load-tests';
 
   return [
@@ -206,28 +207,30 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '',
     '## 0. openapi-k6 명령 준비',
     '',
-    '이 문서의 명령은 `openapi-k6`가 현재 shell에서 실행 가능하다는 전제입니다.',
+    '이 README는 `openapi-k6 init`으로 생성되었습니다. `init`을 실행한 터미널에서는 이미 `openapi-k6`가 동작한 상태입니다.',
+    '',
+    '새 터미널이나 AI 세션에서 작업할 때는 먼저 명령이 잡혀 있는지 확인합니다.',
     '',
     '```bash',
     'openapi-k6 --help',
     '```',
     '',
-    '`command not found`가 나오면 generator 저장소를 빌드한 뒤 대상 백엔드 프로젝트 터미널에서 alias를 설정합니다.',
+    '`command not found`가 나오면 아래 alias를 현재 터미널에서 실행합니다. alias 경로는 `init`을 실행한 CLI 경로로 자동 기록됩니다.',
     '',
     '```bash',
-    '# generator 저장소',
-    'cd /path/to/openapi-k6-runner',
-    'pnpm install',
-    'pnpm run build',
-    '',
-    '# 대상 백엔드 프로젝트 터미널',
     aliasCommand,
     'openapi-k6 --help',
     '```',
     '',
-    'alias의 경로는 현재 `init`을 실행한 CLI 경로입니다. generator 저장소를 옮기거나 다시 clone하면 alias도 다시 설정합니다.',
-    '',
     'alias는 현재 터미널 세션에만 적용됩니다. 새 터미널에서는 같은 alias를 다시 설정해야 합니다.',
+    'generator 저장소를 옮기거나 다시 clone하면 alias도 다시 설정합니다.',
+    '',
+    'generator 코드를 수정한 뒤에는 alias 대상 저장소에서 다시 빌드합니다.',
+    '',
+    '```bash',
+    `cd ${shellQuote(buildDirectory)}`,
+    'pnpm run build',
+    '```',
     '',
     '## AI 작업 가이드',
     '',
@@ -491,6 +494,22 @@ function renderAliasCommand(cliPath: string | undefined): string {
   const command = `node ${shellQuote(resolvedCliPath)}`;
 
   return `alias openapi-k6=${shellQuote(command)}`;
+}
+
+function inferBuildDirectory(cliPath: string | undefined): string {
+  if (cliPath === undefined) {
+    return '/path/to/openapi-k6-runner';
+  }
+
+  const cliDirectory = path.dirname(cliPath);
+  const parent = path.basename(cliDirectory);
+  const grandParent = path.basename(path.dirname(cliDirectory));
+
+  if (parent === 'cli' && grandParent === 'dist') {
+    return path.resolve(cliDirectory, '../..');
+  }
+
+  return path.dirname(cliPath);
 }
 
 function shellQuote(value: string): string {

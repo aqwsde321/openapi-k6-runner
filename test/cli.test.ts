@@ -140,9 +140,12 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('openapi-k6 generate \\');
     expect(readme).toContain('  -s smoke');
     expect(readme).toContain('## 0. openapi-k6 명령 준비');
+    expect(readme).toContain('이 README는 `openapi-k6 init`으로 생성되었습니다.');
+    expect(readme).toContain('새 터미널이나 AI 세션에서 작업할 때는 먼저 명령이 잡혀 있는지 확인합니다.');
     expect(readme).toContain(`alias openapi-k6='node ${cliPath}'`);
-    expect(readme).toContain('alias의 경로는 현재 `init`을 실행한 CLI 경로입니다.');
     expect(readme).toContain('alias는 현재 터미널 세션에만 적용됩니다.');
+    expect(readme).toContain(`cd ${path.dirname(path.dirname(path.dirname(cliPath)))}`);
+    expect(readme).toContain('pnpm run build');
     expect(readme).toContain('OpenAPI 기반 k6 기본 동작 확인용 테스트 자산입니다.');
     expect(readme).toContain('## AI 작업 가이드');
     expect(readme).toContain('새 테스트가 필요하면 `scenarios/<name>.yaml` 파일을 추가하고 `openapi-k6 generate -s <name>`');
