@@ -150,6 +150,11 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('`generated/*.k6.js`는 직접 고치지 말고 scenario를 수정한 뒤 다시 generate합니다.');
     expect(readme).toContain('config 상대 경로는 `config.yaml` 위치 기준입니다.');
     expect(readme).toContain('AI가 확인해야 할 핵심 파일');
+    expect(readme).toContain('## AI에게 테스트 요청 예시');
+    expect(readme).toContain('기본 smoke 테스트를 만들 때:');
+    expect(readme).toContain('load-tests/README.md를 먼저 읽고 그대로 진행해줘.');
+    expect(readme).toContain('load-tests/scenarios/basic-read.yaml을 새로 만들어줘.');
+    expect(readme).toContain('로그인 API와 사용자 조회 API를 찾아 login-flow scenario를 만들어줘.');
     expect(readme).toContain('## 1. config.yaml 채우기');
     expect(readme).toContain('## 2. smoke scenario 확인');
     expect(readme).toContain('## 새 scenario 작성');

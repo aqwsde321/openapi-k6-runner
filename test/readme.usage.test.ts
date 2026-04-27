@@ -12,6 +12,10 @@ describe('README usage guide', () => {
     expect(readme).toContain('## 설치');
     expect(readme).toContain('alias openapi-k6=\'node "/path/to/openapi-k6-runner/dist/cli/index.js"\'');
     expect(readme).toContain('## 빠른 시작');
+    expect(readme).toContain('## AI로 테스트하기');
+    expect(readme).toContain('load-tests/README.md를 먼저 읽고 그대로 진행해줘.');
+    expect(readme).toContain('openapi-k6 generate -s basic-read');
+    expect(readme).toContain('Authorization header에 Bearer {{token}}');
     expect(readme).toContain('## 사용 위치');
     expect(readme).toContain('## Config');
     expect(readme).toContain('## OpenAPI Snapshot');
