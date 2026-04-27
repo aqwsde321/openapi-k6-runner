@@ -168,19 +168,6 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain(`cd ${path.dirname(path.dirname(path.dirname(cliPath)))}`);
     expect(readme).toContain('pnpm run build');
     expect(readme).toContain('이 폴더는 OpenAPI 기반 k6 시나리오, OpenAPI snapshot, 생성된 k6 스크립트를 관리합니다.');
-    expect(readme).toContain('## AI Work Guide');
-    expect(readme).toContain('For a new test, add `scenarios/<name>.yaml` and run `openapi-k6 generate -s <name>`.');
-    expect(readme).toContain('Read `openapi/*.catalog.json` and inspect `operationId`, `method`, `path`, `parameters`, and `hasRequestBody`');
-    expect(readme).toContain('Do not edit `generated/*.k6.js` directly. Edit scenario YAML and regenerate.');
-    expect(readme).toContain('Do not write secrets such as passwords directly in YAML. Use `{{env.NAME}}`.');
-    expect(readme).toContain('Store real secret values in `.env` and do not commit it.');
-    expect(readme).toContain('Resolve config-relative paths from the directory containing `config.yaml`.');
-    expect(readme).toContain('Files to inspect:');
-    expect(readme).toContain('## AI Prompt Examples');
-    expect(readme).toContain('Basic smoke test:');
-    expect(readme).toContain('Read load-tests/README.md first and follow it.');
-    expect(readme).toContain('Create load-tests/scenarios/basic-read.yaml.');
-    expect(readme).toContain('Find the login API and a user-profile/read API.');
     expect(readme).toContain('## 1. config.yaml 채우기');
     expect(readme).toContain('## 2. smoke scenario 확인');
     expect(readme).toContain('## 새 scenario 작성');
@@ -200,6 +187,21 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('## 제거 방법');
     expect(readme).toContain('rm -rf load-tests');
     expect(readme).toContain('필요한 scenario, snapshot, catalog가 있으면 먼저 백업합니다.');
+    expect(readme).toContain('## AI Work Guide');
+    expect(readme).toContain('This section is written for AI agents. Human users should read the usage sections above first.');
+    expect(readme).toContain('For a new test, add `scenarios/<name>.yaml` and run `openapi-k6 generate -s <name>`.');
+    expect(readme).toContain('Read `openapi/*.catalog.json` and inspect `operationId`, `method`, `path`, `parameters`, and `hasRequestBody`');
+    expect(readme).toContain('Do not edit `generated/*.k6.js` directly. Edit scenario YAML and regenerate.');
+    expect(readme).toContain('Do not write secrets such as passwords directly in YAML. Use `{{env.NAME}}`.');
+    expect(readme).toContain('Store real secret values in `.env` and do not commit it.');
+    expect(readme).toContain('Resolve config-relative paths from the directory containing `config.yaml`.');
+    expect(readme).toContain('Files to inspect:');
+    expect(readme).toContain('## AI Prompt Examples');
+    expect(readme).toContain('Basic smoke test:');
+    expect(readme).toContain('Read load-tests/README.md first and follow it.');
+    expect(readme).toContain('Create load-tests/scenarios/basic-read.yaml.');
+    expect(readme).toContain('Find the login API and a user-profile/read API.');
+    expect(readme.indexOf('## AI Work Guide')).toBeGreaterThan(readme.indexOf('## 제거 방법'));
   });
 
   it('initializes a placeholder scaffold with no required options', async () => {

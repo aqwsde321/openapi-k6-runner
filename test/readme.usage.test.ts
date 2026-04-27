@@ -16,10 +16,6 @@ describe('README usage guide', () => {
     expect(readme).toContain('pnpm setup');
     expect(readme).toContain('node /path/to/openapi-k6-runner/dist/cli/index.js --help');
     expect(readme).toContain('## 빠른 시작');
-    expect(readme).toContain('## AI로 테스트하기');
-    expect(readme).toContain('Read load-tests/README.md first and follow it.');
-    expect(readme).toContain('openapi-k6 generate -s basic-read');
-    expect(readme).toContain('Use Bearer {{token}} in the Authorization header of the next step.');
     expect(readme).toContain('## 사용 위치');
     expect(readme).toContain('## Config');
     expect(readme).toContain('## OpenAPI Snapshot');
@@ -40,5 +36,10 @@ describe('README usage guide', () => {
     expect(readme).toContain('{{env.LOGIN_PASSWORD}}');
     expect(readme).toContain('source load-tests/.env');
     expect(readme).toContain('condition`은 흐름 분기가 아니라 k6 `check`');
+    expect(readme).toContain('## AI Agent Instructions');
+    expect(readme).toContain('Read load-tests/README.md first and follow it.');
+    expect(readme).toContain('openapi-k6 generate -s basic-read');
+    expect(readme).toContain('Use Bearer {{token}} in the Authorization header of the next step.');
+    expect(readme.indexOf('## AI Agent Instructions')).toBeGreaterThan(readme.indexOf('## 문서'));
   });
 });

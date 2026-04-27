@@ -79,41 +79,6 @@ openapi-k6 generate -s smoke
 k6 run load-tests/generated/smoke.k6.js
 ```
 
-## AI로 테스트하기
-
-대상 백엔드 프로젝트에서 `openapi-k6 init`으로 `load-tests`를 만든 뒤, AI에게 아래처럼 요청합니다.
-
-```text
-Read load-tests/README.md first and follow it.
-Fill TODO values in load-tests/config.yaml for this project.
-Run openapi-k6 sync to create the OpenAPI snapshot and catalog.
-Read load-tests/openapi/*.catalog.json and choose one unauthenticated GET endpoint.
-Update load-tests/scenarios/smoke.yaml for that endpoint.
-Run openapi-k6 generate -s smoke.
-Do not edit generated/*.k6.js or openapi/*.openapi.json directly.
-```
-
-새 scenario를 만들 때는 이렇게 요청합니다.
-
-```text
-Read load-tests/README.md and load-tests/openapi/*.catalog.json.
-Choose one read endpoint that can be called without login.
-Create load-tests/scenarios/basic-read.yaml.
-Then run openapi-k6 generate -s basic-read.
-Do not edit generated/*.k6.js directly.
-```
-
-인증 흐름을 만들 때는 이렇게 요청합니다.
-
-```text
-Read load-tests/README.md and load-tests/openapi/*.catalog.json.
-Find the login API and a user-profile/read API.
-Create a login-flow scenario.
-Extract token from the login response.
-Use Bearer {{token}} in the Authorization header of the next step.
-Then run openapi-k6 generate -s login-flow.
-```
-
 ## 사용 위치
 
 실제 config, 시나리오, OpenAPI snapshot은 테스트 대상 백엔드 프로젝트의 `load-tests` 아래에 둡니다.
@@ -357,3 +322,40 @@ pnpm run build
 - [기능 세분화](docs/spec/feature-breakdown.md)
 - [작업 계획](docs/planning/work-plan.md)
 - [참조 프로젝트 분석](docs/reference/reference-projects.md)
+
+## AI Agent Instructions
+
+이 섹션은 AI agent에게 그대로 전달하기 위한 영어 지시문입니다. 사람이 실행 흐름을 확인할 때는 위의 사용 문서를 먼저 봅니다.
+
+Basic smoke test:
+
+```text
+Read load-tests/README.md first and follow it.
+Fill TODO values in load-tests/config.yaml for this project.
+Run openapi-k6 sync to create the OpenAPI snapshot and catalog.
+Read load-tests/openapi/*.catalog.json and choose one unauthenticated GET endpoint.
+Update load-tests/scenarios/smoke.yaml for that endpoint.
+Run openapi-k6 generate -s smoke.
+Do not edit generated/*.k6.js or openapi/*.openapi.json directly.
+```
+
+New scenario:
+
+```text
+Read load-tests/README.md and load-tests/openapi/*.catalog.json.
+Choose one read endpoint that can be called without login.
+Create load-tests/scenarios/basic-read.yaml.
+Then run openapi-k6 generate -s basic-read.
+Do not edit generated/*.k6.js directly.
+```
+
+Authenticated flow:
+
+```text
+Read load-tests/README.md and load-tests/openapi/*.catalog.json.
+Find the login API and a user-profile/read API.
+Create a login-flow scenario.
+Extract token from the login response.
+Use Bearer {{token}} in the Authorization header of the next step.
+Then run openapi-k6 generate -s login-flow.
+```
