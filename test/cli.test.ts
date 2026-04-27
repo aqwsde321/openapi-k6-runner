@@ -158,6 +158,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('새 터미널이나 AI 세션에서 작업할 때는 먼저 명령이 잡혀 있는지 확인합니다.');
     expect(readme).toContain('pnpm install');
     expect(readme).toContain('pnpm link --global');
+    expect(readme).toContain('<details>');
+    expect(readme).toContain('<summary>`pnpm link --global`에서 global bin directory 오류가 날 때</summary>');
     expect(readme).toContain('pnpm setup');
     expect(readme).toContain('source ~/.zshrc');
     expect(readme).toContain(`alias openapi-k6='node ${cliPath}'`);
@@ -165,7 +167,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('alias는 현재 터미널 세션에만 적용됩니다.');
     expect(readme).toContain(`cd ${path.dirname(path.dirname(path.dirname(cliPath)))}`);
     expect(readme).toContain('pnpm run build');
-    expect(readme).toContain('OpenAPI 기반 k6 기본 동작 확인용 테스트 자산입니다.');
+    expect(readme).toContain('이 폴더는 OpenAPI 기반 k6 시나리오, OpenAPI snapshot, 생성된 k6 스크립트를 관리합니다.');
     expect(readme).toContain('## AI Work Guide');
     expect(readme).toContain('For a new test, add `scenarios/<name>.yaml` and run `openapi-k6 generate -s <name>`.');
     expect(readme).toContain('Read `openapi/*.catalog.json` and inspect `operationId`, `method`, `path`, `parameters`, and `hasRequestBody`');

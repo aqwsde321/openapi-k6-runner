@@ -14,7 +14,10 @@ pnpm link --global
 openapi-k6 --help
 ```
 
-`pnpm link --global`에서 global bin directory 오류가 나면 pnpm shell 설정을 먼저 적용합니다.
+<details>
+<summary>`pnpm link --global`에서 global bin directory 오류가 날 때</summary>
+
+pnpm shell 설정을 적용한 뒤 다시 link합니다.
 
 ```bash
 pnpm setup
@@ -22,6 +25,8 @@ source ~/.zshrc
 pnpm link --global
 openapi-k6 --help
 ```
+
+</details>
 
 전역 link를 쓰지 않는 환경에서는 빌드된 CLI를 직접 실행할 수 있습니다. `/path/to/openapi-k6-runner`는 이 저장소를 clone한 로컬 경로로 바꿉니다.
 

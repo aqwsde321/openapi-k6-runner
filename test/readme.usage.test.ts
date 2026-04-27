@@ -12,6 +12,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('## 설치');
     expect(readme).toContain('pnpm run build');
     expect(readme).toContain('pnpm link --global');
+    expect(readme).toContain('<summary>`pnpm link --global`에서 global bin directory 오류가 날 때</summary>');
     expect(readme).toContain('pnpm setup');
     expect(readme).toContain('node /path/to/openapi-k6-runner/dist/cli/index.js --help');
     expect(readme).toContain('## 빠른 시작');
