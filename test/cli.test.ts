@@ -121,6 +121,11 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('openapi-k6 sync');
     expect(readme).toContain('openapi-k6 generate \\');
     expect(readme).toContain('  -s smoke');
+    expect(readme).toContain('## AI 작업 가이드');
+    expect(readme).toContain('`openapi/*.catalog.json`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`');
+    expect(readme).toContain('`generated/*.k6.js`는 직접 고치지 말고 scenario를 수정한 뒤 다시 generate합니다.');
+    expect(readme).toContain('config 상대 경로는 `config.yaml` 위치 기준입니다.');
+    expect(readme).toContain('AI가 확인해야 할 핵심 파일');
     expect(readme).toContain('## 1. config.yaml 채우기');
     expect(readme).toContain('## 2. smoke scenario 확인');
     expect(readme).toContain('## 3. OpenAPI snapshot 생성');
