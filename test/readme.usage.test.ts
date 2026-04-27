@@ -10,7 +10,10 @@ describe('README usage guide', () => {
     const readme = await readFile(path.join(repoRoot, 'README.md'), 'utf8');
 
     expect(readme).toContain('## 설치');
-    expect(readme).toContain('alias openapi-k6=\'node "/path/to/openapi-k6-runner/dist/cli/index.js"\'');
+    expect(readme).toContain('pnpm run build');
+    expect(readme).toContain('pnpm link --global');
+    expect(readme).toContain('pnpm setup');
+    expect(readme).toContain('node /path/to/openapi-k6-runner/dist/cli/index.js --help');
     expect(readme).toContain('## 빠른 시작');
     expect(readme).toContain('## AI로 테스트하기');
     expect(readme).toContain('load-tests/README.md를 먼저 읽고 그대로 진행해줘.');

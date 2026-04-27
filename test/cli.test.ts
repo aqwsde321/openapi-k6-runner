@@ -154,8 +154,14 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('  -s smoke');
     expect(readme).toContain('## 0. openapi-k6 명령 준비');
     expect(readme).toContain('이 README는 `openapi-k6 init`으로 생성되었습니다.');
+    expect(readme).toContain('이 문서의 명령은 `openapi-k6`가 현재 shell에서 실행 가능하다는 전제입니다.');
     expect(readme).toContain('새 터미널이나 AI 세션에서 작업할 때는 먼저 명령이 잡혀 있는지 확인합니다.');
+    expect(readme).toContain('pnpm install');
+    expect(readme).toContain('pnpm link --global');
+    expect(readme).toContain('pnpm setup');
+    expect(readme).toContain('source ~/.zshrc');
     expect(readme).toContain(`alias openapi-k6='node ${cliPath}'`);
+    expect(readme).toContain('전역 link를 쓰지 않는 환경에서는 아래 alias를 현재 터미널에서 실행합니다.');
     expect(readme).toContain('alias는 현재 터미널 세션에만 적용됩니다.');
     expect(readme).toContain(`cd ${path.dirname(path.dirname(path.dirname(cliPath)))}`);
     expect(readme).toContain('pnpm run build');
