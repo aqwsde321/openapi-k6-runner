@@ -138,11 +138,10 @@ describe('openapi-k6 CLI', () => {
       '',
     ].join('\n'));
     expect(envExample).toBe([
-      '# Copy this file to .env and fill values for local k6 runs.',
+      '# Copy this file to .env and fill local secret values.',
       '# k6 does not auto-load .env files. Export these variables before running k6.',
-      'BASE_URL=https://dev-api.pharmaresearch.com',
       '',
-      '# Example scenario secrets. Add or rename variables as needed.',
+      '# Add or rename variables to match {{env.NAME}} templates in scenario YAML.',
       'LOGIN_ID=',
       'LOGIN_PASSWORD=',
       '',
@@ -181,6 +180,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('## 3. OpenAPI snapshot 생성');
     expect(readme).toContain('## 4. k6 script 생성');
     expect(readme).toContain('## 5. k6 실행');
+    expect(readme).toContain('API base URL은 기본적으로 `config.yaml`의 `baseUrl`을 사용합니다.');
+    expect(readme).toContain('일시적으로 다른 URL에 실행해야 할 때만 `BASE_URL` 환경 변수를 넘깁니다.');
+    expect(readme).toContain('secret 값을 채우고 실행 전에 export합니다.');
     expect(readme).toContain('source load-tests/.env');
     expect(readme).toContain('catalog.json`에서 `operationId`, `method`, `path`, `tags`, `parameters`, `hasRequestBody`');
     expect(readme).toContain('## 자주 쓰는 수정 위치');
@@ -241,7 +243,8 @@ describe('openapi-k6 CLI', () => {
       '    catalog: openapi/default.catalog.json',
       '',
     ].join('\n'));
-    expect(envExample).toContain('BASE_URL=http://localhost:8080');
+    expect(envExample).not.toContain('BASE_URL=');
+    expect(envExample).toContain('LOGIN_PASSWORD=');
     expect(scenario).toContain('path: /health');
   });
 

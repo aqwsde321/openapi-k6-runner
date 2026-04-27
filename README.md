@@ -47,6 +47,8 @@ openapi-k6 init
 생성되는 파일:
 
 - `load-tests/config.yaml`
+- `load-tests/.env.example`
+- `load-tests/.gitignore`
 - `load-tests/scenarios/smoke.yaml`
 - `load-tests/README.md`
 
@@ -99,6 +101,8 @@ backend-project/
 ```
 
 config 안의 상대 경로는 `config.yaml`이 있는 디렉터리 기준으로 해석합니다. 예를 들어 `load-tests/config.yaml`에서 `snapshot: openapi/pharma.openapi.json`은 `load-tests/openapi/pharma.openapi.json`을 의미합니다.
+
+`.env.example`은 scenario YAML의 `{{env.NAME}}` template에 넣을 local secret 예시입니다. 실제 값은 `.env`에만 두고 커밋하지 않습니다.
 
 ## Config
 
@@ -154,9 +158,10 @@ modules:
 - `modules.<name>.catalog`: `sync`가 저장할 endpoint catalog
 - `modules.<name>.baseUrl`: 특정 module만 다른 API base URL을 쓸 때 사용
 
-k6 실행 시에는 `__ENV.BASE_URL`이 config의 `baseUrl`보다 우선입니다. 실행 시 URL을 바꾸려면 `BASE_URL=... k6 run ...`처럼 넘깁니다.
+k6 실행 시 API base URL은 기본적으로 config의 `baseUrl`을 사용합니다. 일시적으로 다른 URL에 실행해야 할 때만 `BASE_URL=... k6 run ...`처럼 넘기면 `config.yaml` 값보다 우선합니다.
 
 기존 단일 파일 사용을 위해 `--openapi`와 루트 `.env`의 `BASE_URL` fallback도 유지하지만, 새 프로젝트는 `load-tests/config.yaml` 사용을 기본으로 합니다.
+이 fallback은 단일 파일 직접 실행 호환용이며, `load-tests/.env.example`에는 secret placeholder만 둡니다.
 
 ## OpenAPI Snapshot
 
@@ -286,19 +291,22 @@ openapi-k6 generate -s smoke
 
 생성된 스크립트는 직접 k6로 실행합니다.
 
+API base URL은 기본적으로 `load-tests/config.yaml`의 `baseUrl`을 사용합니다.
+
 ```bash
 k6 run load-tests/generated/smoke.k6.js
 ```
 
-실행 시 URL을 바꾸려면 `BASE_URL` 환경 변수를 넘깁니다.
+일시적으로 다른 URL에 실행해야 할 때만 `BASE_URL` 환경 변수를 넘깁니다.
 
 ```bash
 BASE_URL=https://dev-api.example.com k6 run load-tests/generated/smoke.k6.js
 ```
 
-scenario에서 `{{env.NAME}}`을 사용한다면 k6 실행 전에 환경변수를 export합니다.
+scenario에서 `{{env.NAME}}`을 사용한다면 `.env.example`을 `.env`로 복사한 뒤 secret 값을 채우고 k6 실행 전에 export합니다.
 
 ```bash
+cp load-tests/.env.example load-tests/.env
 set -a
 source load-tests/.env
 set +a

@@ -48,7 +48,7 @@ export async function initLoadTests(
   const openapi = normalizeOpenApiForConfig(options.cwd, directoryPath, options.openapi);
 
   await writeTextFile(configPath, renderConfig(moduleName, options.baseUrl, openapi), options.force);
-  await writeTextFile(envExamplePath, renderEnvExample(options.baseUrl), options.force);
+  await writeTextFile(envExamplePath, renderEnvExample(), options.force);
   await writeTextFile(gitignorePath, renderGitignore(), options.force);
   await writeTextFile(scenarioPath, renderSmokeScenario(smokePath), options.force);
   await writeTextFile(readmePath, renderReadme(moduleName, directory, options.cliPath), options.force);
@@ -193,13 +193,12 @@ function renderSmokeScenario(smokePath: string): string {
   ].join('\n');
 }
 
-function renderEnvExample(baseUrl: string | undefined): string {
+function renderEnvExample(): string {
   return [
-    '# Copy this file to .env and fill values for local k6 runs.',
+    '# Copy this file to .env and fill local secret values.',
     '# k6 does not auto-load .env files. Export these variables before running k6.',
-    `BASE_URL=${baseUrl ?? 'http://localhost:8080'}`,
     '',
-    '# Example scenario secrets. Add or rename variables as needed.',
+    '# Add or rename variables to match {{env.NAME}} templates in scenario YAML.',
     'LOGIN_ID=',
     'LOGIN_PASSWORD=',
     '',
@@ -468,17 +467,19 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '',
     '## 5. k6 실행',
     '',
+    'API base URL은 기본적으로 `config.yaml`의 `baseUrl`을 사용합니다.',
+    '',
     '```bash',
     `k6 run ${outputArg}`,
     '```',
     '',
-    '실행 시 base URL을 바꾸려면 `BASE_URL` 환경 변수를 넘깁니다.',
+    '일시적으로 다른 URL에 실행해야 할 때만 `BASE_URL` 환경 변수를 넘깁니다.',
     '',
     '```bash',
     `BASE_URL=https://api.example.com k6 run ${outputArg}`,
     '```',
     '',
-    'scenario에서 `{{env.NAME}}`을 사용한다면 `.env.example`을 `.env`로 복사한 뒤 실행 전에 export합니다.',
+    'scenario에서 `{{env.NAME}}`을 사용한다면 `.env.example`을 `.env`로 복사한 뒤 secret 값을 채우고 실행 전에 export합니다.',
     '',
     '```bash',
     `cp ${shellQuote(`${directory}/.env.example`)} ${envArg}`,
