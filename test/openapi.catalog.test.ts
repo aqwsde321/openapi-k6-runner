@@ -8,6 +8,7 @@ import {
   buildOpenApiCatalog,
   syncOpenApiSnapshot,
 } from '../src/openapi/openapi.catalog.js';
+import { parseOpenApiFile } from '../src/openapi/openapi.parser.js';
 
 describe('OpenAPI snapshot and catalog', () => {
   let workspace: string;
@@ -150,6 +151,72 @@ describe('OpenAPI snapshot and catalog', () => {
     ]);
   });
 
+  it('bundles remote external refs into a snapshot that generate can parse locally', async () => {
+    const source = await startOpenApiRouteServer({
+      '/v3/api-docs': {
+        openapi: '3.0.3',
+        info: { title: 'External Ref API', version: '1.0.0' },
+        paths: {
+          '/orders/{orderId}': {
+            get: {
+              operationId: 'getOrder',
+              parameters: [
+                { $ref: './parameters/order-id.json' },
+              ],
+              responses: { 200: { description: 'OK' } },
+            },
+          },
+        },
+      },
+      '/v3/parameters/order-id.json': {
+        name: 'orderId',
+        in: 'path',
+        required: true,
+        schema: { type: 'string' },
+      },
+    });
+    const snapshotPath = path.join(workspace, 'openapi/external-ref.openapi.json');
+    const catalogPath = path.join(workspace, 'openapi/external-ref.catalog.json');
+
+    await syncOpenApiSnapshot({
+      openapi: source,
+      write: snapshotPath,
+      catalog: catalogPath,
+      generatedAt: new Date('2026-04-26T00:00:00.000Z'),
+    });
+
+    const snapshotSource = await readFile(snapshotPath, 'utf8');
+    const snapshot = JSON.parse(snapshotSource) as {
+      paths: {
+        '/orders/{orderId}': {
+          get: {
+            parameters: unknown[];
+          };
+        };
+      };
+    };
+    const registry = await parseOpenApiFile(snapshotPath);
+    const operation = registry.byOperationId.get('getOrder');
+
+    expect(snapshotSource).not.toContain('./parameters/order-id.json');
+    expect(snapshot.paths['/orders/{orderId}'].get.parameters).toEqual([
+      {
+        name: 'orderId',
+        in: 'path',
+        required: true,
+        schema: { type: 'string' },
+      },
+    ]);
+    expect(operation?.parameters).toEqual([
+      {
+        name: 'orderId',
+        in: 'path',
+        required: true,
+        schema: { type: 'string' },
+      },
+    ]);
+  });
+
   it('excludes HTTP methods outside the MVP generator scope from catalog', () => {
     const catalog = buildOpenApiCatalog({
       openapi: '3.0.3',
@@ -178,6 +245,33 @@ describe('OpenAPI snapshot and catalog', () => {
     server = createServer((_request, response) => {
       response.writeHead(200, { 'Content-Type': 'application/json' });
       response.end(JSON.stringify(spec));
+    });
+
+    await new Promise<void>((resolve) => {
+      server?.listen(0, '127.0.0.1', () => resolve());
+    });
+
+    const address = server.address();
+
+    if (!address || typeof address === 'string') {
+      throw new Error('Failed to start test server');
+    }
+
+    return `http://127.0.0.1:${address.port}/v3/api-docs`;
+  }
+
+  async function startOpenApiRouteServer(routes: Record<string, unknown>): Promise<string> {
+    server = createServer((request, response) => {
+      const route = routes[request.url ?? ''];
+
+      if (route === undefined) {
+        response.writeHead(404, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ message: 'Not found' }));
+        return;
+      }
+
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify(route));
     });
 
     await new Promise<void>((resolve) => {

@@ -397,3 +397,10 @@ CLI/compiler MVP가 동작한 뒤 진행한다.
 | Auth scheme 자동 적용 | 제외 | UI header 제안 시 |
 | k6 실행 자동화 | 제외 | generator 안정화 후 |
 | branch/loop/retry | 제외 | MVP 완료 후 |
+
+## 18. 안정성 보강 기록
+
+P-11 이후 리뷰에서 확인된 안정성 항목을 반영했다.
+
+- OpenAPI `sync` snapshot은 외부 `$ref`를 내부 참조로 bundle해, 원격 원본 없이도 `generate`가 snapshot 파일만 파싱할 수 있게 한다.
+- k6 generator는 path parameter 값을 URL path segment로 encode해 `/`, 공백, `?`, `#` 등이 URL 구조를 깨지 않게 한다.

@@ -111,7 +111,7 @@ describe('openapi-k6 CLI', () => {
     const readme = await readFile(path.join(workspace, 'load-tests/README.md'), 'utf8');
 
     expect(config).toBe([
-      '# API 호출 기준 URL입니다. generated k6 script의 fallback BASE_URL로 사용됩니다.',
+      '# API 호출 기준 URL입니다. 생성된 k6 스크립트의 기본 BASE_URL로 사용됩니다.',
       '# k6 실행 시 BASE_URL 환경 변수를 넘기면 이 값보다 우선합니다.',
       'baseUrl: https://dev-api.pharmaresearch.com',
       '',
@@ -178,11 +178,12 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('지원되는 template:');
     expect(readme).toContain('openapi-k6 generate -s login-flow');
     expect(readme).toContain('## 3. OpenAPI snapshot 생성');
-    expect(readme).toContain('## 4. k6 script 생성');
+    expect(readme).toContain('## 4. k6 스크립트 생성');
     expect(readme).toContain('## 5. k6 실행');
-    expect(readme).toContain('API base URL은 기본적으로 `config.yaml`의 `baseUrl`을 사용합니다.');
-    expect(readme).toContain('일시적으로 다른 URL에 실행해야 할 때만 `BASE_URL` 환경 변수를 넘깁니다.');
-    expect(readme).toContain('secret 값을 채우고 실행 전에 export합니다.');
+    expect(readme).toContain('API base URL은 `openapi-k6 generate` 실행 시점의 `config.yaml` `baseUrl` 값이 생성된 k6 스크립트에 기본값으로 들어갑니다.');
+    expect(readme).toContain('`config.yaml`을 수정한 뒤에는 스크립트를 다시 생성해야 반영됩니다.');
+    expect(readme).toContain('실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.');
+    expect(readme).toContain('비밀 값을 채우고 실행 전에 export합니다.');
     expect(readme).toContain('source load-tests/.env');
     expect(readme).toContain('catalog.json`에서 `operationId`, `method`, `path`, `tags`, `parameters`, `hasRequestBody`');
     expect(readme).toContain('## 자주 쓰는 수정 위치');
@@ -217,7 +218,7 @@ describe('openapi-k6 CLI', () => {
     const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
 
     expect(config).toBe([
-      '# API 호출 기준 URL입니다. generated k6 script의 fallback BASE_URL로 사용됩니다.',
+      '# API 호출 기준 URL입니다. 생성된 k6 스크립트의 기본 BASE_URL로 사용됩니다.',
       '# k6 실행 시 BASE_URL 환경 변수를 넘기면 이 값보다 우선합니다.',
       'baseUrl: TODO',
       '',

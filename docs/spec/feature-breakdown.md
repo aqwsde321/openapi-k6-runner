@@ -313,13 +313,14 @@ MVP에서 condition은 흐름 분기 조건이 아니라 check/assertion이다. 
 - `POST/PUT/PATCH`는 body를 JSON 문자열로 전달한다.
 - `Content-Type: application/json`은 body가 있을 때 기본 추가한다.
 - query는 URL query string으로 붙인다.
-- path parameter는 OpenAPI `{id}`를 template literal로 치환한다.
+- path parameter는 OpenAPI `{id}`를 template literal로 치환하되, URL path segment로 안전하게 `encodeURIComponent(String(value))` 처리한다.
 
 ### 완료 기준
 
 - 생성된 파일은 k6 문법으로 실행 가능해야 한다.
 - 각 step 응답은 `res0`, `res1`처럼 고유 변수에 저장된다.
 - extract와 condition이 step 직후에 생성된다.
+- path parameter 값에 `/`, 공백, `?`, `#` 등이 포함되어도 단일 path segment로 유지된다.
 
 ## 13. F-11 Fixture 기반 테스트
 
@@ -450,6 +451,7 @@ P-06에서 구현한 MVP 보조 기능이다. compiler의 필수 입력은 snaps
 ### 책임
 
 - 원격 OpenAPI URL을 대상 프로젝트의 snapshot 파일로 저장한다.
+- 원격/로컬 OpenAPI의 외부 `$ref`는 snapshot 내부 참조로 bundle해, 이후 `generate`가 snapshot 파일만으로 동일하게 파싱할 수 있게 한다.
 - OpenAPI snapshot을 파싱해 사람이 읽기 쉬운 endpoint catalog를 생성한다.
 - scenario YAML 작성자가 `operationId`, `method`, `path`, `tags`를 쉽게 확인할 수 있게 한다.
 
@@ -489,6 +491,7 @@ interface ApiCatalogOperation {
 
 - OpenAPI URL에서 snapshot 파일을 만들 수 있다.
 - snapshot 파일에서 catalog를 만들 수 있다.
+- 외부 상대 `$ref`가 포함된 원격 OpenAPI도 snapshot 저장 후 로컬 snapshot만으로 generate 입력이 될 수 있다.
 - catalog는 method/path, operationId, tags 기준으로 사람이 endpoint를 찾을 수 있다.
 - generate는 원격 URL이 아니라 snapshot 파일을 입력으로 사용할 수 있다.
 

@@ -21,7 +21,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('## OpenAPI Snapshot');
     expect(readme).toContain('## OpenAPI 예시');
     expect(readme).toContain('## Scenario 예시');
-    expect(readme).toContain('## k6 Script 생성');
+    expect(readme).toContain('## k6 스크립트 생성');
     expect(readme).toContain('## k6 실행');
     expect(readme).toContain('baseUrl: https://dev-api.example.com');
     expect(readme).toContain('defaultModule: pharma');
@@ -33,6 +33,9 @@ describe('README usage guide', () => {
     expect(readme).toContain('openapi-k6 sync');
     expect(readme).toContain('openapi-k6 generate -s smoke');
     expect(readme).toContain('k6 run load-tests/generated/smoke.k6.js');
+    expect(readme).toContain('API base URL은 `openapi-k6 generate` 실행 시점의 `load-tests/config.yaml` `baseUrl` 값이 생성된 k6 스크립트에 기본값으로 들어갑니다.');
+    expect(readme).toContain('`config.yaml`을 수정한 뒤에는 스크립트를 다시 생성해야 반영됩니다.');
+    expect(readme).toContain('실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.');
     expect(readme).toContain('{{env.LOGIN_PASSWORD}}');
     expect(readme).toContain('source load-tests/.env');
     expect(readme).toContain('condition`은 흐름 분기가 아니라 k6 `check`');

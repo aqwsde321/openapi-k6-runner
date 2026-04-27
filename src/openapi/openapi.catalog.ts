@@ -24,7 +24,7 @@ interface LoadedOpenApiDocument {
   source: string;
 }
 
-type SwaggerDereferenceApiInput = Parameters<typeof SwaggerParser.dereference>[1];
+type SwaggerApiInput = Parameters<typeof SwaggerParser.dereference>[1];
 
 export class OpenApiSyncError extends Error {
   constructor(message: string) {
@@ -37,11 +37,17 @@ export async function syncOpenApiSnapshot(
   options: OpenApiSyncOptions,
 ): Promise<OpenApiSyncResult> {
   const loaded = await loadOpenApiDocument(options.openapi);
-  const snapshot = `${JSON.stringify(loaded.document, null, 2)}\n`;
+  // Bundle external refs into the snapshot so generate can run from the local snapshot alone.
+  const bundled = await SwaggerParser.bundle(
+    options.openapi,
+    loaded.document as SwaggerApiInput,
+    {},
+  );
+  const snapshot = `${JSON.stringify(bundled, null, 2)}\n`;
   // Keep the original path/URL as the ref base while avoiding parser issues with extensionless URLs.
   const dereferenced = await SwaggerParser.dereference(
     options.openapi,
-    loaded.document as SwaggerDereferenceApiInput,
+    bundled as SwaggerApiInput,
     {},
   );
   const catalog = buildOpenApiCatalog(dereferenced, {

@@ -146,7 +146,7 @@ function compilePathExpression(step: ASTStep): string {
     }
 
     expression += escapeTemplateLiteral(step.path.slice(cursor, match.index));
-    expression += `\${${compileValueExpression(value)}}`;
+    expression += `\${encodeURIComponent(String(${compileValueExpression(value)}))}`;
     cursor = match.index + match[0].length;
   }
 

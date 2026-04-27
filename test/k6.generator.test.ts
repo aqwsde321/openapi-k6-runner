@@ -67,7 +67,7 @@ describe('k6 generator', () => {
       baseUrl: 'https://api.test.local',
     });
 
-    expect(script).toContain('let url0 = joinUrl(BASE_URL, `/users/${context.userId}`);');
+    expect(script).toContain('let url0 = joinUrl(BASE_URL, `/users/${encodeURIComponent(String(context.userId))}`);');
     expect(script).toContain('url0 = appendQuery(url0, { "includePosts": true, "trace": context.traceId });');
     expect(script).toContain('const params0 = { headers: { "Authorization": `Bearer ${context.token}` } };');
     expect(script).toContain('const res0 = http.get(url0, params0);');

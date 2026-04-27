@@ -44,7 +44,7 @@ export default function () {
     "create-order status == 201": (res) => res.status === 201,
   });
 
-  let url2 = joinUrl(BASE_URL, `/orders/${context.orderId}`);
+  let url2 = joinUrl(BASE_URL, `/orders/${encodeURIComponent(String(context.orderId))}`);
   url2 = appendQuery(url2, { "includeItems": true });
   const params2 = { headers: { "Authorization": `Bearer ${context.token}` } };
   const res2 = http.get(url2, params2);
