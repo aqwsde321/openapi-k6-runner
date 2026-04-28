@@ -498,6 +498,8 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '',
     '## 5. 제거 방법',
     '',
+    '`init --force`는 scaffold 관리 파일만 다시 씁니다. `.env`, `openapi/`, `generated/`, `logs/`, 추가 scenario 파일은 지우지 않습니다.',
+    '',
     `이 scaffold를 제거하려면 대상 프로젝트 루트에서 \`${directory}/\` 폴더를 삭제합니다.`,
     '',
     '삭제 전에 현재 위치와 삭제 대상을 확인합니다.',

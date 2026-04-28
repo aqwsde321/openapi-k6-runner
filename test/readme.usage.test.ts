@@ -23,6 +23,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('## 백엔드 프로젝트에 추가하기');
     expect(readme).toContain('openapi-k6 init');
     expect(readme).toContain('load-tests/run.sh');
+    expect(readme).toContain('`--force`는 `config.yaml`, `.env.example`, `.gitignore`, `run.sh`, `scenarios/smoke.yaml`, `README.md`만 다시 씁니다.');
     expect(readme).toContain('## 다음 단계는 AI에게 맡기기');
     expect(readme).toContain('## 생성 후 구조');
     expect(readme).toContain('Read load-tests/README.md first and follow it.');

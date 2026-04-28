@@ -84,11 +84,13 @@ openapi-k6 init
 - `load-tests/scenarios/smoke.yaml`
 - `load-tests/README.md`
 
-기존 파일은 덮어쓰지 않습니다. 다시 만들려면 `--force`를 명시합니다.
+기존 scaffold 관리 파일은 덮어쓰지 않습니다. 다시 만들려면 `--force`를 명시합니다.
 
 ```bash
 openapi-k6 init --force
 ```
+
+`--force`는 `config.yaml`, `.env.example`, `.gitignore`, `run.sh`, `scenarios/smoke.yaml`, `README.md`만 다시 씁니다. `.env`, `openapi/`, `generated/`, `logs/`, 추가 scenario 파일은 지우지 않습니다.
 
 ## 다음 단계는 AI에게 맡기기
 

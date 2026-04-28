@@ -369,7 +369,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain("cp 'perf tests/.env.example' 'perf tests/.env'");
   });
 
-  it('does not overwrite scaffold files unless --force is provided', async () => {
+  it('overwrites scaffold-managed files with --force without deleting local artifacts', async () => {
     await runCli(
       [
         'init',
@@ -380,6 +380,15 @@ describe('openapi-k6 CLI', () => {
       ],
       { cwd: workspace, stdout: createSink(), stderr: createSink() },
     );
+    await writeFile(path.join(workspace, 'load-tests/README.md'), 'stale readme\n', 'utf8');
+    await writeFile(path.join(workspace, 'load-tests/run.sh'), '#!/usr/bin/env bash\necho stale\n', 'utf8');
+    await writeFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'name: stale\nsteps: []\n', 'utf8');
+    await writeFile(path.join(workspace, 'load-tests/.env'), 'LOGIN_PASSWORD=local-secret\n', 'utf8');
+    await writeFile(path.join(workspace, 'load-tests/scenarios/custom.yaml'), 'name: custom\nsteps: []\n', 'utf8');
+    await writeFile(path.join(workspace, 'load-tests/generated/custom.k6.js'), 'export default function () {}\n', 'utf8');
+    await writeFile(path.join(workspace, 'load-tests/openapi/custom.openapi.json'), '{}\n', 'utf8');
+    await mkdir(path.join(workspace, 'load-tests/logs'), { recursive: true });
+    await writeFile(path.join(workspace, 'load-tests/logs/smoke.log'), 'old log\n', 'utf8');
 
     await expect(
       runCli(
@@ -407,8 +416,25 @@ describe('openapi-k6 CLI', () => {
     );
 
     const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+    const readme = await readFile(path.join(workspace, 'load-tests/README.md'), 'utf8');
+    const runScript = await readFile(path.join(workspace, 'load-tests/run.sh'), 'utf8');
+    const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
+    const env = await readFile(path.join(workspace, 'load-tests/.env'), 'utf8');
+    const customScenario = await readFile(path.join(workspace, 'load-tests/scenarios/custom.yaml'), 'utf8');
+    const generated = await readFile(path.join(workspace, 'load-tests/generated/custom.k6.js'), 'utf8');
+    const snapshot = await readFile(path.join(workspace, 'load-tests/openapi/custom.openapi.json'), 'utf8');
+    const log = await readFile(path.join(workspace, 'load-tests/logs/smoke.log'), 'utf8');
 
     expect(config).toContain('baseUrl: https://changed.test.local');
+    expect(readme).toContain('# load-tests');
+    expect(readme).toContain('`init --force`는 scaffold 관리 파일만 다시 씁니다.');
+    expect(runScript).toContain('exec k6 run "${K6_ARGS[@]}" "$SCRIPT_PATH"');
+    expect(scenario).toContain('path: /health');
+    expect(env).toBe('LOGIN_PASSWORD=local-secret\n');
+    expect(customScenario).toBe('name: custom\nsteps: []\n');
+    expect(generated).toBe('export default function () {}\n');
+    expect(snapshot).toBe('{}\n');
+    expect(log).toBe('old log\n');
   });
 
   it('fails when --scenario is missing', async () => {
