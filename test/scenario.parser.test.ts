@@ -103,6 +103,46 @@ describe('scenario parser', () => {
     });
   });
 
+  it('parses multipart request fields and files', () => {
+    const scenario = parseScenarioSource([
+      'name: upload-product-image',
+      'steps:',
+      '  - id: upload-image',
+      '    api:',
+      '      operationId: uploadProductImage',
+      '    request:',
+      '      headers:',
+      '        Authorization: "Bearer {{token}}"',
+      '      multipart:',
+      '        fields:',
+      '          title: Main image',
+      '          sortOrder: 1',
+      '        files:',
+      '          image:',
+      '            path: fixtures/product.png',
+      '            filename: product.png',
+      '            contentType: image/png',
+      '',
+    ].join('\n'));
+
+    expect(scenario.steps[0]?.request).toEqual({
+      headers: { Authorization: 'Bearer {{token}}' },
+      multipart: {
+        fields: {
+          title: 'Main image',
+          sortOrder: 1,
+        },
+        files: {
+          image: {
+            path: 'fixtures/product.png',
+            filename: 'product.png',
+            contentType: 'image/png',
+          },
+        },
+      },
+    });
+  });
+
   it('fails when name is missing', () => {
     expect(() =>
       parseScenarioSource(
@@ -181,5 +221,62 @@ describe('scenario parser', () => {
         ].join('\n'),
       ),
     ).toThrowError('<inline>: steps[0].api: api must be an object');
+  });
+
+  it('fails when body and multipart are used together', () => {
+    expect(() =>
+      parseScenarioSource([
+        'name: invalid-upload',
+        'steps:',
+        '  - id: upload',
+        '    api:',
+        '      method: POST',
+        '      path: /upload',
+        '    request:',
+        '      body:',
+        '        name: test',
+        '      multipart:',
+        '        files:',
+        '          file:',
+        '            path: fixtures/file.bin',
+        '',
+      ].join('\n')),
+    ).toThrowError('<inline>: steps[0].request: request.body and request.multipart cannot be used together');
+  });
+
+  it('fails when multipart file spec is invalid', () => {
+    expect(() =>
+      parseScenarioSource([
+        'name: invalid-upload',
+        'steps:',
+        '  - id: upload',
+        '    api:',
+        '      method: POST',
+        '      path: /upload',
+        '    request:',
+        '      multipart:',
+        '        files:',
+        '          file:',
+        '            filename: file.bin',
+        '',
+      ].join('\n')),
+    ).toThrowError('<inline>: steps[0].request.multipart.files.file.path must be a string');
+
+    expect(() =>
+      parseScenarioSource([
+        'name: invalid-upload',
+        'steps:',
+        '  - id: upload',
+        '    api:',
+        '      method: POST',
+        '      path: /upload',
+        '    request:',
+        '      multipart:',
+        '        files:',
+        '          file:',
+        '            path: ../secrets/file.bin',
+        '',
+      ].join('\n')),
+    ).toThrowError('<inline>: steps[0].request.multipart.files.file.path must stay inside the load-tests directory');
   });
 });

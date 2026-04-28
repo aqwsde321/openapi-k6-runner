@@ -82,6 +82,7 @@ describe('OpenAPI snapshot and catalog', () => {
             },
           ],
           hasRequestBody: true,
+          requestBodyContentTypes: ['application/json'],
         },
       ],
     });
@@ -124,6 +125,7 @@ describe('OpenAPI snapshot and catalog', () => {
       path: '/orders/{orderId}',
       operationId: 'createOrder',
       hasRequestBody: true,
+      requestBodyContentTypes: ['application/json'],
     });
   });
 

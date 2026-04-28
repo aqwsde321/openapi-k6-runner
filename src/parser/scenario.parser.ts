@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
-import type { ApiReference, ExtractRule, Scenario, Step, StepRequest } from '../core/types.js';
+import type { ApiReference, ExtractRule, MultipartFile, MultipartRequest, Scenario, Step, StepRequest } from '../core/types.js';
 
 export class ScenarioParseError extends Error {
   constructor(message: string) {
@@ -117,13 +118,103 @@ function parseStepRequest(value: unknown, path: string): StepRequest {
   const pathParams = request.pathParams === undefined
     ? undefined
     : expectRecord(request.pathParams, `${path}.pathParams must be an object`);
+  const multipart = request.multipart === undefined
+    ? undefined
+    : parseMultipartRequest(request.multipart, `${path}.multipart`);
+
+  if (request.body !== undefined && multipart !== undefined) {
+    throw new ScenarioParseError(`${path}: request.body and request.multipart cannot be used together`);
+  }
 
   return {
     ...(headers === undefined ? {} : { headers }),
     ...(query === undefined ? {} : { query }),
     ...(pathParams === undefined ? {} : { pathParams }),
     ...(request.body === undefined ? {} : { body: request.body }),
+    ...(multipart === undefined ? {} : { multipart }),
   };
+}
+
+function parseMultipartRequest(value: unknown, path: string): MultipartRequest {
+  const multipart = expectRecord(value, `${path}: multipart must be an object`);
+  const fields = multipart.fields === undefined
+    ? undefined
+    : expectRecord(multipart.fields, `${path}.fields must be an object`);
+  const files = expectRecord(multipart.files, `${path}.files must be an object`);
+
+  if (Object.keys(files).length === 0) {
+    throw new ScenarioParseError(`${path}.files must include at least one file field`);
+  }
+
+  for (const fieldName of Object.keys(fields ?? {})) {
+    if (fieldName in files) {
+      throw new ScenarioParseError(`${path}: fields.${fieldName} conflicts with files.${fieldName}`);
+    }
+  }
+
+  return {
+    ...(fields === undefined ? {} : { fields }),
+    files: parseMultipartFiles(files, `${path}.files`),
+  };
+}
+
+function parseMultipartFiles(value: Record<string, unknown>, path: string): Record<string, MultipartFile> {
+  const files: Record<string, MultipartFile> = {};
+
+  for (const [fieldName, rawFile] of Object.entries(value)) {
+    if (!fieldName.trim()) {
+      throw new ScenarioParseError(`${path}: file field name must not be empty`);
+    }
+
+    const file = expectRecord(rawFile, `${path}.${fieldName} must be an object`);
+    const filePath = expectString(file.path, `${path}.${fieldName}.path must be a string`);
+    const filename = file.filename === undefined
+      ? undefined
+      : expectString(file.filename, `${path}.${fieldName}.filename must be a string`);
+    const contentType = file.contentType === undefined
+      ? undefined
+      : expectString(file.contentType, `${path}.${fieldName}.contentType must be a string`);
+
+    const normalizedFilePath = validateFixturePath(filePath, `${path}.${fieldName}.path`);
+
+    if (filename !== undefined && !filename.trim()) {
+      throw new ScenarioParseError(`${path}.${fieldName}.filename must not be empty`);
+    }
+
+    if (contentType !== undefined && !contentType.trim()) {
+      throw new ScenarioParseError(`${path}.${fieldName}.contentType must not be empty`);
+    }
+
+    files[fieldName] = {
+      path: normalizedFilePath,
+      ...(filename === undefined ? {} : { filename: filename.trim() }),
+      ...(contentType === undefined ? {} : { contentType: contentType.trim() }),
+    };
+  }
+
+  return files;
+}
+
+function validateFixturePath(value: string, pathLabel: string): string {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    throw new ScenarioParseError(`${pathLabel} must not be empty`);
+  }
+
+  if (trimmed.includes('{{')) {
+    throw new ScenarioParseError(`${pathLabel} must be a static path without templates`);
+  }
+
+  if (path.isAbsolute(trimmed)) {
+    throw new ScenarioParseError(`${pathLabel} must be relative to the load-tests directory`);
+  }
+
+  if (trimmed.split(/[\\/]+/).includes('..')) {
+    throw new ScenarioParseError(`${pathLabel} must stay inside the load-tests directory`);
+  }
+
+  return trimmed;
 }
 
 function parseExtract(value: unknown, path: string): Record<string, ExtractRule> {

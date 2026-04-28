@@ -71,3 +71,32 @@ paths:
       responses:
         "200":
           description: OK
+  /products/{productId}/image:
+    parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: uploadProductImage
+      tags:
+        - products
+      summary: Upload product image
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - image
+              properties:
+                title:
+                  type: string
+                image:
+                  type: string
+                  format: binary
+      responses:
+        "200":
+          description: Uploaded

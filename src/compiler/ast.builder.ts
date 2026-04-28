@@ -40,6 +40,16 @@ function normalizeRequest(request: StepRequest | undefined): StepRequest {
     ...(request.query === undefined ? {} : { query: { ...request.query } }),
     ...(request.pathParams === undefined ? {} : { pathParams: { ...request.pathParams } }),
     ...(request.body === undefined ? {} : { body: request.body }),
+    ...(request.multipart === undefined
+      ? {}
+      : {
+          multipart: {
+            ...(request.multipart.fields === undefined ? {} : { fields: { ...request.multipart.fields } }),
+            files: Object.fromEntries(
+              Object.entries(request.multipart.files).map(([fieldName, file]) => [fieldName, { ...file }]),
+            ),
+          },
+        }),
   };
 }
 

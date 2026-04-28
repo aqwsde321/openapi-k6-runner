@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import type { ASTScenario, ASTStep, StepRequest } from '../core/types.js';
 import { compileValueExpression } from '../core/template.js';
 import { compileJsonPathSegments } from '../utils/jsonpath.js';
@@ -14,6 +16,8 @@ const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 
 export interface K6GeneratorOptions {
   baseUrl?: string;
+  fileRootDir?: string;
+  outputPath?: string;
 }
 
 export class K6GenerationError extends Error {
@@ -47,6 +51,7 @@ export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions =
     '',
     `const BASE_URL = __ENV.BASE_URL || ${JSON.stringify(baseUrl)};`,
     "const OPENAPI_K6_TRACE = __ENV.OPENAPI_K6_TRACE === '1';",
+    ...renderMultipartFileDeclarations(ast, options),
     '',
     ...renderHelpers(ast),
     '',
@@ -192,12 +197,25 @@ function renderStep(scenarioName: string, step: ASTStep, index: number): string[
     innerLines.push(`${urlVariable} = appendQuery(${urlVariable}, ${compileValueExpression(step.request.query)});`);
   }
 
-  const hasBodyValue = step.request.body !== undefined && BODY_METHODS.has(method);
-  if (hasBodyValue) {
-    innerLines.push(`const ${bodyVariable} = JSON.stringify(${compileValueExpression(step.request.body)});`);
+  const hasJsonBodyValue = step.request.body !== undefined && BODY_METHODS.has(method);
+  const hasMultipartValue = step.request.multipart !== undefined;
+
+  if (step.request.body !== undefined && hasMultipartValue) {
+    throw new K6GenerationError(`step "${step.id}": request.body and request.multipart cannot be used together`);
   }
 
-  const headers = buildHeaders(step.request, hasBodyValue);
+  if (hasMultipartValue && !BODY_METHODS.has(method)) {
+    throw new K6GenerationError(`step "${step.id}": request.multipart is only supported for POST, PUT, or PATCH`);
+  }
+
+  if (hasJsonBodyValue) {
+    innerLines.push(`const ${bodyVariable} = JSON.stringify(${compileValueExpression(step.request.body)});`);
+  } else if (hasMultipartValue) {
+    innerLines.push(`const ${bodyVariable} = ${renderMultipartBody(step, index)};`);
+  }
+
+  const hasBodyValue = hasJsonBodyValue || hasMultipartValue;
+  const headers = buildHeaders(step.request, hasJsonBodyValue, hasMultipartValue);
   innerLines.push(`const ${paramsVariable} = ${renderRequestParams(headers, tagsVariable)};`);
 
   innerLines.push(`logStepStart(${metadataVariable}, ${urlVariable});`);
@@ -277,6 +295,86 @@ function renderExtract(step: ASTStep, index: number, responseVariable: string): 
   return lines;
 }
 
+function renderMultipartFileDeclarations(ast: ASTScenario, options: K6GeneratorOptions): string[] {
+  const declarations: string[] = [];
+
+  ast.steps.forEach((step, stepIndex) => {
+    Object.values(step.request.multipart?.files ?? {}).forEach((file, fileIndex) => {
+      declarations.push(
+        `const ${renderMultipartFileVariable(stepIndex, fileIndex)} = open(${JSON.stringify(resolveMultipartOpenPath(ast, file.path, options))}, 'b');`,
+      );
+    });
+  });
+
+  return declarations;
+}
+
+function renderMultipartBody(step: ASTStep, stepIndex: number): string {
+  const multipart = step.request.multipart;
+
+  if (multipart === undefined) {
+    throw new K6GenerationError(`step "${step.id}": request.multipart is missing`);
+  }
+
+  const entries = [
+    ...Object.entries(multipart.fields ?? {}).map(
+      ([fieldName, value]) => `${JSON.stringify(fieldName)}: ${compileValueExpression(value)}`,
+    ),
+    ...Object.entries(multipart.files).map(
+      ([fieldName, file], fileIndex) => {
+        const fileVariable = renderMultipartFileVariable(stepIndex, fileIndex);
+        const filename = file.filename ?? path.basename(file.path);
+        const args = [
+          fileVariable,
+          compileValueExpression(filename),
+          ...(file.contentType === undefined ? [] : [compileValueExpression(file.contentType)]),
+        ];
+
+        return `${JSON.stringify(fieldName)}: http.file(${args.join(', ')})`;
+      },
+    ),
+  ];
+
+  return `{ ${entries.join(', ')} }`;
+}
+
+function renderMultipartFileVariable(stepIndex: number, fileIndex: number): string {
+  return `multipartFile${stepIndex}_${fileIndex}`;
+}
+
+function resolveMultipartOpenPath(ast: ASTScenario, filePath: string, options: K6GeneratorOptions): string {
+  validateMultipartFilePath(filePath);
+
+  const fileRootDir = path.resolve(options.fileRootDir ?? 'load-tests');
+  const outputPath = options.outputPath === undefined
+    ? path.join(fileRootDir, 'generated', `${ast.name}.k6.js`)
+    : path.resolve(options.outputPath);
+  const outputDir = path.dirname(outputPath);
+  const absoluteFilePath = path.resolve(fileRootDir, filePath);
+  const relativePath = path.relative(outputDir, absoluteFilePath) || path.basename(absoluteFilePath);
+  const normalizedPath = relativePath.split(path.sep).join('/');
+
+  return normalizedPath.startsWith('.') ? normalizedPath : `./${normalizedPath}`;
+}
+
+function validateMultipartFilePath(filePath: string): void {
+  if (!filePath.trim()) {
+    throw new K6GenerationError('request.multipart file path must not be empty');
+  }
+
+  if (filePath.includes('{{')) {
+    throw new K6GenerationError('request.multipart file path must be a static path without templates');
+  }
+
+  if (path.isAbsolute(filePath)) {
+    throw new K6GenerationError('request.multipart file path must be relative to the load-tests directory');
+  }
+
+  if (filePath.trim().split(/[\\/]+/).includes('..')) {
+    throw new K6GenerationError('request.multipart file path must stay inside the load-tests directory');
+  }
+}
+
 function renderCondition(
   step: ASTStep,
   index: number,
@@ -321,6 +419,7 @@ function compileCondition(condition: string, stepId: string): { operator: string
 function buildHeaders(
   request: StepRequest,
   includeJsonContentType: boolean,
+  omitContentType = false,
 ): Record<string, unknown> | undefined {
   const headers: Record<string, unknown> = {};
 
@@ -329,7 +428,13 @@ function buildHeaders(
   }
 
   if (request.headers) {
-    Object.assign(headers, request.headers);
+    for (const [key, value] of Object.entries(request.headers)) {
+      if (omitContentType && key.toLowerCase() === 'content-type') {
+        continue;
+      }
+
+      headers[key] = value;
+    }
   }
 
   return Object.keys(headers).length > 0 ? headers : undefined;

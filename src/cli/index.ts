@@ -295,9 +295,14 @@ export async function runGenerateCommand(
   }
 
   const ast = buildAst(scenario, registry);
-  const script = generateK6Script(ast, { baseUrl });
+  const outputPath = resolveOutputPath(cwd, config, options.scenario, options.write);
+  const script = generateK6Script(ast, {
+    baseUrl,
+    fileRootDir: resolveLoadTestDir(cwd, config),
+    outputPath,
+  });
   const result: GenerateResult = {
-    outputPath: resolveOutputPath(cwd, config, options.scenario, options.write),
+    outputPath,
     scenarioPath,
     openapiPath,
     baseUrl,

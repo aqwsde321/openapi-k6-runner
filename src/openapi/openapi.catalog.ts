@@ -120,6 +120,7 @@ export function buildOpenApiCatalog(
         tags: readStringArray(operation.tags),
         parameters: collectOperationParameters(pathItem, operation),
         hasRequestBody: operation.requestBody !== undefined,
+        ...renderRequestBodyContentTypes(operation.requestBody),
         ...(operationId === undefined ? {} : { operationId }),
         ...(summary === undefined ? {} : { summary }),
         ...(description === undefined ? {} : { description }),
@@ -132,6 +133,26 @@ export function buildOpenApiCatalog(
     source: options.source,
     operations,
   };
+}
+
+function renderRequestBodyContentTypes(requestBody: unknown): Pick<ApiCatalogOperation, 'requestBodyContentTypes'> | Record<string, never> {
+  const contentTypes = readRequestBodyContentTypes(requestBody);
+
+  return contentTypes.length === 0 ? {} : { requestBodyContentTypes: contentTypes };
+}
+
+function readRequestBodyContentTypes(requestBody: unknown): string[] {
+  if (!isRecord(requestBody)) {
+    return [];
+  }
+
+  const content = requestBody.content;
+
+  if (!isRecord(content)) {
+    return [];
+  }
+
+  return Object.keys(content).sort((left, right) => left.localeCompare(right));
 }
 
 async function readOpenApiSource(input: string): Promise<string> {

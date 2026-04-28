@@ -1,0 +1,20 @@
+name: upload-product-image
+
+steps:
+  - id: upload-image
+    api:
+      operationId: uploadProductImage
+    request:
+      headers:
+        Authorization: "Bearer {{env.API_TOKEN}}"
+      pathParams:
+        productId: "product-001"
+      multipart:
+        fields:
+          title: Main image
+        files:
+          image:
+            path: fixtures/product.png
+            filename: product.png
+            contentType: image/png
+    condition: status == 200

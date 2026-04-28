@@ -191,6 +191,57 @@ describe('k6 generator', () => {
     await expectValidJavaScript(workspace, script);
   });
 
+  it('generates multipart form-data uploads with files opened in init context', async () => {
+    const script = generateK6Script(
+      {
+        name: 'upload-product-image',
+        steps: [
+          {
+            id: 'upload-image',
+            method: 'POST',
+            path: '/products/{productId}/image',
+            pathParameters: [{ name: 'productId', in: 'path' }],
+            request: {
+              headers: {
+                Authorization: 'Bearer {{token}}',
+                'Content-Type': 'multipart/form-data',
+              },
+              pathParams: { productId: '{{productId}}' },
+              multipart: {
+                fields: {
+                  title: 'Main image',
+                  sortOrder: 1,
+                },
+                files: {
+                  image: {
+                    path: 'fixtures/product.png',
+                    filename: 'product.png',
+                    contentType: 'image/png',
+                  },
+                },
+              },
+            },
+            condition: 'status == 200',
+          },
+        ],
+      },
+      {
+        baseUrl: 'https://api.test.local',
+        fileRootDir: path.join(workspace, 'load-tests'),
+        outputPath: path.join(workspace, 'load-tests/generated/upload-product-image.k6.js'),
+      },
+    );
+
+    expect(script).toContain('const multipartFile0_0 = open("../fixtures/product.png", \'b\');');
+    expect(script).toContain('const body0 = { "title": "Main image", "sortOrder": 1, "image": http.file(multipartFile0_0, "product.png", "image/png") };');
+    expect(script).toContain('const params0 = { headers: { "Authorization": `Bearer ${context.token}` }, tags: tags0 };');
+    expect(script).not.toContain('"Content-Type": "multipart/form-data"');
+    expect(script).toContain('const res0 = http.post(url0, body0, params0);');
+    expect(script).toContain('logStepStart(metadata0, url0);');
+    expect(script).toContain('logFailedCheck(metadata0, "status == 200", url0, res0);');
+    await expectValidJavaScript(workspace, script);
+  });
+
   it('renders generated metadata as literals without template compilation', async () => {
     const script = generateK6Script(
       {

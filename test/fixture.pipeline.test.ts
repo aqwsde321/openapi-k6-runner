@@ -78,6 +78,7 @@ describe('target project fixture pipeline', () => {
         operationId: 'loginUser',
         tags: ['auth'],
         hasRequestBody: true,
+        requestBodyContentTypes: ['application/json'],
       }),
       expect.objectContaining({
         method: 'POST',
@@ -85,6 +86,7 @@ describe('target project fixture pipeline', () => {
         operationId: 'createOrder',
         tags: ['orders'],
         hasRequestBody: true,
+        requestBodyContentTypes: ['application/json'],
       }),
       expect.objectContaining({
         method: 'GET',
@@ -93,7 +95,53 @@ describe('target project fixture pipeline', () => {
         tags: ['orders'],
         hasRequestBody: false,
       }),
+      expect.objectContaining({
+        method: 'POST',
+        path: '/products/{productId}/image',
+        operationId: 'uploadProductImage',
+        tags: ['products'],
+        hasRequestBody: true,
+        requestBodyContentTypes: ['multipart/form-data'],
+      }),
     ]);
+    expectValidJavaScript(generatedPath);
+  });
+
+  it('generates a multipart upload k6 script from the target project fixture layout', async () => {
+    await copyScenarioFixture('upload-product-image.yaml');
+    await copyOpenApiFixture('store.openapi.yaml');
+    await copyConfigFixture();
+
+    await runCli(
+      [
+        'sync',
+        '--config',
+        'load-tests/config.yaml',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    await runCli(
+      [
+        'generate',
+        '--config',
+        'load-tests/config.yaml',
+        '--scenario',
+        'load-tests/scenarios/upload-product-image.yaml',
+        '--write',
+        'load-tests/generated/upload-product-image.k6.js',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const generatedPath = path.join(workspace, 'load-tests/generated/upload-product-image.k6.js');
+    const generated = await readFile(generatedPath, 'utf8');
+    const expected = await readFile(
+      path.join(fixturesRoot, 'expected/upload-product-image.k6.js'),
+      'utf8',
+    );
+
+    expect(generated).toBe(expected);
     expectValidJavaScript(generatedPath);
   });
 

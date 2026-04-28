@@ -199,4 +199,79 @@ describe('AST builder', () => {
       },
     });
   });
+
+  it('preserves multipart request fields and files', () => {
+    const registry = buildApiRegistry({
+      openapi: '3.0.3',
+      info: { title: 'Fixture API', version: '1.0.0' },
+      paths: {
+        '/products/{productId}/image': {
+          post: {
+            operationId: 'uploadProductImage',
+            parameters: [
+              {
+                name: 'productId',
+                in: 'path',
+                required: true,
+                schema: { type: 'string' },
+              },
+            ],
+            requestBody: {
+              content: {
+                'multipart/form-data': {
+                  schema: { type: 'object' },
+                },
+              },
+            },
+            responses: { 200: { description: 'OK' } },
+          },
+        },
+      },
+    });
+    const scenario: Scenario = {
+      name: 'upload-product-image',
+      steps: [
+        {
+          id: 'upload-image',
+          api: { operationId: 'uploadProductImage' },
+          request: {
+            headers: { Authorization: 'Bearer {{token}}' },
+            pathParams: { productId: '{{productId}}' },
+            multipart: {
+              fields: { title: 'Main image' },
+              files: {
+                image: {
+                  path: 'fixtures/product.png',
+                  filename: 'product.png',
+                  contentType: 'image/png',
+                },
+              },
+            },
+          },
+        },
+      ],
+    };
+
+    const ast = buildAst(scenario, registry);
+
+    expect(ast.steps[0]).toMatchObject({
+      id: 'upload-image',
+      method: 'POST',
+      path: '/products/{productId}/image',
+      request: {
+        headers: { Authorization: 'Bearer {{token}}' },
+        pathParams: { productId: '{{productId}}' },
+        multipart: {
+          fields: { title: 'Main image' },
+          files: {
+            image: {
+              path: 'fixtures/product.png',
+              filename: 'product.png',
+              contentType: 'image/png',
+            },
+          },
+        },
+      },
+    });
+  });
 });

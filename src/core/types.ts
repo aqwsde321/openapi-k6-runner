@@ -22,6 +22,18 @@ export interface StepRequest {
   query?: Record<string, unknown>;
   pathParams?: Record<string, unknown>;
   body?: unknown;
+  multipart?: MultipartRequest;
+}
+
+export interface MultipartRequest {
+  fields?: Record<string, unknown>;
+  files: Record<string, MultipartFile>;
+}
+
+export interface MultipartFile {
+  path: string;
+  filename?: string;
+  contentType?: string;
 }
 
 export interface ExtractRule {
@@ -59,6 +71,7 @@ export interface ApiCatalogOperation {
   description?: string;
   parameters: unknown[];
   hasRequestBody: boolean;
+  requestBodyContentTypes?: string[];
 }
 
 export interface ASTScenario {

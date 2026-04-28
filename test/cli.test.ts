@@ -233,7 +233,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('### 2-3. k6 스크립트 생성');
     expect(readme).toContain('### 2-4. k6 실행');
     expect(readme).toContain('생성/갱신: `load-tests/openapi/pharma.openapi.json`, `load-tests/openapi/pharma.catalog.json`');
-    expect(readme).toContain('`load-tests/openapi/pharma.catalog.json`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`를 확인합니다.');
+    expect(readme).toContain('`load-tests/openapi/pharma.catalog.json`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.');
     expect(readme).toContain('기본 smoke 테스트는 `load-tests/scenarios/smoke.yaml`를 수정합니다.');
     expect(readme).toContain('생성/갱신: `load-tests/generated/smoke.k6.js`');
     expect(readme).toContain('## 3. 비밀 값 사용');
@@ -253,7 +253,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('시나리오에서 `{{env.NAME}}`을 사용한다면 `load-tests/.env.example`을 `load-tests/.env`로 복사한 뒤 비밀 값을 채웁니다.');
     expect(readme).toContain('cp load-tests/.env.example load-tests/.env');
     expect(readme).toContain('`run.sh`가 실행할 때 `load-tests/.env`를 자동으로 export합니다.');
-    expect(readme).toContain('Read `openapi/*.catalog.json` and inspect `operationId`, `method`, `path`, `parameters`, and `hasRequestBody`');
+    expect(readme).toContain('Read `openapi/*.catalog.json` and inspect `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, and `requestBodyContentTypes`');
     expect(readme).toContain('rm -rf load-tests');
     expect(readme).toContain('필요한 scenario, snapshot, catalog가 있으면 먼저 백업합니다.');
     expect(readme).toContain('## AI Work Guide');
@@ -266,6 +266,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Keep human-facing documentation in Korean.');
     expect(readme).toContain('Do not write secrets such as passwords directly in YAML. Use `{{env.NAME}}`.');
     expect(readme).toContain('Store real secret values in `load-tests/.env` and do not commit it.');
+    expect(readme).toContain('Do not use `request.body` and `request.multipart` in the same step.');
     expect(readme).toContain('Resolve config-relative paths from the directory containing `config.yaml`.');
     expect(readme).toContain('`load-tests/run.sh`: k6 runner that auto-loads `load-tests/.env` values');
     expect(readme).toContain('### Files to inspect');
@@ -275,6 +276,11 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Create load-tests/scenarios/basic-read.yaml.');
     expect(readme).toContain('Find the login API and a user-profile/read API.');
     expect(readme).toContain('Do not edit load-tests/README.md, load-tests/run.sh, load-tests/.env.example, or load-tests/.gitignore unless explicitly asked to change scaffold files.');
+    expect(readme).toContain('`multipart`: multipart/form-data request body for file uploads');
+    expect(readme).toContain('Multipart upload example:');
+    expect(readme).toContain('path: fixtures/product.png');
+    expect(readme).toContain('Multipart file paths are relative to `load-tests/`.');
+    expect(readme).toContain('Spring endpoints such as `@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` should be modeled with `request.multipart`.');
     expect(readme.indexOf('## AI Work Guide')).toBeGreaterThan(readme.indexOf('## 5. 제거 방법'));
   });
 
