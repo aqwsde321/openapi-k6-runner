@@ -12,7 +12,8 @@ describe('README usage guide', () => {
     expect(readme).toContain('## 용도');
     expect(readme).toContain('## 설치');
     expect(readme).toContain('pnpm run build');
-    expect(readme).toContain('generator 코드를 수정하거나 새 버전으로 업데이트했을 때는 빌드 결과물만 갱신하면');
+    expect(readme).toContain('로컬 코드만 수정했을 때:');
+    expect(readme).toContain('generator 저장소를 pull/checkout해서 새 버전으로 업데이트했을 때:');
     expect(readme).toContain('pnpm run build:watch');
     expect(readme).toContain('새 버전으로 업데이트한 뒤에는 watch를 다시 시작하는 편이 안전합니다.');
     expect(readme).toContain('pnpm link --global');

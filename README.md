@@ -23,9 +23,18 @@ pnpm link --global
 openapi-k6 --help
 ```
 
-`pnpm link --global`은 보통 한 번만 실행하면 됩니다. 이후 generator 코드를 수정하거나 새 버전으로 업데이트했을 때는 빌드 결과물만 갱신하면 `openapi-k6` 명령에 바로 반영됩니다.
+`pnpm link --global`은 보통 한 번만 실행하면 됩니다. 이후에는 상황별로 generator 저장소에서 갱신합니다.
+
+로컬 코드만 수정했을 때:
 
 ```bash
+pnpm run build
+```
+
+generator 저장소를 pull/checkout해서 새 버전으로 업데이트했을 때:
+
+```bash
+pnpm install
 pnpm run build
 ```
 

@@ -168,7 +168,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('alias는 현재 터미널 세션에만 적용됩니다.');
     expect(readme).toContain(`cd ${path.dirname(path.dirname(path.dirname(cliPath)))}`);
     expect(readme).toContain('pnpm run build');
-    expect(readme).toContain('generator 코드를 수정하거나 새 버전으로 업데이트한 뒤에는 generator 저장소에서 다시 빌드합니다.');
+    expect(readme).toContain('generator 로컬 코드만 수정한 뒤에는 generator 저장소에서 다시 빌드합니다.');
+    expect(readme).toContain('generator 저장소를 pull/checkout해서 새 버전으로 업데이트한 뒤에는 의존성도 다시 설치하고 빌드합니다.');
     expect(readme).toContain('pnpm run build:watch');
     expect(readme).toContain('개발 중 수동 빌드가 번거로우면 generator 저장소의 별도 터미널에서 watch 빌드를 켜둡니다.');
     expect(readme).toContain('새 버전으로 업데이트한 뒤에는 watch를 다시 시작하는 편이 안전합니다.');
