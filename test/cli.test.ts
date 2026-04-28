@@ -158,9 +158,20 @@ describe('openapi-k6 CLI', () => {
     expect(runScript).toContain('#!/usr/bin/env bash');
     expect(runScript).toContain('SCENARIO="smoke"');
     expect(runScript).toContain('LOG_ENABLED=false');
+    expect(runScript).toContain('TRACE_ENABLED=false');
+    expect(runScript).toContain('REPORT_ENABLED=false');
+    expect(runScript).toContain('DASHBOARD_OPEN_ENABLED=false');
     expect(runScript).toContain('K6_ARGS=()');
+    expect(runScript).toContain('Usage: $0 [scenario] [run.sh flags] [k6 run options]');
+    expect(runScript).toContain('See load-tests/README.md for the full workflow.');
     expect(runScript).toContain('source "$ENV_FILE"');
     expect(runScript).toContain('LOG_FILE="$LOG_DIR/$SCENARIO.log"');
+    expect(runScript).toContain('REPORT_FILE="$LOG_DIR/$SCENARIO-report.html"');
+    expect(runScript).toContain('export OPENAPI_K6_TRACE=1');
+    expect(runScript).toContain('export K6_WEB_DASHBOARD=true');
+    expect(runScript).toContain('export K6_WEB_DASHBOARD_PERIOD="${K6_WEB_DASHBOARD_PERIOD:-1s}"');
+    expect(runScript).toContain('export K6_WEB_DASHBOARD_EXPORT="${K6_WEB_DASHBOARD_EXPORT:-$REPORT_FILE}"');
+    expect(runScript).toContain('export K6_WEB_DASHBOARD_OPEN=true');
     expect(runScript).toContain('k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH" 2>&1 | tee "$LOG_FILE"');
     expect(runScript).toContain('status="${PIPESTATUS[0]}"');
     expect(runScript).toContain('exec k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH"');
@@ -176,7 +187,12 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('./load-tests/run.sh smoke --vus 1 --iterations 1');
     expect(readme).toContain('./load-tests/run.sh smoke --log');
     expect(readme).toContain('로그 파일: `load-tests/logs/smoke.log`');
+    expect(readme).toContain('`--trace`: 각 scenario step의 시작/종료 로그 출력');
+    expect(readme).toContain('`--report`: k6 Web Dashboard HTML report를 `logs/<scenario>-report.html`에 저장');
+    expect(readme).toContain('./load-tests/run.sh smoke --report --duration 10s --vus 1');
+    expect(readme).toContain('./load-tests/run.sh smoke --trace --log --report --duration 10s --vus 1');
     expect(readme).toContain('`run.sh`는 같은 폴더의 `.env`를 자동으로 로드한 뒤');
+    expect(readme).toContain('빠른 사용법은 `run.sh --help`로 확인할 수 있습니다.');
     expect(readme).toContain('## 0. openapi-k6 명령 준비');
     expect(readme).toContain('사람이 꼭 이해해야 하는 내용은 이 README 앞부분에 있습니다.');
     expect(readme).toContain('## 사람이 꼭 알아야 하는 것');
@@ -307,6 +323,99 @@ describe('openapi-k6 CLI', () => {
     ].join('\n'));
   });
 
+  it('prints generated run.sh usage with --help', async () => {
+    await runCli(
+      ['init'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const result = spawnSync(
+      path.join(workspace, 'load-tests/run.sh'),
+      ['--help'],
+      {
+        cwd: workspace,
+        encoding: 'utf8',
+        env: process.env,
+      },
+    );
+
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('Usage:');
+    expect(result.stdout).toContain('run.sh flags:');
+    expect(result.stdout).toContain('k6 options must come after the scenario name.');
+  });
+
+  it('runs the generated run.sh with report, trace, and dashboard flags', async () => {
+    await runCli(
+      ['init'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+    await writeFile(
+      path.join(workspace, 'load-tests/generated/smoke.k6.js'),
+      'export default function () {}\n',
+      'utf8',
+    );
+    const binDir = path.join(workspace, 'bin');
+    const argLogPath = path.join(workspace, 'k6-args.txt');
+    const envLogPath = path.join(workspace, 'k6-env.txt');
+    await mkdir(binDir, { recursive: true });
+    await writeFile(
+      path.join(binDir, 'k6'),
+      [
+        '#!/usr/bin/env bash',
+        'printf "%s\\n" "$@" > "$K6_ARG_LOG"',
+        '{',
+        '  printf "OPENAPI_K6_TRACE=%s\\n" "${OPENAPI_K6_TRACE-}"',
+        '  printf "K6_WEB_DASHBOARD=%s\\n" "${K6_WEB_DASHBOARD-}"',
+        '  printf "K6_WEB_DASHBOARD_PERIOD=%s\\n" "${K6_WEB_DASHBOARD_PERIOD-}"',
+        '  printf "K6_WEB_DASHBOARD_EXPORT=%s\\n" "${K6_WEB_DASHBOARD_EXPORT-}"',
+        '  printf "K6_WEB_DASHBOARD_OPEN=%s\\n" "${K6_WEB_DASHBOARD_OPEN-}"',
+        '} > "$K6_ENV_LOG"',
+        'echo fake-k6-output',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await chmod(path.join(binDir, 'k6'), 0o755);
+
+    const result = spawnSync(
+      path.join(workspace, 'load-tests/run.sh'),
+      ['smoke', '--report', '--trace', '--open-dashboard', '--log', '--duration', '10s', '--vus', '1'],
+      {
+        cwd: workspace,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+          K6_ARG_LOG: argLogPath,
+          K6_ENV_LOG: envLogPath,
+        },
+      },
+    );
+    const args = await readFile(argLogPath, 'utf8');
+    const envLog = await readFile(envLogPath, 'utf8');
+
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('Writing k6 HTML report to');
+    expect(result.stdout).toContain('Writing k6 output to');
+    expect(args).toBe([
+      'run',
+      '--duration',
+      '10s',
+      '--vus',
+      '1',
+      path.join(workspace, 'load-tests/generated/smoke.k6.js'),
+      '',
+    ].join('\n'));
+    expect(envLog).toContain('OPENAPI_K6_TRACE=1');
+    expect(envLog).toContain('K6_WEB_DASHBOARD=true');
+    expect(envLog).toContain('K6_WEB_DASHBOARD_PERIOD=1s');
+    expect(envLog).toContain(`K6_WEB_DASHBOARD_EXPORT=${path.join(workspace, 'load-tests/logs/smoke-report.html')}`);
+    expect(envLog).toContain('K6_WEB_DASHBOARD_OPEN=true');
+  });
+
   it('initializes a placeholder scaffold with no required options', async () => {
     await runCli(
       ['init'],
@@ -409,6 +518,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('./perf-tests/run.sh smoke --vus 1 --iterations 1');
     expect(readme).toContain('./perf-tests/run.sh smoke --log');
     expect(readme).toContain('로그 파일: `perf-tests/logs/smoke.log`');
+    expect(readme).toContain('./perf-tests/run.sh smoke --report --duration 10s --vus 1');
     expect(readme).toContain('BASE_URL=https://api.example.com ./perf-tests/run.sh smoke');
     expect(readme).toContain('cp perf-tests/.env.example perf-tests/.env');
     expect(readme).toContain('rm -rf perf-tests');

@@ -164,8 +164,8 @@ backend-project/
 - 생성된 k6 스크립트는 각 step을 k6 `group()`으로 묶고, 요청에 `openapi_scenario`, `openapi_step`, `openapi_method`, `openapi_path`, `openapi_api` tag를 붙입니다.
 - 생성된 k6 스크립트는 `condition` 실패 시 scenario, step, method, path, status, URL, duration, 응답 body 일부를 console error로 출력합니다.
 - `load-tests/run.sh <scenario> --log`를 사용하면 k6 출력이 `load-tests/logs/<scenario>.log`에도 저장됩니다.
-- `OPENAPI_K6_TRACE=1`을 켜면 step 시작/종료 로그가 출력됩니다. 예: `OPENAPI_K6_TRACE=1 ./load-tests/run.sh smoke --log`
-- k6 기본 Web Dashboard는 k6 표준 환경변수로 켭니다. 예: `K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_OPEN=true ./load-tests/run.sh smoke`
+- `load-tests/run.sh <scenario> --trace`를 사용하면 step 시작/종료 로그가 출력됩니다.
+- `load-tests/run.sh <scenario> --report`를 사용하면 k6 Web Dashboard HTML report가 `load-tests/logs/<scenario>-report.html`에 저장됩니다.
 
 ## 개발 검증
 
