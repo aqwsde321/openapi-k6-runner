@@ -168,6 +168,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('alias는 현재 터미널 세션에만 적용됩니다.');
     expect(readme).toContain(`cd ${path.dirname(path.dirname(path.dirname(cliPath)))}`);
     expect(readme).toContain('pnpm run build');
+    expect(readme).toContain('pnpm run build:watch');
+    expect(readme).toContain('개발 중 수동 빌드가 번거로우면 generator 저장소의 별도 터미널에서 watch 빌드를 켜둡니다.');
     expect(readme).toContain('이 폴더는 백엔드 프로젝트 안에서 OpenAPI snapshot, scenario YAML, 생성된 k6 스크립트를 관리합니다.');
     expect(readme).toContain('## 1. 최소 설정');
     expect(readme).toContain('## 2. 기본 실행 흐름');

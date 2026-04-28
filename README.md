@@ -23,6 +23,18 @@ pnpm link --global
 openapi-k6 --help
 ```
 
+`pnpm link --global`은 보통 한 번만 실행하면 됩니다. 이후 generator 코드를 수정할 때는 빌드 결과물만 갱신하면 `openapi-k6` 명령에 바로 반영됩니다.
+
+```bash
+pnpm run build
+```
+
+개발 중 수동 빌드가 번거로우면 별도 터미널에서 watch 빌드를 켜둡니다.
+
+```bash
+pnpm run build:watch
+```
+
 <details>
 <summary>`pnpm link --global`에서 global bin directory 오류가 날 때</summary>
 
@@ -146,6 +158,8 @@ pnpm test
 pnpm run typecheck
 pnpm run build
 ```
+
+CLI 코드를 수정하면서 백엔드 프로젝트에서 바로 확인할 때는 `pnpm run build:watch`를 켜두면 `dist`가 자동 갱신됩니다.
 
 ## 문서
 
