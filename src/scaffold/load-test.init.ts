@@ -294,7 +294,12 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
   const configPath = `${directory}/config.yaml`;
   const scenarioPath = `${directory}/scenarios/smoke.yaml`;
   const outputPath = `${directory}/generated/smoke.k6.js`;
+  const snapshotPath = `${directory}/openapi/${moduleName}.openapi.json`;
+  const catalogPath = `${directory}/openapi/${moduleName}.catalog.json`;
+  const logPath = `${directory}/logs/smoke.log`;
   const runScriptPath = `${directory}/run.sh`;
+  const scenarioTemplatePath = `${directory}/scenarios/<name>.yaml`;
+  const outputTemplatePath = `${directory}/generated/<name>.k6.js`;
   const workflowScenarioPath = `${directory}/scenarios/login-flow.yaml`;
   const workflowOutputPath = `${directory}/generated/login-flow.k6.js`;
   const envPath = `${directory}/.env`;
@@ -432,11 +437,38 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '',
     '## 2. 기본 실행 흐름',
     '',
+    '아래 순서대로 진행합니다. 각 단계의 생성/갱신 파일은 오른쪽에 표시했습니다.',
+    '',
+    '| 순서 | 사용자가 준비하는 것 | 실행 명령 | 생성/갱신되는 것 |',
+    '| --- | --- | --- | --- |',
+    `| 1 | \`config.yaml\`의 \`baseUrl\`, \`modules.${moduleName}.openapi\` TODO 채우기 | - | - |`,
+    `| 2 | - | \`${usesDefaultDirectory ? 'openapi-k6 sync' : `openapi-k6 sync --config ${configArg} --module ${moduleName}`}\` | \`${snapshotPath}\`, \`${catalogPath}\` |`,
+    `| 3 | \`${catalogPath}\`를 보고 scenario 작성/수정 | - | \`${scenarioTemplatePath}\` |`,
+    `| 4 | - | \`${usesDefaultDirectory ? 'openapi-k6 generate -s <name>' : `openapi-k6 generate --config ${configArg} --module ${moduleName} --scenario ${shellQuote(scenarioTemplatePath)} --write ${shellQuote(outputTemplatePath)}`}\` | \`${outputTemplatePath}\` |`,
+    `| 5 | \`{{env.NAME}}\`을 쓰는 경우 \`.env\` 작성 | - | \`${envPath}\` |`,
+    `| 6 | - | \`${runScriptArg} <name> --log\` | k6 실행, \`${directory}/logs/<name>.log\` |`,
+    '',
+    '아래 예시는 scaffold가 생성한 `smoke` scenario 기준입니다.',
+    '',
+    '### 2-1. OpenAPI snapshot/catalog 생성',
+    '',
     '```bash',
     usesDefaultDirectory
       ? 'openapi-k6 sync'
       : `openapi-k6 sync --config ${configArg} --module ${moduleName}`,
     '```',
+    '',
+    `생성/갱신: \`${snapshotPath}\`, \`${catalogPath}\``,
+    '',
+    '### 2-2. Scenario YAML 작성',
+    '',
+    `\`${catalogPath}\`에서 테스트할 endpoint의 \`operationId\`, \`method\`, \`path\`, \`parameters\`, \`hasRequestBody\`를 확인합니다.`,
+    '',
+    `기본 smoke 테스트는 \`${scenarioPath}\`를 수정합니다. 새 테스트는 \`${scenarioTemplatePath}\` 파일을 만듭니다.`,
+    '',
+    '생성/수정: scenario YAML',
+    '',
+    '### 2-3. k6 스크립트 생성',
     '',
     '```bash',
     'openapi-k6 generate \\',
@@ -449,6 +481,10 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
           `  --write ${outputArg}`,
         ]),
     '```',
+    '',
+    `생성/갱신: \`${outputPath}\``,
+    '',
+    '### 2-4. k6 실행',
     '',
     '```bash',
     `${runScriptArg} smoke`,
@@ -468,7 +504,7 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     `${runScriptArg} smoke --log`,
     '```',
     '',
-    `로그 파일: \`${directory}/logs/smoke.log\``,
+    `로그 파일: \`${logPath}\``,
     '',
     'API base URL은 `openapi-k6 generate` 실행 시점의 `config.yaml` `baseUrl` 값이 생성된 k6 스크립트에 기본값으로 들어갑니다.',
     '`config.yaml`을 수정한 뒤에는 스크립트를 다시 생성해야 반영됩니다.',
