@@ -115,6 +115,7 @@ Fill TODO values in load-tests/config.yaml for this backend project.
 Run the OpenAPI snapshot command from load-tests/README.md to create the catalog.
 Read load-tests/openapi/*.catalog.json and choose one unauthenticated GET endpoint.
 Update load-tests/scenarios/smoke.yaml for that endpoint.
+Run the scenario validation command from load-tests/README.md.
 Run the k6 script generation command from load-tests/README.md.
 Do not edit load-tests/README.md, load-tests/run.sh, load-tests/.env.example, or load-tests/.gitignore unless explicitly asked to change scaffold files.
 Do not edit load-tests/generated/*.k6.js or load-tests/openapi/*.openapi.json directly.
@@ -126,6 +127,7 @@ Keep human-facing documentation in Korean. Keep AI instruction sections in Engli
 ```text
 Read load-tests/README.md and load-tests/openapi/*.catalog.json.
 Create load-tests/scenarios/basic-read.yaml for one read endpoint that can be called without login.
+Validate the scenario using the command documented in load-tests/README.md.
 Generate the k6 script using the command documented in load-tests/README.md.
 Do not edit load-tests/README.md, load-tests/run.sh, load-tests/.env.example, or load-tests/.gitignore unless explicitly asked to change scaffold files.
 Do not edit load-tests/generated/*.k6.js directly.
@@ -141,6 +143,7 @@ Create a login-flow scenario.
 Extract the token from the login response.
 Use Bearer {{token}} in the Authorization header of the next step.
 Use {{env.NAME}} for secrets and keep real values in load-tests/.env only.
+Validate the scenario using the command documented in load-tests/README.md.
 Generate the k6 script using the command documented in load-tests/README.md.
 Do not edit load-tests/README.md, load-tests/run.sh, load-tests/.env.example, or load-tests/.gitignore unless explicitly asked to change scaffold files.
 Do not edit load-tests/generated/*.k6.js directly.
@@ -167,7 +170,7 @@ backend-project/
         └── smoke.k6.js
 ```
 
-루트 README는 여기까지만 안내합니다. 실제 config 작성, OpenAPI sync, scenario 작성, k6 script 생성, k6 실행은 `load-tests/README.md`를 기준으로 진행합니다.
+루트 README는 여기까지만 안내합니다. 실제 config 작성, OpenAPI sync, scenario 작성, scenario 검증, k6 script 생성, k6 실행은 `load-tests/README.md`를 기준으로 진행합니다.
 
 ## 알아둘 점
 
@@ -175,6 +178,7 @@ backend-project/
 - `sync`는 외부 파일이나 URL을 가리키는 `$ref`를 snapshot 내부 참조로 묶어 저장합니다.
 - `pathParams` 값은 URL path segment로 encode되어 `/`, 공백, `?`, `#` 등이 URL 구조를 깨지 않습니다.
 - `openapi-k6 generate`는 config의 `baseUrl`을 생성된 k6 스크립트의 기본값으로 넣습니다. k6 실행 시 `BASE_URL=... k6 run ...`처럼 환경 변수를 넘기면 이 기본값보다 우선합니다.
+- `openapi-k6 test -s <scenario>`는 k6 파일을 만들기 전에 scenario YAML을 Node.js에서 1회 직접 실행해 API 흐름을 검증합니다.
 - 실제 비밀 값은 scenario YAML에 쓰지 말고 `{{env.NAME}}`으로 참조합니다. `load-tests/run.sh`는 `load-tests/.env`만 자동으로 읽으며, 백엔드 프로젝트 루트의 `.env`는 자동으로 읽지 않습니다.
 - `multipart/form-data` 파일 업로드는 scenario YAML의 `request.multipart`로 작성합니다. 파일 경로는 `load-tests/` 기준이며, 기본 fixture 위치는 `load-tests/fixtures/`입니다.
 - 생성된 k6 스크립트는 각 step을 k6 `group()`으로 묶고, 요청에 `openapi_scenario`, `openapi_step`, `openapi_method`, `openapi_path`, `openapi_api` tag를 붙입니다.

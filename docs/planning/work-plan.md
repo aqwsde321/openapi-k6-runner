@@ -30,7 +30,10 @@
 | P-09 | 멀티모듈 OpenAPI 설정 | module별 registry 선택 | 완료 |
 | P-10 | Init Scaffold | 대상 프로젝트 load-tests 초기화 | 완료 |
 | P-11 | Env Secret Template | `{{env.NAME}}` -> `__ENV.NAME` | 완료 |
-| P-12 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
+| P-12 | Scenario Test Runner | Scenario DSL 직접 실행 검증 | 완료 |
+| P-13 | AI Scenario Workflow | AI 작성/검증 루프 문서 보강 | 완료 |
+| P-14 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
+| P-15 | Studio UI | 로컬 UI 워크벤치 | 후순위 |
 
 ## 3. P-00 문서 확정
 
@@ -355,7 +358,49 @@ CLI/compiler MVP가 동작하고 README 사용법이 정리된 뒤 진행한다.
 - generated k6 script 문법 테스트
 - init scaffold `.env.example`/`.gitignore` 생성 테스트
 
-## 15. P-12 UI Adapter 설계
+## 15. P-12 Scenario Test Runner
+
+### 시점
+
+AI가 catalog를 보고 scenario YAML을 작성한 뒤, 실제 부하 테스트 전에 API 흐름이 맞는지 확인해야 하는 문제가 확인되어 진행한다.
+
+### 작업
+
+- `openapi-k6 test -s <scenario>` CLI 명령 추가
+- `scenario.yaml + config.yaml + OpenAPI snapshot`을 읽어 Node.js에서 HTTP 요청 직접 실행
+- `{{env.NAME}}`, `{{token}}` runtime template 치환
+- step별 status, condition, extract 결과 출력
+- 실패 응답 body 일부 출력
+
+### 완료 기준
+
+- scenario 이름은 `load-tests/scenarios/<name>.yaml`로 해석된다.
+- `load-tests/.env`와 shell 환경변수를 사용해 `{{env.NAME}}`을 치환한다.
+- condition 실패는 리포트에 표시되고 CLI가 실패 exit code를 반환한다.
+- 통과한 scenario는 기존처럼 `generate`와 `run.sh`로 부하 테스트에 넘길 수 있다.
+
+### 테스트
+
+- GET/POST 요청 실행
+- pathParams/query/header/body 생성
+- env/context template 치환
+- extract 후 다음 step에서 사용
+- condition pass/fail
+- multipart upload
+- CLI scenario 이름 해석
+
+## 16. P-13 AI Scenario Workflow
+
+### 작업
+
+- README와 init scaffold README의 작업 흐름을 `sync -> scenario 작성 -> test -> generate -> run.sh`로 정리
+- AI 프롬프트 예시에 scenario 검증 단계를 추가
+
+### 완료 기준
+
+- AI가 catalog를 보고 scenario를 작성한 뒤 `openapi-k6 test` 결과로 수정 루프를 돌 수 있다.
+
+## 17. P-14 UI Adapter 설계
 
 ### 시점
 
@@ -373,7 +418,22 @@ CLI/compiler MVP가 동작한 뒤 진행한다.
 - UI 저장 flow를 Scenario DSL로 export할 수 있는 변환 규칙이 문서화된다.
 - 구현은 별도 단계에서 진행한다.
 
-## 16. 완료된 구현 순서
+## 18. P-15 Studio UI
+
+### 시점
+
+Scenario Test Runner와 UI Adapter 설계가 안정화된 뒤 진행한다.
+
+### 작업
+
+- 로컬 studio 명령과 UI 워크벤치 설계
+- catalog 탐색, flow builder, scenario export, test 결과 표시
+
+### 완료 기준
+
+- UI는 k6를 직접 생성하지 않고 Scenario DSL과 기존 compiler/generator를 사용한다.
+
+## 19. 완료된 구현 순서
 
 1. P-01 CLI 골격
 2. P-02 Scenario Parser
@@ -386,19 +446,21 @@ CLI/compiler MVP가 동작한 뒤 진행한다.
 9. P-09 멀티모듈 OpenAPI 설정
 10. P-10 Init Scaffold
 11. P-11 Env Secret Template
+12. P-12 Scenario Test Runner
+13. P-13 AI Scenario Workflow
 
-## 17. 보류 결정
+## 20. 보류 결정
 
 | 항목 | 현재 결정 | 재검토 시점 |
 | --- | --- | --- |
-| UI 통합 | MVP 제외 | P-12 |
+| UI 통합 | MVP 제외 | P-14 |
 | Supabase 저장소 | 제외 | UI 구현 시 |
 | Swagger URL 자동 탐색 | 제외 | 멀티모듈 module 등록 시 |
 | Auth scheme 자동 적용 | 제외 | UI header 제안 시 |
-| k6 실행 자동화 | 제외 | generator 안정화 후 |
+| k6 실행 자동화 | `test`는 scenario 검증용으로 추가, k6 부하 실행은 `run.sh` 유지 | 부하 실행 orchestration 필요 시 |
 | branch/loop/retry | 제외 | MVP 완료 후 |
 
-## 18. 안정성 보강 기록
+## 21. 안정성 보강 기록
 
 P-11 이후 리뷰에서 확인된 안정성 항목을 반영했다.
 

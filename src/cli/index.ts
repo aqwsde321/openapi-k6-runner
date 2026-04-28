@@ -14,6 +14,11 @@ import {
   type LoadTestConfig,
   type LoadTestModuleConfig,
 } from '../config/load-test.config.js';
+import {
+  executeAstScenario,
+  formatScenarioExecutionReport,
+  type ScenarioExecutionResult,
+} from '../executor/scenario.executor.js';
 import { syncOpenApiSnapshot } from '../openapi/openapi.catalog.js';
 import { parseOpenApiFile } from '../openapi/openapi.parser.js';
 import { parseScenarioFile } from '../parser/scenario.parser.js';
@@ -32,6 +37,8 @@ export interface CliContext {
   stdout?: WritableLike;
   stderr?: WritableLike;
   cliPath?: string;
+  env?: Record<string, string | undefined>;
+  fetch?: typeof fetch;
 }
 
 export interface GenerateOptions {
@@ -46,6 +53,12 @@ export interface SyncOptions {
   openapi?: string;
   write?: string;
   catalog?: string;
+  config?: string;
+  module?: string;
+}
+
+export interface TestOptions {
+  scenario: string;
   config?: string;
   module?: string;
 }
@@ -72,6 +85,12 @@ export interface SyncResult {
   catalogPath: string;
   openapiPath: string;
   operationCount: number;
+  moduleName?: string;
+}
+
+export interface TestResult extends ScenarioExecutionResult {
+  scenarioPath: string;
+  openapiPath: string;
   moduleName?: string;
 }
 
@@ -147,6 +166,24 @@ async function loadBaseUrl(cwd: string): Promise<string | undefined> {
       error.code === 'ENOENT'
     ) {
       return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function loadLoadTestEnv(loadTestDir: string): Promise<Record<string, string>> {
+  try {
+    const raw = await fs.readFile(path.join(loadTestDir, '.env'), 'utf8');
+    return parseDotEnv(raw);
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === 'ENOENT'
+    ) {
+      return {};
     }
 
     throw error;
@@ -369,6 +406,58 @@ export async function runSyncCommand(
   };
 }
 
+export async function runTestCommand(
+  options: TestOptions,
+  context: CliContext = {},
+): Promise<TestResult> {
+  const cwd = resolveCwd(context);
+  const config = await loadOptionalConfig(cwd, options.config, true);
+  const moduleConfig = selectConfigModule(config, options.module);
+  const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
+  const moduleName = moduleConfig?.name ?? '<none>';
+  const openapiPath = resolveConfiguredOpenApiInput(
+    cwd,
+    config,
+    undefined,
+    moduleConfig?.snapshot,
+    'modules.<name>.snapshot is required to run test',
+    `modules.${moduleName}.snapshot`,
+    'test',
+  );
+  const scenario = await parseScenarioFile(scenarioPath);
+  const registry = await parseOpenApiFile(openapiPath);
+  const loadTestDir = resolveLoadTestDir(cwd, config);
+  const loadTestEnv = await loadLoadTestEnv(loadTestDir);
+  const runtimeEnv = {
+    ...loadTestEnv,
+    ...(context.env ?? process.env),
+  };
+  const baseUrl =
+    normalizeConfiguredValue(runtimeEnv.BASE_URL) ??
+    normalizeConfiguredValue(moduleConfig?.baseUrl) ??
+    normalizeConfiguredValue(config?.baseUrl) ??
+    registry.defaultServerUrl;
+
+  if (!baseUrl) {
+    throw new Error('baseUrl is not configured and OpenAPI servers[0].url is missing.');
+  }
+
+  const ast = buildAst(scenario, registry);
+  const result = await executeAstScenario(ast, {
+    baseUrl,
+    fileRootDir: loadTestDir,
+    env: runtimeEnv,
+    fetch: context.fetch,
+  });
+
+  return {
+    ...result,
+    scenarioPath,
+    openapiPath,
+    ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
+  };
+}
+
 export async function runInitCommand(
   options: InitOptions,
   context: CliContext = {},
@@ -452,6 +541,21 @@ export function createProgram(context: CliContext = {}): Command {
       const result = await runSyncCommand(options, context);
       writeLine(stdout, `Synced ${result.snapshotPath}`);
       writeLine(stdout, `Catalog ${result.catalogPath} (${result.operationCount} operations)`);
+    });
+
+  program
+    .command('test')
+    .description('Run a scenario once with Node.js to validate API flow before generating k6.')
+    .requiredOption('-s, --scenario <path-or-name>', 'Scenario DSL file path or load-tests scenario name')
+    .option('--config <path>', 'Load test config file path')
+    .option('-m, --module <name>', 'Module name from config')
+    .action(async (options: TestOptions) => {
+      const result = await runTestCommand(options, context);
+      stdout.write(formatScenarioExecutionReport(result));
+
+      if (!result.passed) {
+        throw new CommanderError(1, 'openapi-k6.test.failed', 'Scenario test failed');
+      }
     });
 
   return program;

@@ -15,6 +15,20 @@ function createSink(): Writable {
   });
 }
 
+function createCapture(): { stream: Writable; output: () => string } {
+  const chunks: Buffer[] = [];
+
+  return {
+    stream: new Writable({
+      write(chunk, _encoding, callback) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        callback();
+      },
+    }),
+    output: () => Buffer.concat(chunks).toString('utf8'),
+  };
+}
+
 async function writeGenerateFixtures(workspace: string, serverUrl = 'https://openapi.test.local'): Promise<void> {
   await writeFile(
     path.join(workspace, 'scenario.yaml'),
@@ -230,11 +244,14 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('`./load-tests/run.sh <name> --log`');
     expect(readme).toContain('### 2-1. OpenAPI snapshot/catalog 생성');
     expect(readme).toContain('### 2-2. Scenario YAML 작성');
-    expect(readme).toContain('### 2-3. k6 스크립트 생성');
-    expect(readme).toContain('### 2-4. k6 실행');
+    expect(readme).toContain('### 2-3. Scenario 검증');
+    expect(readme).toContain('### 2-4. k6 스크립트 생성');
+    expect(readme).toContain('### 2-5. k6 실행');
     expect(readme).toContain('생성/갱신: `load-tests/openapi/pharma.openapi.json`, `load-tests/openapi/pharma.catalog.json`');
     expect(readme).toContain('`load-tests/openapi/pharma.catalog.json`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.');
     expect(readme).toContain('기본 smoke 테스트는 `load-tests/scenarios/smoke.yaml`를 수정합니다.');
+    expect(readme).toContain('openapi-k6 test -s smoke');
+    expect(readme).toContain('step별 status, condition, extract 결과를 먼저 확인한 뒤 통과한 scenario만 k6 스크립트로 생성합니다.');
     expect(readme).toContain('생성/갱신: `load-tests/generated/smoke.k6.js`');
     expect(readme).toContain('## 3. 비밀 값 사용');
     expect(readme).toContain('## 4. 자주 하는 수정');
@@ -252,7 +269,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.');
     expect(readme).toContain('시나리오에서 `{{env.NAME}}`을 사용한다면 `load-tests/.env.example`을 `load-tests/.env`로 복사한 뒤 비밀 값을 채웁니다.');
     expect(readme).toContain('cp load-tests/.env.example load-tests/.env');
-    expect(readme).toContain('`run.sh`가 실행할 때 `load-tests/.env`를 자동으로 export합니다.');
+    expect(readme).toContain('`openapi-k6 test`와 `run.sh`가 `load-tests/.env`를 읽습니다.');
     expect(readme).toContain('Read `openapi/*.catalog.json` and inspect `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, and `requestBodyContentTypes`');
     expect(readme).toContain('rm -rf load-tests');
     expect(readme).toContain('필요한 scenario, snapshot, catalog가 있으면 먼저 백업합니다.');
@@ -260,6 +277,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('This section is for AI agents. Human users only need the Korean sections above unless they want implementation details.');
     expect(readme).toContain('### Workflow');
     expect(readme).toContain('Update or create `scenarios/*.yaml`.');
+    expect(readme).toContain('Run `openapi-k6 test` to validate the scenario API flow before generating k6.');
     expect(readme).toContain('Do not edit scaffold-managed files during ordinary backend test work: `README.md`, `run.sh`, `.env.example`, `.gitignore`.');
     expect(readme).toContain('If scaffold docs or helper scripts must change, update the generator template in openapi-k6-runner and rerun `openapi-k6 init --force` intentionally.');
     expect(readme).toContain('Do not edit `generated/*.k6.js` directly. Edit scenario YAML and regenerate.');
@@ -843,6 +861,135 @@ describe('openapi-k6 CLI', () => {
 
     expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://config-base.test.local";');
     expect(output).toContain('const url0 = joinUrl(BASE_URL, `/app-health`);');
+  });
+
+  it('tests a scenario by name using default config and output paths', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const stdout = createCapture();
+    await runCli(
+      ['test', '-s', 'smoke'],
+      {
+        cwd: workspace,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        env: {},
+        fetch: async () => new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' }),
+      },
+    );
+
+    expect(stdout.output()).toContain('Scenario: smoke');
+    expect(stdout.output()).toContain('[1/1] health');
+    expect(stdout.output()).toContain('GET /app-health');
+    expect(stdout.output()).toContain('url: https://config-base.test.local/app-health');
+    expect(stdout.output()).toContain('status: 200 OK');
+    expect(stdout.output()).toContain('condition: status == 200 pass');
+    expect(stdout.output()).toContain('Result: PASS');
+  });
+
+  it('fails clearly when test sees TODO config values', async () => {
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: TODO',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: TODO',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['test', '-s', 'smoke'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink(), env: {} },
+      ),
+    ).rejects.toThrow('modules.app.snapshot is not configured. Replace TODO before running test.');
+  });
+
+  it('returns a failing command when scenario test conditions fail', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const stdout = createCapture();
+    await expect(
+      runCli(
+        ['test', '-s', 'smoke'],
+        {
+          cwd: workspace,
+          stdout: stdout.stream,
+          stderr: createSink(),
+          env: {},
+          fetch: async () => new Response(JSON.stringify({ message: 'boom' }), { status: 500 }),
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'openapi-k6.test.failed',
+    });
+
+    expect(stdout.output()).toContain('condition: status == 200 fail');
+    expect(stdout.output()).toContain('response body:');
+    expect(stdout.output()).toContain('"message":"boom"');
+    expect(stdout.output()).toContain('Result: FAIL');
   });
 
   it('selects an isolated module registry with --module', async () => {
