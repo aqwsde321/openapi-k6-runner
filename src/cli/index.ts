@@ -78,6 +78,7 @@ export interface SyncResult {
 export interface InitResult {
   directoryPath: string;
   configPath: string;
+  runScriptPath: string;
   scenarioPath: string;
   readmePath: string;
 }
@@ -418,6 +419,7 @@ export function createProgram(context: CliContext = {}): Command {
       writeLine(stdout, `Initialized ${result.directoryPath}`);
       writeLine(stdout, `Config ${result.configPath}`);
       writeLine(stdout, `Scenario ${result.scenarioPath}`);
+      writeLine(stdout, `Run script ${result.runScriptPath}`);
     });
 
   program

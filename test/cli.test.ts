@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Writable } from 'node:stream';
@@ -107,6 +107,9 @@ describe('openapi-k6 CLI', () => {
     const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
     const envExample = await readFile(path.join(workspace, 'load-tests/.env.example'), 'utf8');
     const gitignore = await readFile(path.join(workspace, 'load-tests/.gitignore'), 'utf8');
+    const runScriptPath = path.join(workspace, 'load-tests/run.sh');
+    const runScript = await readFile(runScriptPath, 'utf8');
+    const runScriptStat = await stat(runScriptPath);
     const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
     const readme = await readFile(path.join(workspace, 'load-tests/README.md'), 'utf8');
 
@@ -147,10 +150,19 @@ describe('openapi-k6 CLI', () => {
       '',
     ].join('\n'));
     expect(gitignore).toBe('.env\n');
+    expect(runScript).toContain('#!/usr/bin/env bash');
+    expect(runScript).toContain('SCENARIO="smoke"');
+    expect(runScript).toContain('source "$ENV_FILE"');
+    expect(runScript).toContain('exec k6 run "$@" "$SCRIPT_PATH"');
+    expect(runScriptStat.mode & 0o111).not.toBe(0);
     expect(scenario).toContain('path: /__dev/error-codes');
     expect(readme).toContain('openapi-k6 sync');
     expect(readme).toContain('openapi-k6 generate \\');
     expect(readme).toContain('  -s smoke');
+    expect(readme).toContain('run.sh');
+    expect(readme).toContain('./load-tests/run.sh smoke');
+    expect(readme).toContain('./load-tests/run.sh smoke --vus 1 --iterations 1');
+    expect(readme).toContain('`run.sh`는 같은 폴더의 `.env`를 자동으로 로드한 뒤');
     expect(readme).toContain('## 0. openapi-k6 명령 준비');
     expect(readme).toContain('사람이 꼭 이해해야 하는 내용은 이 README 앞부분에 있습니다.');
     expect(readme).toContain('## 사람이 꼭 알아야 하는 것');
@@ -190,8 +202,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('API base URL은 `openapi-k6 generate` 실행 시점의 `config.yaml` `baseUrl` 값이 생성된 k6 스크립트에 기본값으로 들어갑니다.');
     expect(readme).toContain('`config.yaml`을 수정한 뒤에는 스크립트를 다시 생성해야 반영됩니다.');
     expect(readme).toContain('실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.');
-    expect(readme).toContain('비밀 값을 채우고 실행 전에 export합니다.');
-    expect(readme).toContain('source load-tests/.env');
+    expect(readme).toContain('시나리오에서 `{{env.NAME}}`을 사용한다면 `.env.example`을 `.env`로 복사한 뒤 비밀 값을 채웁니다.');
+    expect(readme).toContain('cp load-tests/.env.example load-tests/.env');
+    expect(readme).toContain('`run.sh`가 실행할 때 `.env`를 자동으로 export합니다.');
     expect(readme).toContain('Read `openapi/*.catalog.json` and inspect `operationId`, `method`, `path`, `parameters`, and `hasRequestBody`');
     expect(readme).toContain('rm -rf load-tests');
     expect(readme).toContain('필요한 scenario, snapshot, catalog가 있으면 먼저 백업합니다.');
@@ -204,6 +217,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Do not write secrets such as passwords directly in YAML. Use `{{env.NAME}}`.');
     expect(readme).toContain('Store real secret values in `.env` and do not commit it.');
     expect(readme).toContain('Resolve config-relative paths from the directory containing `config.yaml`.');
+    expect(readme).toContain('`load-tests/run.sh`: k6 runner that auto-loads local .env values');
     expect(readme).toContain('### Files to inspect');
     expect(readme).toContain('### Prompt Examples');
     expect(readme).toContain('Basic smoke test:');
@@ -311,9 +325,10 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('--write perf-tests/generated/smoke.k6.js');
     expect(readme).toContain('--scenario perf-tests/scenarios/login-flow.yaml');
     expect(readme).toContain('--write perf-tests/generated/login-flow.k6.js');
-    expect(readme).toContain('k6 run perf-tests/generated/smoke.k6.js');
-    expect(readme).toContain('BASE_URL=https://api.example.com k6 run perf-tests/generated/smoke.k6.js');
-    expect(readme).toContain('source perf-tests/.env');
+    expect(readme).toContain('./perf-tests/run.sh smoke');
+    expect(readme).toContain('./perf-tests/run.sh smoke --vus 1 --iterations 1');
+    expect(readme).toContain('BASE_URL=https://api.example.com ./perf-tests/run.sh smoke');
+    expect(readme).toContain('cp perf-tests/.env.example perf-tests/.env');
     expect(readme).toContain('rm -rf perf-tests');
     expect(readme).not.toContain('load-tests/');
   });
@@ -336,8 +351,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain("--config 'perf tests/config.yaml'");
     expect(readme).toContain("--scenario 'perf tests/scenarios/smoke.yaml'");
     expect(readme).toContain("--write 'perf tests/generated/smoke.k6.js'");
-    expect(readme).toContain("k6 run 'perf tests/generated/smoke.k6.js'");
-    expect(readme).toContain("source 'perf tests/.env'");
+    expect(readme).toContain("'./perf tests/run.sh' smoke");
+    expect(readme).toContain("cp 'perf tests/.env.example' 'perf tests/.env'");
   });
 
   it('does not overwrite scaffold files unless --force is provided', async () => {

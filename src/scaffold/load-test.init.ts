@@ -17,6 +17,7 @@ export interface InitLoadTestsResult {
   configPath: string;
   envExamplePath: string;
   gitignorePath: string;
+  runScriptPath: string;
   scenarioPath: string;
   readmePath: string;
 }
@@ -37,6 +38,7 @@ export async function initLoadTests(
   const configPath = path.join(directoryPath, 'config.yaml');
   const envExamplePath = path.join(directoryPath, '.env.example');
   const gitignorePath = path.join(directoryPath, '.gitignore');
+  const runScriptPath = path.join(directoryPath, 'run.sh');
   const scenarioPath = path.join(directoryPath, 'scenarios/smoke.yaml');
   const readmePath = path.join(directoryPath, 'README.md');
   const smokePath = normalizeEndpointPath(options.smokePath ?? '/health');
@@ -50,6 +52,8 @@ export async function initLoadTests(
   await writeTextFile(configPath, renderConfig(moduleName, options.baseUrl, openapi), options.force);
   await writeTextFile(envExamplePath, renderEnvExample(), options.force);
   await writeTextFile(gitignorePath, renderGitignore(), options.force);
+  await writeTextFile(runScriptPath, renderRunScript(), options.force);
+  await fs.chmod(runScriptPath, 0o755);
   await writeTextFile(scenarioPath, renderSmokeScenario(smokePath), options.force);
   await writeTextFile(readmePath, renderReadme(moduleName, directory, options.cliPath), options.force);
 
@@ -58,6 +62,7 @@ export async function initLoadTests(
     configPath,
     envExamplePath,
     gitignorePath,
+    runScriptPath,
     scenarioPath,
     readmePath,
   };
@@ -212,16 +217,52 @@ function renderGitignore(): string {
   ].join('\n');
 }
 
+function renderRunScript(): string {
+  return [
+    '#!/usr/bin/env bash',
+    'set -euo pipefail',
+    '',
+    'SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"',
+    'SCENARIO="smoke"',
+    '',
+    'if [[ $# -gt 0 && "$1" != -* ]]; then',
+    '  SCENARIO="$1"',
+    '  shift',
+    'fi',
+    '',
+    'SCRIPT_PATH="$SCRIPT_DIR/generated/$SCENARIO.k6.js"',
+    'ENV_FILE="$SCRIPT_DIR/.env"',
+    '',
+    'if [[ ! -f "$SCRIPT_PATH" ]]; then',
+    '  echo "Missing generated k6 script: $SCRIPT_PATH" >&2',
+    '  echo "Run: openapi-k6 generate -s $SCENARIO" >&2',
+    '  exit 1',
+    'fi',
+    '',
+    'if [[ -f "$ENV_FILE" ]]; then',
+    '  set -a',
+    '  # shellcheck disable=SC1091',
+    '  source "$ENV_FILE"',
+    '  set +a',
+    'fi',
+    '',
+    'exec k6 run "$@" "$SCRIPT_PATH"',
+    '',
+  ].join('\n');
+}
+
 function renderReadme(moduleName: string, directory: string, cliPath: string | undefined): string {
   const configPath = `${directory}/config.yaml`;
   const scenarioPath = `${directory}/scenarios/smoke.yaml`;
   const outputPath = `${directory}/generated/smoke.k6.js`;
+  const runScriptPath = `${directory}/run.sh`;
   const workflowScenarioPath = `${directory}/scenarios/login-flow.yaml`;
   const workflowOutputPath = `${directory}/generated/login-flow.k6.js`;
   const envPath = `${directory}/.env`;
   const configArg = shellQuote(configPath);
   const scenarioArg = shellQuote(scenarioPath);
   const outputArg = shellQuote(outputPath);
+  const runScriptArg = shellCommandPath(runScriptPath);
   const workflowScenarioArg = shellQuote(workflowScenarioPath);
   const workflowOutputArg = shellQuote(workflowOutputPath);
   const envArg = shellQuote(envPath);
@@ -318,6 +359,7 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '├── config.yaml',
     '├── .env.example',
     '├── .gitignore',
+    '├── run.sh',
     '├── openapi/',
     `│   ├── ${moduleName}.openapi.json`,
     `│   └── ${moduleName}.catalog.json`,
@@ -370,7 +412,15 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '```',
     '',
     '```bash',
-    `k6 run ${outputArg}`,
+    `${runScriptArg} smoke`,
+    '```',
+    '',
+    '`run.sh`는 같은 폴더의 `.env`를 자동으로 로드한 뒤 `generated/<scenario>.k6.js`를 실행합니다.',
+    '',
+    'k6 옵션을 넘길 때는 scenario 이름 뒤에 붙입니다.',
+    '',
+    '```bash',
+    `${runScriptArg} smoke --vus 1 --iterations 1`,
     '```',
     '',
     'API base URL은 `openapi-k6 generate` 실행 시점의 `config.yaml` `baseUrl` 값이 생성된 k6 스크립트에 기본값으로 들어갑니다.',
@@ -378,20 +428,19 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.',
     '',
     '```bash',
-    `BASE_URL=https://api.example.com k6 run ${outputArg}`,
+    `BASE_URL=https://api.example.com ${runScriptArg} smoke`,
     '```',
     '',
     '## 3. 비밀 값 사용',
     '',
-    '시나리오에서 `{{env.NAME}}`을 사용한다면 `.env.example`을 `.env`로 복사한 뒤 비밀 값을 채우고 실행 전에 export합니다.',
+    '시나리오에서 `{{env.NAME}}`을 사용한다면 `.env.example`을 `.env`로 복사한 뒤 비밀 값을 채웁니다.',
     '',
     '```bash',
     `cp ${shellQuote(`${directory}/.env.example`)} ${envArg}`,
-    'set -a',
-    `source ${envArg}`,
-    'set +a',
-    `k6 run ${outputArg}`,
+    `${runScriptArg} smoke`,
     '```',
+    '',
+    '`run.sh`가 실행할 때 `.env`를 자동으로 export합니다.',
     '',
     '## 4. 자주 하는 수정',
     '',
@@ -412,7 +461,7 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     `rm -rf ${shellQuote(directory)}`,
     '```',
     '',
-    `주의: 이 명령은 \`${directory}/config.yaml\`, \`${directory}/.env.example\`, \`${directory}/.gitignore\`, \`${directory}/scenarios/\`, \`${directory}/openapi/\`, \`${directory}/generated/\`를 모두 삭제합니다.`,
+    `주의: 이 명령은 \`${directory}/config.yaml\`, \`${directory}/.env.example\`, \`${directory}/.gitignore\`, \`${directory}/run.sh\`, \`${directory}/scenarios/\`, \`${directory}/openapi/\`, \`${directory}/generated/\`를 모두 삭제합니다.`,
     '필요한 scenario, snapshot, catalog가 있으면 먼저 백업합니다.',
     '',
     '## AI Work Guide',
@@ -429,7 +478,7 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '6. Update or create `scenarios/*.yaml`.',
     '7. Run `openapi-k6 generate` to regenerate the k6 script.',
     '8. For scenarios that need secrets, copy `.env.example` to `.env` and fill local values.',
-    '9. Run the generated script with `k6 run` when verification is needed.',
+    `9. Run the generated script with \`${runScriptArg} <scenario>\` or the directory-specific run command shown above.`,
     '',
     '### Rules',
     '',
@@ -541,6 +590,7 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
     '',
     `- \`${directory}/config.yaml\`: base URL, OpenAPI URL, snapshot/catalog paths`,
     `- \`${directory}/.env.example\`: local secret environment variable example`,
+    `- \`${directory}/run.sh\`: k6 runner that auto-loads local .env values`,
     `- \`${directory}/openapi/${moduleName}.catalog.json\`: endpoint catalog`,
     `- \`${directory}/scenarios/smoke.yaml\`: scenario DSL`,
     `- \`${directory}/generated/smoke.k6.js\`: generated k6 script`,
@@ -615,4 +665,12 @@ function shellQuote(value: string): string {
   }
 
   return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+function shellCommandPath(value: string): string {
+  if (path.isAbsolute(value) || value.startsWith('./') || value.startsWith('../')) {
+    return shellQuote(value);
+  }
+
+  return shellQuote(`./${value}`);
 }

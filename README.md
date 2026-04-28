@@ -80,6 +80,7 @@ openapi-k6 init
 - `load-tests/config.yaml`
 - `load-tests/.env.example`
 - `load-tests/.gitignore`
+- `load-tests/run.sh`
 - `load-tests/scenarios/smoke.yaml`
 - `load-tests/README.md`
 
@@ -139,6 +140,7 @@ backend-project/
     ├── config.yaml
     ├── .env.example
     ├── .gitignore
+    ├── run.sh
     ├── openapi/
     │   ├── default.openapi.json
     │   └── default.catalog.json
