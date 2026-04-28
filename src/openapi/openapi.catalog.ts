@@ -26,6 +26,14 @@ interface LoadedOpenApiDocument {
 
 type SwaggerApiInput = Parameters<typeof SwaggerParser.dereference>[1];
 
+const openApiRefOptions: SwaggerParser.Options = {
+  resolve: {
+    http: {
+      safeUrlResolver: false,
+    },
+  },
+};
+
 export class OpenApiSyncError extends Error {
   constructor(message: string) {
     super(message);
@@ -41,14 +49,14 @@ export async function syncOpenApiSnapshot(
   const bundled = await SwaggerParser.bundle(
     options.openapi,
     loaded.document as SwaggerApiInput,
-    {},
+    openApiRefOptions,
   );
   const snapshot = `${JSON.stringify(bundled, null, 2)}\n`;
   // Keep the original path/URL as the ref base while avoiding parser issues with extensionless URLs.
   const dereferenced = await SwaggerParser.dereference(
     options.openapi,
     bundled as SwaggerApiInput,
-    {},
+    openApiRefOptions,
   );
   const catalog = buildOpenApiCatalog(dereferenced, {
     generatedAt: (options.generatedAt ?? new Date()).toISOString(),
