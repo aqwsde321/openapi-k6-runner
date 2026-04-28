@@ -23,7 +23,7 @@ pnpm link --global
 openapi-k6 --help
 ```
 
-`pnpm link --global`은 보통 한 번만 실행하면 됩니다. 이후 generator 코드를 수정할 때는 빌드 결과물만 갱신하면 `openapi-k6` 명령에 바로 반영됩니다.
+`pnpm link --global`은 보통 한 번만 실행하면 됩니다. 이후 generator 코드를 수정하거나 새 버전으로 업데이트했을 때는 빌드 결과물만 갱신하면 `openapi-k6` 명령에 바로 반영됩니다.
 
 ```bash
 pnpm run build
@@ -159,7 +159,7 @@ pnpm run typecheck
 pnpm run build
 ```
 
-CLI 코드를 수정하면서 백엔드 프로젝트에서 바로 확인할 때는 `pnpm run build:watch`를 켜두면 `dist`가 자동 갱신됩니다.
+CLI 코드를 수정하면서 백엔드 프로젝트에서 바로 확인할 때는 `pnpm run build:watch`를 켜두면 `dist`가 자동 갱신됩니다. 단, 새 버전으로 업데이트한 뒤에는 watch를 다시 시작하는 편이 안전합니다.
 
 ## 문서
 

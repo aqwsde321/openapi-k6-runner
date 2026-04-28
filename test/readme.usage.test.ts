@@ -12,7 +12,9 @@ describe('README usage guide', () => {
     expect(readme).toContain('## 용도');
     expect(readme).toContain('## 설치');
     expect(readme).toContain('pnpm run build');
+    expect(readme).toContain('generator 코드를 수정하거나 새 버전으로 업데이트했을 때는 빌드 결과물만 갱신하면');
     expect(readme).toContain('pnpm run build:watch');
+    expect(readme).toContain('새 버전으로 업데이트한 뒤에는 watch를 다시 시작하는 편이 안전합니다.');
     expect(readme).toContain('pnpm link --global');
     expect(readme).toContain('<summary>`pnpm link --global`에서 global bin directory 오류가 날 때</summary>');
     expect(readme).toContain('pnpm setup');
