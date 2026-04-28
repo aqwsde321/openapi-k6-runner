@@ -34,13 +34,19 @@ export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions =
     "import http from 'k6/http';",
   ];
 
-  if (hasCondition(ast)) {
-    lines.push("import { check } from 'k6';");
+  const k6Imports = [
+    ...(hasCondition(ast) ? ['check'] : []),
+    ...(hasSteps(ast) ? ['group'] : []),
+  ];
+
+  if (k6Imports.length > 0) {
+    lines.push(`import { ${k6Imports.join(', ')} } from 'k6';`);
   }
 
   lines.push(
     '',
     `const BASE_URL = __ENV.BASE_URL || ${JSON.stringify(baseUrl)};`,
+    "const OPENAPI_K6_TRACE = __ENV.OPENAPI_K6_TRACE === '1';",
     '',
     ...renderHelpers(ast),
     '',
@@ -49,7 +55,7 @@ export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions =
   );
 
   ast.steps.forEach((step, index) => {
-    lines.push('', ...renderStep(step, index));
+    lines.push('', ...renderStep(ast.name, step, index));
   });
 
   lines.push('}', '');
@@ -62,6 +68,42 @@ function renderHelpers(ast: ASTScenario): string[] {
     "  return `${baseUrl.replace(/\\/+$/, '')}/${endpointPath.replace(/^\\/+/, '')}`;",
     '}',
   ];
+
+  if (hasSteps(ast)) {
+    helpers.push(
+      '',
+      'function logStepStart(metadata, url) {',
+      '  if (!OPENAPI_K6_TRACE) {',
+      '    return;',
+      '  }',
+      '',
+      '  console.log(JSON.stringify({',
+      "    type: 'openapi-k6-step-start',",
+      '    scenario: metadata.scenario,',
+      '    step: metadata.step,',
+      '    method: metadata.method,',
+      '    path: metadata.path,',
+      '    url,',
+      '  }));',
+      '}',
+      '',
+      'function logStepEnd(metadata, response) {',
+      '  if (!OPENAPI_K6_TRACE) {',
+      '    return;',
+      '  }',
+      '',
+      '  console.log(JSON.stringify({',
+      "    type: 'openapi-k6-step-end',",
+      '    scenario: metadata.scenario,',
+      '    step: metadata.step,',
+      '    method: metadata.method,',
+      '    path: metadata.path,',
+      '    status: response.status,',
+      '    durationMs: response.timings.duration,',
+      '  }));',
+      '}',
+    );
+  }
 
   if (hasQuery(ast)) {
     helpers.push(
@@ -99,13 +141,17 @@ function renderHelpers(ast: ASTScenario): string[] {
       "  return text.length > limit ? `${text.slice(0, limit)}...<truncated ${text.length - limit} chars>` : text;",
       '}',
       '',
-      'function logFailedCheck(stepId, condition, url, response) {',
+      'function logFailedCheck(metadata, condition, url, response) {',
       '  console.error(JSON.stringify({',
       "    type: 'openapi-k6-check-failed',",
-      '    step: stepId,',
+      '    scenario: metadata.scenario,',
+      '    step: metadata.step,',
+      '    method: metadata.method,',
+      '    path: metadata.path,',
       '    condition,',
       '    status: response.status,',
       '    url,',
+      '    durationMs: response.timings.duration,',
       '    responseBody: truncateLogValue(response.body, 2000),',
       '  }, null, 2));',
       '}',
@@ -115,12 +161,14 @@ function renderHelpers(ast: ASTScenario): string[] {
   return helpers;
 }
 
-function renderStep(step: ASTStep, index: number): string[] {
-  const lines: string[] = [];
+function renderStep(scenarioName: string, step: ASTStep, index: number): string[] {
+  const innerLines: string[] = [];
   const urlVariable = `url${index}`;
   const responseVariable = `res${index}`;
   const bodyVariable = `body${index}`;
   const paramsVariable = `params${index}`;
+  const metadataVariable = `metadata${index}`;
+  const tagsVariable = `tags${index}`;
   const method = step.method.toUpperCase();
   const httpCall = HTTP_CALLS[method];
 
@@ -128,29 +176,41 @@ function renderStep(step: ASTStep, index: number): string[] {
     throw new K6GenerationError(`step "${step.id}": unsupported HTTP method ${step.method}`);
   }
 
+  innerLines.push(
+    `const ${metadataVariable} = ${renderLogMetadata(scenarioName, step, method)};`,
+  );
+  innerLines.push(
+    `const ${tagsVariable} = ${renderRequestTags(scenarioName, step, method)};`,
+  );
+
   const hasQueryValue = hasRequestEntries(step.request.query);
-  lines.push(
-    `  ${hasQueryValue ? 'let' : 'const'} ${urlVariable} = joinUrl(BASE_URL, ${compilePathExpression(step)});`,
+  innerLines.push(
+    `${hasQueryValue ? 'let' : 'const'} ${urlVariable} = joinUrl(BASE_URL, ${compilePathExpression(step)});`,
   );
 
   if (hasQueryValue) {
-    lines.push(`  ${urlVariable} = appendQuery(${urlVariable}, ${compileValueExpression(step.request.query)});`);
+    innerLines.push(`${urlVariable} = appendQuery(${urlVariable}, ${compileValueExpression(step.request.query)});`);
   }
 
   const hasBodyValue = step.request.body !== undefined && BODY_METHODS.has(method);
   if (hasBodyValue) {
-    lines.push(`  const ${bodyVariable} = JSON.stringify(${compileValueExpression(step.request.body)});`);
+    innerLines.push(`const ${bodyVariable} = JSON.stringify(${compileValueExpression(step.request.body)});`);
   }
 
   const headers = buildHeaders(step.request, hasBodyValue);
-  if (headers !== undefined) {
-    lines.push(`  const ${paramsVariable} = { headers: ${compileValueExpression(headers)} };`);
-  }
+  innerLines.push(`const ${paramsVariable} = ${renderRequestParams(headers, tagsVariable)};`);
 
-  lines.push(`  const ${responseVariable} = ${renderHttpCall(httpCall, method, urlVariable, bodyVariable, paramsVariable, hasBodyValue, headers !== undefined)};`);
-  lines.push(...renderCondition(step, index, responseVariable, urlVariable));
-  lines.push(...renderExtract(step, index, responseVariable));
-  return lines;
+  innerLines.push(`logStepStart(${metadataVariable}, ${urlVariable});`);
+  innerLines.push(`const ${responseVariable} = ${renderHttpCall(httpCall, method, urlVariable, bodyVariable, paramsVariable, hasBodyValue)};`);
+  innerLines.push(`logStepEnd(${metadataVariable}, ${responseVariable});`);
+  innerLines.push(...renderCondition(step, index, responseVariable, urlVariable, metadataVariable));
+  innerLines.push(...renderExtract(step, index, responseVariable));
+
+  return [
+    `  group(${JSON.stringify(`${step.id} ${method} ${step.path}`)}, () => {`,
+    ...innerLines.map((line) => `    ${line}`),
+    '  });',
+  ];
 }
 
 function compilePathExpression(step: ASTStep): string {
@@ -187,22 +247,17 @@ function renderHttpCall(
   bodyVariable: string,
   paramsVariable: string,
   hasBodyValue: boolean,
-  hasParams: boolean,
 ): string {
   if (BODY_METHODS.has(method)) {
     const bodyArgument = hasBodyValue ? bodyVariable : 'null';
-    return hasParams
-      ? `http.${httpCall}(${urlVariable}, ${bodyArgument}, ${paramsVariable})`
-      : `http.${httpCall}(${urlVariable}, ${bodyArgument})`;
+    return `http.${httpCall}(${urlVariable}, ${bodyArgument}, ${paramsVariable})`;
   }
 
-  if (method === 'DELETE' && hasParams) {
+  if (method === 'DELETE') {
     return `http.${httpCall}(${urlVariable}, null, ${paramsVariable})`;
   }
 
-  return hasParams
-    ? `http.${httpCall}(${urlVariable}, ${paramsVariable})`
-    : `http.${httpCall}(${urlVariable})`;
+  return `http.${httpCall}(${urlVariable}, ${paramsVariable})`;
 }
 
 function renderExtract(step: ASTStep, index: number, responseVariable: string): string[] {
@@ -211,11 +266,11 @@ function renderExtract(step: ASTStep, index: number, responseVariable: string): 
   }
 
   const jsonVariable = `res${index}Json`;
-  const lines = [`  const ${jsonVariable} = ${responseVariable}.json();`];
+  const lines = [`const ${jsonVariable} = ${responseVariable}.json();`];
 
   for (const [variableName, rule] of Object.entries(step.extract)) {
     lines.push(
-      `  ${compileContextReference(variableName)} = readJsonPath(${jsonVariable}, ${JSON.stringify(compileJsonPathSegments(rule.from))});`,
+      `${compileContextReference(variableName)} = readJsonPath(${jsonVariable}, ${JSON.stringify(compileJsonPathSegments(rule.from))});`,
     );
   }
 
@@ -227,6 +282,7 @@ function renderCondition(
   index: number,
   responseVariable: string,
   urlVariable: string,
+  metadataVariable: string,
 ): string[] {
   if (step.condition === undefined) {
     return [];
@@ -235,12 +291,12 @@ function renderCondition(
   const condition = compileCondition(step.condition, step.id);
   const checkVariable = `check${index}`;
   return [
-    `  const ${checkVariable} = check(${responseVariable}, {`,
-    `    ${JSON.stringify(`${step.id} ${step.condition}`)}: (res) => res.status ${condition.operator} ${condition.status},`,
-    '  });',
-    `  if (!${checkVariable}) {`,
-    `    logFailedCheck(${JSON.stringify(step.id)}, ${JSON.stringify(step.condition)}, ${urlVariable}, ${responseVariable});`,
-    '  }',
+    `const ${checkVariable} = check(${responseVariable}, {`,
+    `  ${JSON.stringify(`${step.id} ${step.condition}`)}: (res) => res.status ${condition.operator} ${condition.status},`,
+    '});',
+    `if (!${checkVariable}) {`,
+    `  logFailedCheck(${metadataVariable}, ${JSON.stringify(step.condition)}, ${urlVariable}, ${responseVariable});`,
+    '}',
   ];
 }
 
@@ -279,6 +335,44 @@ function buildHeaders(
   return Object.keys(headers).length > 0 ? headers : undefined;
 }
 
+function renderRequestParams(
+  headers: Record<string, unknown> | undefined,
+  tagsVariable: string,
+): string {
+  if (headers === undefined) {
+    return `{ tags: ${tagsVariable} }`;
+  }
+
+  return `{ headers: ${compileValueExpression(headers)}, tags: ${tagsVariable} }`;
+}
+
+function renderLogMetadata(scenarioName: string, step: ASTStep, method: string): string {
+  return renderStringRecord({
+    scenario: scenarioName,
+    step: step.id,
+    method,
+    path: step.path,
+  });
+}
+
+function renderRequestTags(scenarioName: string, step: ASTStep, method: string): string {
+  return renderStringRecord({
+    openapi_scenario: scenarioName,
+    openapi_step: step.id,
+    openapi_method: method,
+    openapi_path: step.path,
+    openapi_api: `${method} ${step.path}`,
+  });
+}
+
+function renderStringRecord(value: Record<string, string>): string {
+  const entries = Object.entries(value).map(
+    ([key, item]) => `${JSON.stringify(key)}: ${JSON.stringify(item)}`,
+  );
+
+  return `{ ${entries.join(', ')} }`;
+}
+
 function hasHeader(headers: Record<string, unknown> | undefined, headerName: string): boolean {
   if (!headers) {
     return false;
@@ -301,6 +395,10 @@ function hasExtract(ast: ASTScenario): boolean {
 
 function hasCondition(ast: ASTScenario): boolean {
   return ast.steps.some((step) => step.condition !== undefined);
+}
+
+function hasSteps(ast: ASTScenario): boolean {
+  return ast.steps.length > 0;
 }
 
 function compileContextReference(variableName: string): string {

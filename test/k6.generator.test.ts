@@ -40,12 +40,44 @@ describe('k6 generator', () => {
 
     expect(script).toMatchInlineSnapshot(`
       "import http from 'k6/http';
-      import { check } from 'k6';
+      import { check, group } from 'k6';
 
       const BASE_URL = __ENV.BASE_URL || "https://api.test.local";
+      const OPENAPI_K6_TRACE = __ENV.OPENAPI_K6_TRACE === '1';
 
       function joinUrl(baseUrl, endpointPath) {
         return \`\${baseUrl.replace(/\\/+$/, '')}/\${endpointPath.replace(/^\\/+/, '')}\`;
+      }
+
+      function logStepStart(metadata, url) {
+        if (!OPENAPI_K6_TRACE) {
+          return;
+        }
+
+        console.log(JSON.stringify({
+          type: 'openapi-k6-step-start',
+          scenario: metadata.scenario,
+          step: metadata.step,
+          method: metadata.method,
+          path: metadata.path,
+          url,
+        }));
+      }
+
+      function logStepEnd(metadata, response) {
+        if (!OPENAPI_K6_TRACE) {
+          return;
+        }
+
+        console.log(JSON.stringify({
+          type: 'openapi-k6-step-end',
+          scenario: metadata.scenario,
+          step: metadata.step,
+          method: metadata.method,
+          path: metadata.path,
+          status: response.status,
+          durationMs: response.timings.duration,
+        }));
       }
 
       function truncateLogValue(value, limit) {
@@ -57,13 +89,17 @@ describe('k6 generator', () => {
         return text.length > limit ? \`\${text.slice(0, limit)}...<truncated \${text.length - limit} chars>\` : text;
       }
 
-      function logFailedCheck(stepId, condition, url, response) {
+      function logFailedCheck(metadata, condition, url, response) {
         console.error(JSON.stringify({
           type: 'openapi-k6-check-failed',
-          step: stepId,
+          scenario: metadata.scenario,
+          step: metadata.step,
+          method: metadata.method,
+          path: metadata.path,
           condition,
           status: response.status,
           url,
+          durationMs: response.timings.duration,
           responseBody: truncateLogValue(response.body, 2000),
         }, null, 2));
       }
@@ -71,14 +107,21 @@ describe('k6 generator', () => {
       export default function () {
         const context = {};
 
-        const url0 = joinUrl(BASE_URL, \`/health\`);
-        const res0 = http.get(url0);
-        const check0 = check(res0, {
-          "health status == 200": (res) => res.status === 200,
+        group("health GET /health", () => {
+          const metadata0 = { "scenario": "health", "step": "health", "method": "GET", "path": "/health" };
+          const tags0 = { "openapi_scenario": "health", "openapi_step": "health", "openapi_method": "GET", "openapi_path": "/health", "openapi_api": "GET /health" };
+          const url0 = joinUrl(BASE_URL, \`/health\`);
+          const params0 = { tags: tags0 };
+          logStepStart(metadata0, url0);
+          const res0 = http.get(url0, params0);
+          logStepEnd(metadata0, res0);
+          const check0 = check(res0, {
+            "health status == 200": (res) => res.status === 200,
+          });
+          if (!check0) {
+            logFailedCheck(metadata0, "status == 200", url0, res0);
+          }
         });
-        if (!check0) {
-          logFailedCheck("health", "status == 200", url0, res0);
-        }
       }
       "
     `);
@@ -92,14 +135,18 @@ describe('k6 generator', () => {
 
     expect(script).toContain('let url0 = joinUrl(BASE_URL, `/users/${encodeURIComponent(String(context.userId))}`);');
     expect(script).toContain('url0 = appendQuery(url0, { "includePosts": true, "trace": context.traceId });');
-    expect(script).toContain('const params0 = { headers: { "Authorization": `Bearer ${context.token}` } };');
+    expect(script).toContain('group("get-user GET /users/{userId}", () => {');
+    expect(script).toContain('const metadata0 = { "scenario": "method-coverage", "step": "get-user", "method": "GET", "path": "/users/{userId}" };');
+    expect(script).toContain('const tags0 = { "openapi_scenario": "method-coverage", "openapi_step": "get-user", "openapi_method": "GET", "openapi_path": "/users/{userId}", "openapi_api": "GET /users/{userId}" };');
+    expect(script).toContain('const params0 = { headers: { "Authorization": `Bearer ${context.token}` }, tags: tags0 };');
     expect(script).toContain('const res0 = http.get(url0, params0);');
     expect(script).toContain('const body1 = JSON.stringify({ "name": "tester" });');
-    expect(script).toContain('const params1 = { headers: { "Content-Type": "application/json" } };');
+    expect(script).toContain('const params1 = { headers: { "Content-Type": "application/json" }, tags: tags1 };');
     expect(script).toContain('const res1 = http.post(url1, body1, params1);');
     expect(script).toContain('const res2 = http.put(url2, body2, params2);');
     expect(script).toContain('const res3 = http.patch(url3, body3, params3);');
-    expect(script).toContain('const res4 = http.del(url4);');
+    expect(script).toContain('const params4 = { tags: tags4 };');
+    expect(script).toContain('const res4 = http.del(url4, null, params4);');
     await expectValidJavaScript(workspace, script);
   });
 
@@ -140,7 +187,30 @@ describe('k6 generator', () => {
     );
 
     expect(script).toContain('const body0 = JSON.stringify({ "loginId": __ENV.LOGIN_ID, "password": __ENV.LOGIN_PASSWORD });');
-    expect(script).toContain('const params0 = { headers: { "Content-Type": "application/json", "X-Client": __ENV.CLIENT_ID } };');
+    expect(script).toContain('const params0 = { headers: { "Content-Type": "application/json", "X-Client": __ENV.CLIENT_ID }, tags: tags0 };');
+    await expectValidJavaScript(workspace, script);
+  });
+
+  it('renders generated metadata as literals without template compilation', async () => {
+    const script = generateK6Script(
+      {
+        name: '{{env.SCENARIO_NAME}}',
+        steps: [
+          {
+            id: '{{bad-name}}',
+            method: 'GET',
+            path: '/health',
+            pathParameters: [],
+            request: {},
+          },
+        ],
+      },
+      { baseUrl: 'https://api.test.local' },
+    );
+
+    expect(script).toContain('group("{{bad-name}} GET /health", () => {');
+    expect(script).toContain('const metadata0 = { "scenario": "{{env.SCENARIO_NAME}}", "step": "{{bad-name}}", "method": "GET", "path": "/health" };');
+    expect(script).toContain('const tags0 = { "openapi_scenario": "{{env.SCENARIO_NAME}}", "openapi_step": "{{bad-name}}", "openapi_method": "GET", "openapi_path": "/health", "openapi_api": "GET /health" };');
     await expectValidJavaScript(workspace, script);
   });
 
@@ -179,7 +249,7 @@ describe('k6 generator', () => {
     expect(script).toContain('context.firstItemId = readJsonPath(res0Json, ["items",0,"id"]);');
     expect(script).toContain('context["order-id"] = readJsonPath(res0Json, ["data","id"]);');
     expect(script).toContain('"login status < 300": (res) => res.status < 300,');
-    expect(script).toContain('logFailedCheck("login", "status < 300", url0, res0);');
+    expect(script).toContain('logFailedCheck(metadata0, "status < 300", url0, res0);');
     expect(script.indexOf('const check0 = check(res0')).toBeLessThan(script.indexOf('const res0Json = res0.json();'));
   });
 
@@ -205,8 +275,12 @@ describe('k6 generator', () => {
     );
 
     expect(script).toContain("type: 'openapi-k6-check-failed'");
+    expect(script).toContain('scenario: metadata.scenario,');
+    expect(script).toContain('method: metadata.method,');
+    expect(script).toContain('path: metadata.path,');
+    expect(script).toContain('durationMs: response.timings.duration,');
     expect(script).toContain('responseBody: truncateLogValue(response.body, 2000),');
-    expect(script).toContain('logFailedCheck("complete-signup", "status == 200", url0, res0);');
+    expect(script).toContain('logFailedCheck(metadata0, "status == 200", url0, res0);');
     expect(script).not.toContain('requestBody');
     expect(script).not.toContain('requestHeaders');
     await expectValidJavaScript(workspace, script);

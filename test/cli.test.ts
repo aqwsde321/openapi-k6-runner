@@ -83,7 +83,10 @@ describe('openapi-k6 CLI', () => {
 
     expect(output).toContain("import http from 'k6/http';");
     expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://openapi.test.local";');
-    expect(output).toContain('const res0 = http.get(url0);');
+    expect(output).toContain('import { check, group } from \'k6\';');
+    expect(output).toContain('group("health GET /health", () => {');
+    expect(output).toContain('const params0 = { tags: tags0 };');
+    expect(output).toContain('const res0 = http.get(url0, params0);');
     expect(output).toContain('"health status == 200": (res) => res.status === 200,');
   });
 
@@ -533,7 +536,7 @@ describe('openapi-k6 CLI', () => {
 
     const output = await readFile(path.join(workspace, 'load-tests/generated/scenario.k6.js'), 'utf8');
 
-    expect(output).toContain('const res0 = http.get(url0);');
+    expect(output).toContain('const res0 = http.get(url0, params0);');
   });
 
   it('includes BASE_URL from .env in the generated output', async () => {
