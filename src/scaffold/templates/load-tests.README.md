@@ -176,7 +176,7 @@ __SYNC_COMMAND__
 
 `openapi-k6 test`는 k6 파일을 만들지 않고 scenario YAML을 Node.js에서 1회 직접 실행합니다.
 부하 테스트가 아니라 사전 검증 단계입니다.
-step별 status, condition, extract 결과를 먼저 확인한 뒤 통과한 scenario만 k6 스크립트로 생성합니다.
+step 실행 중 URL, Running 상태, status, condition, extract 결과를 바로 확인한 뒤 통과한 scenario만 k6 스크립트로 생성합니다.
 
 ```bash
 __TEST_SMOKE_COMMAND__
@@ -202,20 +202,24 @@ __TEST_SMOKE_COMMAND__
 예상 출력:
 
 ```text
-Scenario: smoke
-Base URL: http://localhost:8080
+Scenario  smoke
+Base URL  http://localhost:8080
 
 [1/1] health
-GET /health
-url: http://localhost:8080/health
-status: 200 OK
-duration: 12ms
-condition: status == 200 pass
+  GET     /health
+  URL     http://localhost:8080/health
+  Running...
+  Status  200 OK  12ms
+  Check   status == 200  PASS
 
-Result: PASS
+Result
+  Steps    1 passed / 1 total
+  Duration  12ms
+  Status    PASS
 ```
 
-실패하면 `Result: FAIL`이 나오고, 실패한 step의 status, error, response body 일부를 보여줍니다. 비밀 값은 출력에서 마스킹됩니다.
+실패하면 마지막 `Status`가 `FAIL`이 되고, 실패한 step 아래에 status, error, response body 일부를 바로 보여줍니다. 비밀 값은 출력에서 마스킹됩니다.
+색상은 터미널에서만 켜지며 `--no-color` 옵션이나 `NO_COLOR=1` 환경변수로 끌 수 있습니다.
 
 `__ENV_PATH__`가 있으면 `{{env.NAME}}` template 값과 `BASE_URL`을 읽습니다. 현재 shell 환경변수가 같은 이름으로 있으면 shell 값이 우선합니다.
 

@@ -15,18 +15,33 @@ function createSink(): Writable {
   });
 }
 
-function createCapture(): { stream: Writable; output: () => string } {
+function createCapture(options: { isTTY?: boolean } = {}): { stream: Writable & { isTTY?: boolean }; output: () => string } {
   const chunks: Buffer[] = [];
+  const stream = new Writable({
+    write(chunk, _encoding, callback) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      callback();
+    },
+  }) as Writable & { isTTY?: boolean };
+
+  stream.isTTY = options.isTTY;
 
   return {
-    stream: new Writable({
-      write(chunk, _encoding, callback) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-        callback();
-      },
-    }),
+    stream,
     output: () => Buffer.concat(chunks).toString('utf8'),
   };
+}
+
+async function waitForOutput(readOutput: () => string, expected: string): Promise<void> {
+  const deadline = Date.now() + 1000;
+
+  while (!readOutput().includes(expected)) {
+    if (Date.now() > deadline) {
+      throw new Error(`Timed out waiting for output: ${expected}`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
 }
 
 async function writeGenerateFixtures(workspace: string, serverUrl = 'https://openapi.test.local'): Promise<void> {
@@ -251,7 +266,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('`load-tests/openapi/pharma.catalog.json`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.');
     expect(readme).toContain('기본 smoke 테스트는 `load-tests/scenarios/smoke.yaml`를 수정합니다.');
     expect(readme).toContain('openapi-k6 test -s smoke');
-    expect(readme).toContain('step별 status, condition, extract 결과를 먼저 확인한 뒤 통과한 scenario만 k6 스크립트로 생성합니다.');
+    expect(readme).toContain('step 실행 중 URL, Running 상태, status, condition, extract 결과를 바로 확인한 뒤 통과한 scenario만 k6 스크립트로 생성합니다.');
+    expect(readme).toContain('색상은 터미널에서만 켜지며 `--no-color` 옵션이나 `NO_COLOR=1` 환경변수로 끌 수 있습니다.');
     expect(readme).toContain('생성/갱신: `load-tests/generated/smoke.k6.js`');
     expect(readme).toContain('## 3. 비밀 값 사용');
     expect(readme).toContain('## 4. 자주 하는 수정');
@@ -876,6 +892,9 @@ describe('openapi-k6 CLI', () => {
         '    api:',
         '      operationId: getHealth',
         '    condition: status == 200',
+        '    extract:',
+        '      ok:',
+        '        from: $.ok',
         '',
       ].join('\n'),
       'utf8',
@@ -902,13 +921,184 @@ describe('openapi-k6 CLI', () => {
       },
     );
 
-    expect(stdout.output()).toContain('Scenario: smoke');
+    expect(stdout.output()).toContain('Scenario  smoke');
+    expect(stdout.output()).toContain('Base URL  https://config-base.test.local');
     expect(stdout.output()).toContain('[1/1] health');
-    expect(stdout.output()).toContain('GET /app-health');
-    expect(stdout.output()).toContain('url: https://config-base.test.local/app-health');
-    expect(stdout.output()).toContain('status: 200 OK');
-    expect(stdout.output()).toContain('condition: status == 200 pass');
-    expect(stdout.output()).toContain('Result: PASS');
+    expect(stdout.output()).toContain('GET     /app-health');
+    expect(stdout.output()).toContain('URL     https://config-base.test.local/app-health');
+    expect(stdout.output()).toContain('Running...');
+    expect(stdout.output()).toContain('Status  200 OK');
+    expect(stdout.output()).toContain('Check   status == 200  PASS');
+    expect(stdout.output()).toContain('Extract ok  OK');
+    expect(stdout.output()).toContain('Result');
+    expect(stdout.output()).toContain('Status    PASS');
+  });
+
+  it('streams scenario test output before the request finishes', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    let resolveResponse: (response: Response) => void = () => {};
+    const responsePromise = new Promise<Response>((resolve) => {
+      resolveResponse = resolve;
+    });
+    const stdout = createCapture();
+    const runPromise = runCli(
+      ['test', '-s', 'smoke'],
+      {
+        cwd: workspace,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        env: {},
+        fetch: async () => responsePromise,
+      },
+    );
+
+    await waitForOutput(stdout.output, 'Running...');
+
+    expect(stdout.output()).toContain('Scenario  smoke');
+    expect(stdout.output()).toContain('[1/1] health');
+    expect(stdout.output()).toContain('URL     https://config-base.test.local/app-health');
+    expect(stdout.output()).not.toContain('Status    PASS');
+
+    resolveResponse(new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' }));
+    await runPromise;
+
+    expect(stdout.output()).toContain('Status  200 OK');
+    expect(stdout.output()).toContain('Status    PASS');
+  });
+
+  it('does not print ANSI color codes to captured streams', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const stdout = createCapture();
+    await runCli(
+      ['test', '-s', 'smoke'],
+      {
+        cwd: workspace,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        env: {},
+        fetch: async () => new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' }),
+      },
+    );
+
+    expect(stdout.output()).not.toMatch(/\u001b\[/);
+  });
+
+  it('disables ANSI colors with --no-color and NO_COLOR', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const colorOutput = createCapture({ isTTY: true });
+    await runCli(
+      ['test', '-s', 'smoke'],
+      {
+        cwd: workspace,
+        stdout: colorOutput.stream,
+        stderr: createSink(),
+        env: {},
+        fetch: async () => new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' }),
+      },
+    );
+
+    const noColorOutput = createCapture({ isTTY: true });
+    await runCli(
+      ['test', '-s', 'smoke', '--no-color'],
+      {
+        cwd: workspace,
+        stdout: noColorOutput.stream,
+        stderr: createSink(),
+        env: {},
+        fetch: async () => new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' }),
+      },
+    );
+
+    const noColorEnvOutput = createCapture({ isTTY: true });
+    await runCli(
+      ['test', '-s', 'smoke'],
+      {
+        cwd: workspace,
+        stdout: noColorEnvOutput.stream,
+        stderr: createSink(),
+        env: { NO_COLOR: '1' },
+        fetch: async () => new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' }),
+      },
+    );
+
+    expect(colorOutput.output()).toMatch(/\u001b\[/);
+    expect(noColorOutput.output()).not.toMatch(/\u001b\[/);
+    expect(noColorEnvOutput.output()).not.toMatch(/\u001b\[/);
   });
 
   it('fails clearly when test sees TODO config values', async () => {
@@ -986,10 +1176,86 @@ describe('openapi-k6 CLI', () => {
       code: 'openapi-k6.test.failed',
     });
 
-    expect(stdout.output()).toContain('condition: status == 200 fail');
-    expect(stdout.output()).toContain('response body:');
+    expect(stdout.output()).toContain('Check   status == 200  FAIL');
+    expect(stdout.output()).toContain('Response body');
     expect(stdout.output()).toContain('"message":"boom"');
-    expect(stdout.output()).toContain('Result: FAIL');
+    expect(stdout.output()).toContain('Status    FAIL');
+  });
+
+  it('masks env secrets in CLI reporter URLs, errors, and truncated response bodies', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: condition-failure',
+        '    api:',
+        '      operationId: getHealth',
+        '    request:',
+        '      query:',
+        '        token: "{{env.API_TOKEN}}"',
+        '    condition: status == 200',
+        '  - id: network-failure',
+        '    api:',
+        '      operationId: getHealth',
+        '    request:',
+        '      query:',
+        '        token: "{{env.API_TOKEN}}"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const secret = 'SENSITIVE_BOUNDARY_TOKEN';
+    let requestCount = 0;
+    const stdout = createCapture();
+
+    await expect(
+      runCli(
+        ['test', '-s', 'smoke'],
+        {
+          cwd: workspace,
+          stdout: stdout.stream,
+          stderr: createSink(),
+          env: { API_TOKEN: secret },
+          fetch: async (input) => {
+            requestCount += 1;
+
+            if (requestCount === 1) {
+              return new Response(`${'x'.repeat(1995)}${secret} response tail`, {
+                status: 500,
+                statusText: 'Internal Server Error',
+              });
+            }
+
+            throw new Error(`network failed for ${String(input)}`);
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'openapi-k6.test.failed',
+    });
+
+    const output = stdout.output();
+
+    expect(output).toContain('URL     https://config-base.test.local/app-health?token=***');
+    expect(output).toContain('Response body');
+    expect(output).toContain('Error   network failed for https://config-base.test.local/app-health?token=***');
+    expect(output).toContain('***');
+    expect(output).not.toContain(secret);
+    expect(output).not.toContain(secret.slice(0, 8));
   });
 
   it('selects an isolated module registry with --module', async () => {

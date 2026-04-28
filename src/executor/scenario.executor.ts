@@ -14,6 +14,7 @@ const FULL_TEMPLATE_PATTERN = new RegExp(`^{{\\s*(${TEMPLATE_REFERENCE})\\s*}}$`
 const DEFAULT_RESPONSE_BODY_LIMIT = 2000;
 
 type FetchLike = typeof fetch;
+type MaybePromise<T> = T | Promise<T>;
 
 export interface ScenarioExecutorOptions {
   baseUrl: string;
@@ -21,11 +22,50 @@ export interface ScenarioExecutorOptions {
   env?: Record<string, string | undefined>;
   fetch?: FetchLike;
   responseBodyLimit?: number;
+  reporter?: ScenarioExecutionReporter;
+}
+
+export interface ScenarioExecutionReporter {
+  onScenarioStart?(event: ScenarioStartEvent): MaybePromise<void>;
+  onStepStart?(event: StepStartEvent): MaybePromise<void>;
+  onStepRequest?(event: StepRequestEvent): MaybePromise<void>;
+  onStepEnd?(event: StepEndEvent): MaybePromise<void>;
+  onScenarioEnd?(result: ScenarioExecutionResult): MaybePromise<void>;
+}
+
+export interface ScenarioStartEvent {
+  scenario: string;
+  baseUrl: string;
+  totalSteps: number;
+  secretValues: string[];
+}
+
+export interface StepStartEvent {
+  scenario: string;
+  index: number;
+  totalSteps: number;
+  id: string;
+  method: string;
+  path: string;
+  secretValues: string[];
+}
+
+export interface StepRequestEvent extends StepStartEvent {
+  url: string;
+}
+
+export interface StepEndEvent {
+  scenario: string;
+  index: number;
+  totalSteps: number;
+  result: StepExecutionResult;
+  secretValues: string[];
 }
 
 export interface ScenarioExecutionResult {
   scenario: string;
   baseUrl: string;
+  durationMs: number;
   passed: boolean;
   steps: StepExecutionResult[];
   secretValues: string[];
@@ -104,7 +144,16 @@ export async function executeAstScenario(
   };
   const fetchImpl = options.fetch ?? fetch;
   const fileRootDir = path.resolve(options.fileRootDir ?? 'load-tests');
+  const scenarioStartedAt = performance.now();
+  const reporter = options.reporter;
   const steps: StepExecutionResult[] = [];
+
+  await reporter?.onScenarioStart?.({
+    scenario: ast.name,
+    baseUrl,
+    totalSteps: ast.steps.length,
+    secretValues: [...state.secretValues],
+  });
 
   for (const [index, step] of ast.steps.entries()) {
     steps.push(await executeStep(step, index, {
@@ -112,16 +161,24 @@ export async function executeAstScenario(
       fetchImpl,
       fileRootDir,
       state,
+      reporter,
+      scenario: ast.name,
+      totalSteps: ast.steps.length,
     }));
   }
 
-  return {
+  const result = {
     scenario: ast.name,
     baseUrl,
+    durationMs: performance.now() - scenarioStartedAt,
     passed: steps.every((step) => step.passed),
     steps,
     secretValues: [...state.secretValues],
   };
+
+  await reporter?.onScenarioEnd?.(result);
+
+  return result;
 }
 
 export function formatScenarioExecutionReport(
@@ -189,11 +246,27 @@ async function executeStep(
     fetchImpl: FetchLike;
     fileRootDir: string;
     state: RuntimeState;
+    reporter?: ScenarioExecutionReporter;
+    scenario: string;
+    totalSteps: number;
   },
 ): Promise<StepExecutionResult> {
   const startedAt = performance.now();
   const method = step.method.toUpperCase();
   let url: string | undefined;
+  const startEvent: StepStartEvent = {
+    scenario: options.scenario,
+    index,
+    totalSteps: options.totalSteps,
+    id: step.id,
+    method,
+    path: step.path,
+    secretValues: [...options.state.secretValues],
+  };
+
+  await options.reporter?.onStepStart?.(startEvent);
+
+  let result: StepExecutionResult;
 
   try {
     const parsedCondition = step.condition === undefined
@@ -201,6 +274,11 @@ async function executeStep(
       : parseCondition(step.condition, step.id);
     const request = await buildRuntimeRequest(step, method, options.baseUrl, options.fileRootDir, options.state);
     url = request.url;
+    await options.reporter?.onStepRequest?.({
+      ...startEvent,
+      url,
+      secretValues: [...options.state.secretValues],
+    });
     const response = await options.fetchImpl(request.url, request.init);
     const body = await response.text();
     const responseResult = {
@@ -217,7 +295,7 @@ async function executeStep(
     const extracts = evaluateExtracts(step, body, options.state);
     const passed = (condition?.passed ?? true) && extracts.every((extract) => extract.passed);
 
-    return {
+    result = {
       index,
       id: step.id,
       method,
@@ -230,7 +308,7 @@ async function executeStep(
       extracts,
     };
   } catch (error) {
-    return {
+    result = {
       index,
       id: step.id,
       method,
@@ -242,6 +320,16 @@ async function executeStep(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+
+  await options.reporter?.onStepEnd?.({
+    scenario: options.scenario,
+    index,
+    totalSteps: options.totalSteps,
+    result,
+    secretValues: [...options.state.secretValues],
+  });
+
+  return result;
 }
 
 async function buildRuntimeRequest(

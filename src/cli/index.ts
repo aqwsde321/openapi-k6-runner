@@ -16,16 +16,18 @@ import {
 } from '../config/load-test.config.js';
 import {
   executeAstScenario,
-  formatScenarioExecutionReport,
+  type ScenarioExecutionReporter,
   type ScenarioExecutionResult,
 } from '../executor/scenario.executor.js';
 import { syncOpenApiSnapshot } from '../openapi/openapi.catalog.js';
 import { parseOpenApiFile } from '../openapi/openapi.parser.js';
 import { parseScenarioFile } from '../parser/scenario.parser.js';
 import { initLoadTests } from '../scaffold/load-test.init.js';
+import { createScenarioConsoleReporter } from './test.reporter.js';
 
 type WritableLike = {
   write(chunk: string): unknown;
+  isTTY?: boolean;
 };
 
 const DEFAULT_CONFIG_PATH = 'load-tests/config.yaml';
@@ -39,6 +41,7 @@ export interface CliContext {
   cliPath?: string;
   env?: Record<string, string | undefined>;
   fetch?: typeof fetch;
+  testReporter?: ScenarioExecutionReporter;
 }
 
 export interface GenerateOptions {
@@ -61,6 +64,7 @@ export interface TestOptions {
   scenario: string;
   config?: string;
   module?: string;
+  color?: boolean;
 }
 
 export interface InitOptions {
@@ -448,6 +452,7 @@ export async function runTestCommand(
     fileRootDir: loadTestDir,
     env: runtimeEnv,
     fetch: context.fetch,
+    reporter: context.testReporter,
   });
 
   return {
@@ -482,6 +487,22 @@ function resolveCliPath(context: CliContext): string {
 
 function writeLine(stream: WritableLike, message: string): void {
   stream.write(`${message}\n`);
+}
+
+function shouldUseColor(
+  stream: WritableLike,
+  env: Record<string, string | undefined>,
+  colorOption: boolean | undefined,
+): boolean {
+  if (colorOption === false) {
+    return false;
+  }
+
+  if (env.NO_COLOR !== undefined || env.TERM === 'dumb') {
+    return false;
+  }
+
+  return stream.isTTY === true;
 }
 
 export function createProgram(context: CliContext = {}): Command {
@@ -549,9 +570,16 @@ export function createProgram(context: CliContext = {}): Command {
     .requiredOption('-s, --scenario <path-or-name>', 'Scenario DSL file path or load-tests scenario name')
     .option('--config <path>', 'Load test config file path')
     .option('-m, --module <name>', 'Module name from config')
+    .option('--no-color', 'Disable ANSI color output')
     .action(async (options: TestOptions) => {
-      const result = await runTestCommand(options, context);
-      stdout.write(formatScenarioExecutionReport(result));
+      const colorEnv = context.env ?? process.env;
+      const testReporter = context.testReporter ?? createScenarioConsoleReporter(stdout, {
+        color: shouldUseColor(stdout, colorEnv, options.color),
+      });
+      const result = await runTestCommand(options, {
+        ...context,
+        testReporter,
+      });
 
       if (!result.passed) {
         throw new CommanderError(1, 'openapi-k6.test.failed', 'Scenario test failed');

@@ -62,6 +62,62 @@ describe('scenario executor', () => {
     expect(report).not.toContain('local-secret');
   });
 
+  it('emits reporter events during scenario execution', async () => {
+    const events: string[] = [];
+    const result = await executeAstScenario({
+      name: 'smoke',
+      steps: [
+        {
+          id: 'health',
+          method: 'GET',
+          path: '/health',
+          pathParameters: [],
+          request: {},
+          condition: 'status == 200',
+        },
+      ],
+    }, {
+      baseUrl: 'https://api.test.local',
+      env: {},
+      reporter: {
+        onScenarioStart: (event) => {
+          events.push(`scenario-start:${event.scenario}`);
+        },
+        onStepStart: (event) => {
+          events.push(`step-start:${event.id}`);
+        },
+        onStepRequest: (event) => {
+          events.push(`step-request:${event.url}`);
+        },
+        onStepEnd: (event) => {
+          events.push(`step-end:${event.result.id}:${event.result.passed}`);
+        },
+        onScenarioEnd: (event) => {
+          events.push(`scenario-end:${event.passed}`);
+        },
+      },
+      fetch: async () => {
+        expect(events).toEqual([
+          'scenario-start:smoke',
+          'step-start:health',
+          'step-request:https://api.test.local/health',
+        ]);
+
+        return jsonResponse({ ok: true }, 200, 'OK');
+      },
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.durationMs).toBeGreaterThanOrEqual(0);
+    expect(events).toEqual([
+      'scenario-start:smoke',
+      'step-start:health',
+      'step-request:https://api.test.local/health',
+      'step-end:health:true',
+      'scenario-end:true',
+    ]);
+  });
+
   it('marks condition failures and includes the response body in the report', async () => {
     const result = await executeAstScenario({
       name: 'failing-health',
