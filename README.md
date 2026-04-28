@@ -9,7 +9,7 @@ OpenAPI 스펙과 사람이 읽기 쉬운 Scenario DSL로 k6 실행 스크립트
 - OpenAPI endpoint catalog를 만들어 테스트할 API를 쉽게 고릅니다.
 - YAML scenario로 로그인, 조회, 주문 같은 API 흐름을 작성합니다.
 - scenario YAML을 k6 JavaScript로 생성합니다.
-- 비밀번호나 토큰 같은 값은 `{{env.NAME}}` 템플릿으로 분리해 `.env`에만 둡니다.
+- 비밀번호나 토큰 같은 값은 `{{env.NAME}}` 템플릿으로 분리해 `load-tests/.env`에만 둡니다.
 
 ## 설치
 
@@ -75,10 +75,11 @@ cd /path/to/backend-project
 openapi-k6 init
 ```
 
-생성되는 파일:
+생성되는 파일과 이후 직접 만들 파일:
 
 - `load-tests/config.yaml`
 - `load-tests/.env.example`
+- `load-tests/.env`는 생성되지 않습니다. 비밀 값이 필요할 때 `.env.example`을 복사해서 직접 만듭니다.
 - `load-tests/.gitignore`
 - `load-tests/run.sh`
 - `load-tests/scenarios/smoke.yaml`
@@ -91,6 +92,16 @@ openapi-k6 init --force
 ```
 
 `--force`는 `config.yaml`, `.env.example`, `.gitignore`, `run.sh`, `scenarios/smoke.yaml`, `README.md`만 다시 씁니다. `.env`, `openapi/`, `generated/`, `logs/`, 추가 scenario 파일은 지우지 않습니다.
+
+### `.env` 위치
+
+`load-tests/run.sh`는 `run.sh`와 같은 폴더의 `load-tests/.env`만 source합니다. 백엔드 프로젝트 루트의 `.env`는 자동으로 읽지 않습니다.
+
+```bash
+cp load-tests/.env.example load-tests/.env
+```
+
+scenario YAML에서 `{{env.LOGIN_PASSWORD}}`처럼 참조한 값은 `load-tests/.env`에 `LOGIN_PASSWORD=...` 형식으로 작성합니다. 루트 `.env` 값을 재사용하려면 필요한 키만 `load-tests/.env`로 복사하거나, 실행 전에 shell에서 직접 export합니다.
 
 ## 다음 단계는 AI에게 맡기기
 
@@ -141,6 +152,7 @@ backend-project/
     ├── README.md
     ├── config.yaml
     ├── .env.example
+    ├── .env          # 필요 시 직접 생성, git commit 금지
     ├── .gitignore
     ├── run.sh
     ├── openapi/
@@ -160,12 +172,13 @@ backend-project/
 - `sync`는 외부 파일이나 URL을 가리키는 `$ref`를 snapshot 내부 참조로 묶어 저장합니다.
 - `pathParams` 값은 URL path segment로 encode되어 `/`, 공백, `?`, `#` 등이 URL 구조를 깨지 않습니다.
 - `openapi-k6 generate`는 config의 `baseUrl`을 생성된 k6 스크립트의 기본값으로 넣습니다. k6 실행 시 `BASE_URL=... k6 run ...`처럼 환경 변수를 넘기면 이 기본값보다 우선합니다.
-- 실제 비밀 값은 scenario YAML에 쓰지 말고 `{{env.NAME}}`으로 참조합니다.
+- 실제 비밀 값은 scenario YAML에 쓰지 말고 `{{env.NAME}}`으로 참조합니다. `load-tests/run.sh`는 `load-tests/.env`만 자동으로 읽으며, 백엔드 프로젝트 루트의 `.env`는 자동으로 읽지 않습니다.
 - 생성된 k6 스크립트는 각 step을 k6 `group()`으로 묶고, 요청에 `openapi_scenario`, `openapi_step`, `openapi_method`, `openapi_path`, `openapi_api` tag를 붙입니다.
 - 생성된 k6 스크립트는 `condition` 실패 시 scenario, step, method, path, status, URL, duration, 응답 body 일부를 console error로 출력합니다.
 - `load-tests/run.sh <scenario> --log`를 사용하면 k6 출력이 `load-tests/logs/<scenario>.log`에도 저장됩니다.
 - `load-tests/run.sh <scenario> --trace`를 사용하면 step 시작/종료 로그가 출력됩니다.
 - `load-tests/run.sh <scenario> --report`를 사용하면 k6 Web Dashboard HTML report가 `load-tests/logs/<scenario>-report.html`에 저장됩니다.
+- `{{env.NAME}}` 값을 쓰려면 `cp load-tests/.env.example load-tests/.env`로 `run.sh` 옆에 `.env`를 만든 뒤 값을 채웁니다.
 
 ## 개발 검증
 

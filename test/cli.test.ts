@@ -146,8 +146,8 @@ describe('openapi-k6 CLI', () => {
       '',
     ].join('\n'));
     expect(envExample).toBe([
-      '# Copy this file to .env and fill local secret values.',
-      '# k6 does not auto-load .env files. Export these variables before running k6.',
+      '# Copy this file to .env next to run.sh and fill local secret values.',
+      '# run.sh auto-loads this .env file. Plain k6 run does not.',
       '',
       '# Add or rename variables to match {{env.NAME}} templates in scenario YAML.',
       'LOGIN_ID=',
@@ -163,7 +163,9 @@ describe('openapi-k6 CLI', () => {
     expect(runScript).toContain('DASHBOARD_OPEN_ENABLED=false');
     expect(runScript).toContain('K6_ARGS=()');
     expect(runScript).toContain('Usage: $0 [scenario] [run.sh flags] [k6 run options]');
-    expect(runScript).toContain('See load-tests/README.md for the full workflow.');
+    expect(runScript).toContain('This script loads only the .env file next to run.sh.');
+    expect(runScript).toContain('It does not load the backend project root .env.');
+    expect(runScript).toContain('See README.md in this directory for the full workflow.');
     expect(runScript).toContain('source "$ENV_FILE"');
     expect(runScript).toContain('LOG_FILE="$LOG_DIR/$SCENARIO.log"');
     expect(runScript).toContain('REPORT_FILE="$LOG_DIR/$SCENARIO-report.html"');
@@ -191,12 +193,13 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('`--report`: k6 Web Dashboard HTML report를 `logs/<scenario>-report.html`에 저장');
     expect(readme).toContain('./load-tests/run.sh smoke --report --duration 10s --vus 1');
     expect(readme).toContain('./load-tests/run.sh smoke --trace --log --report --duration 10s --vus 1');
-    expect(readme).toContain('`run.sh`는 같은 폴더의 `.env`를 자동으로 로드한 뒤');
+    expect(readme).toContain('`run.sh`는 자신과 같은 폴더의 `.env`(`load-tests/.env`)만 자동으로 로드한 뒤');
+    expect(readme).toContain('백엔드 프로젝트 루트의 `.env`는 자동으로 읽지 않습니다.');
     expect(readme).toContain('빠른 사용법은 `run.sh --help`로 확인할 수 있습니다.');
     expect(readme).toContain('## 0. openapi-k6 명령 준비');
     expect(readme).toContain('사람이 꼭 이해해야 하는 내용은 이 README 앞부분에 있습니다.');
     expect(readme).toContain('## 사람이 꼭 알아야 하는 것');
-    expect(readme).toContain('직접 수정하는 파일은 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.');
+    expect(readme).toContain('직접 수정하는 파일은 이 폴더의 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.');
     expect(readme).toContain('이 README는 `openapi-k6 init`으로 생성되었습니다.');
     expect(readme).toContain('먼저 현재 shell에서 명령이 실행되는지 확인합니다.');
     expect(readme).toContain('pnpm install');
@@ -246,9 +249,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('API base URL은 `openapi-k6 generate` 실행 시점의 `config.yaml` `baseUrl` 값이 생성된 k6 스크립트에 기본값으로 들어갑니다.');
     expect(readme).toContain('`config.yaml`을 수정한 뒤에는 스크립트를 다시 생성해야 반영됩니다.');
     expect(readme).toContain('실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.');
-    expect(readme).toContain('시나리오에서 `{{env.NAME}}`을 사용한다면 `.env.example`을 `.env`로 복사한 뒤 비밀 값을 채웁니다.');
+    expect(readme).toContain('시나리오에서 `{{env.NAME}}`을 사용한다면 `load-tests/.env.example`을 `load-tests/.env`로 복사한 뒤 비밀 값을 채웁니다.');
     expect(readme).toContain('cp load-tests/.env.example load-tests/.env');
-    expect(readme).toContain('`run.sh`가 실행할 때 `.env`를 자동으로 export합니다.');
+    expect(readme).toContain('`run.sh`가 실행할 때 `load-tests/.env`를 자동으로 export합니다.');
     expect(readme).toContain('Read `openapi/*.catalog.json` and inspect `operationId`, `method`, `path`, `parameters`, and `hasRequestBody`');
     expect(readme).toContain('rm -rf load-tests');
     expect(readme).toContain('필요한 scenario, snapshot, catalog가 있으면 먼저 백업합니다.');
@@ -259,9 +262,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Do not edit `generated/*.k6.js` directly. Edit scenario YAML and regenerate.');
     expect(readme).toContain('Keep human-facing documentation in Korean.');
     expect(readme).toContain('Do not write secrets such as passwords directly in YAML. Use `{{env.NAME}}`.');
-    expect(readme).toContain('Store real secret values in `.env` and do not commit it.');
+    expect(readme).toContain('Store real secret values in `load-tests/.env` and do not commit it.');
     expect(readme).toContain('Resolve config-relative paths from the directory containing `config.yaml`.');
-    expect(readme).toContain('`load-tests/run.sh`: k6 runner that auto-loads local .env values');
+    expect(readme).toContain('`load-tests/run.sh`: k6 runner that auto-loads `load-tests/.env` values');
     expect(readme).toContain('### Files to inspect');
     expect(readme).toContain('### Prompt Examples');
     expect(readme).toContain('Basic smoke test:');
@@ -344,6 +347,8 @@ describe('openapi-k6 CLI', () => {
     expect(result.stdout).toContain('Usage:');
     expect(result.stdout).toContain('run.sh flags:');
     expect(result.stdout).toContain('k6 options must come after the scenario name.');
+    expect(result.stdout).toContain('This script loads only the .env file next to run.sh.');
+    expect(result.stdout).toContain('It does not load the backend project root .env.');
   });
 
   it('runs the generated run.sh with report, trace, and dashboard flags', async () => {
