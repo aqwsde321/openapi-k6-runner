@@ -13,8 +13,9 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "tsc -p tsconfig.build.json",
-    "build:watch": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "build": "tsc -p tsconfig.build.json && pnpm run build:assets",
+    "build:assets": "mkdir -p dist/scaffold/templates && cp src/scaffold/templates/load-tests.README.md dist/scaffold/templates/load-tests.README.md",
+    "build:watch": "pnpm run build:assets && tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
