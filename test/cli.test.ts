@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -158,9 +158,9 @@ describe('openapi-k6 CLI', () => {
     expect(runScript).toContain('K6_ARGS=()');
     expect(runScript).toContain('source "$ENV_FILE"');
     expect(runScript).toContain('LOG_FILE="$LOG_DIR/$SCENARIO.log"');
-    expect(runScript).toContain('k6 run "${K6_ARGS[@]}" "$SCRIPT_PATH" 2>&1 | tee "$LOG_FILE"');
+    expect(runScript).toContain('k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH" 2>&1 | tee "$LOG_FILE"');
     expect(runScript).toContain('status="${PIPESTATUS[0]}"');
-    expect(runScript).toContain('exec k6 run "${K6_ARGS[@]}" "$SCRIPT_PATH"');
+    expect(runScript).toContain('exec k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH"');
     expect(runScriptStat.mode & 0o111).not.toBe(0);
     expect(runScriptSyntax.stderr).toBe('');
     expect(runScriptSyntax.status).toBe(0);
@@ -236,6 +236,58 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Create load-tests/scenarios/basic-read.yaml.');
     expect(readme).toContain('Find the login API and a user-profile/read API.');
     expect(readme.indexOf('## AI Work Guide')).toBeGreaterThan(readme.indexOf('## 5. 제거 방법'));
+  });
+
+  it('runs the generated run.sh with --log when no k6 options are provided', async () => {
+    await runCli(
+      ['init'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+    await writeFile(
+      path.join(workspace, 'load-tests/generated/smoke.k6.js'),
+      'export default function () {}\n',
+      'utf8',
+    );
+    const binDir = path.join(workspace, 'bin');
+    const argLogPath = path.join(workspace, 'k6-args.txt');
+    await mkdir(binDir, { recursive: true });
+    await writeFile(
+      path.join(binDir, 'k6'),
+      [
+        '#!/usr/bin/env bash',
+        'printf "%s\\n" "$@" > "$K6_ARG_LOG"',
+        'echo fake-k6-output',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await chmod(path.join(binDir, 'k6'), 0o755);
+
+    const result = spawnSync(
+      path.join(workspace, 'load-tests/run.sh'),
+      ['smoke', '--log'],
+      {
+        cwd: workspace,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+          K6_ARG_LOG: argLogPath,
+        },
+      },
+    );
+    const log = await readFile(path.join(workspace, 'load-tests/logs/smoke.log'), 'utf8');
+    const args = await readFile(argLogPath, 'utf8');
+
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('Writing k6 output to');
+    expect(log).toContain('fake-k6-output');
+    expect(args).toBe([
+      'run',
+      path.join(workspace, 'load-tests/generated/smoke.k6.js'),
+      '',
+    ].join('\n'));
   });
 
   it('initializes a placeholder scaffold with no required options', async () => {
@@ -428,7 +480,7 @@ describe('openapi-k6 CLI', () => {
     expect(config).toContain('baseUrl: https://changed.test.local');
     expect(readme).toContain('# load-tests');
     expect(readme).toContain('`init --force`는 scaffold 관리 파일만 다시 씁니다.');
-    expect(runScript).toContain('exec k6 run "${K6_ARGS[@]}" "$SCRIPT_PATH"');
+    expect(runScript).toContain('exec k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH"');
     expect(scenario).toContain('path: /health');
     expect(env).toBe('LOGIN_PASSWORD=local-secret\n');
     expect(customScenario).toBe('name: custom\nsteps: []\n');

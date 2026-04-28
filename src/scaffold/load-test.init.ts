@@ -279,13 +279,13 @@ function renderRunScript(): string {
     '  mkdir -p "$LOG_DIR"',
     '  echo "Writing k6 output to $LOG_FILE"',
     '  set +e',
-    '  k6 run "${K6_ARGS[@]}" "$SCRIPT_PATH" 2>&1 | tee "$LOG_FILE"',
+    '  k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH" 2>&1 | tee "$LOG_FILE"',
     '  status="${PIPESTATUS[0]}"',
     '  set -e',
     '  exit "$status"',
     'fi',
     '',
-    'exec k6 run "${K6_ARGS[@]}" "$SCRIPT_PATH"',
+    'exec k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH"',
     '',
   ].join('\n');
 }
