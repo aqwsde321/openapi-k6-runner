@@ -296,25 +296,37 @@ __RUN_SMOKE_COMMAND__
 
 ## Scenario 작성법
 
-### Scenario DSL Reference
+Scenario YAML은 `__DIRECTORY__/scenarios/*.yaml`에 작성합니다.
+먼저 `__CATALOG_PATH__`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.
 
-Endpoint selection:
+자주 쓰는 request 필드입니다.
 
-1. Prefer `api.operationId` when the catalog has a stable operationId.
-2. Use `api.method` and `api.path` when operationId is missing or unclear.
-3. Add `request.pathParams` for OpenAPI path templates such as `/orders/{orderId}`.
-4. Use `extract` to save response values into shared context.
-5. Reference extracted values with `{{variableName}}` in later steps.
-
-Supported request fields:
-
-- `headers`: HTTP headers
+- `headers`: 인증 토큰 등 HTTP header
 - `query`: query string
-- `pathParams`: values for OpenAPI path template placeholders
+- `pathParams`: `/orders/{orderId}` 같은 path template 값
 - `body`: JSON request body
-- `multipart`: multipart/form-data request body for file uploads
+- `multipart`: multipart/form-data 파일 업로드
 
-Multipart upload example:
+JSON body 예시:
+
+```yaml
+name: login-flow
+
+steps:
+  - id: login
+    api:
+      operationId: loginUser
+    request:
+      body:
+        username: "{{env.LOGIN_ID}}"
+        password: "{{env.LOGIN_PASSWORD}}"
+    extract:
+      token:
+        from: $.token
+    condition: status == 200
+```
+
+파일 업로드 예시:
 
 ```yaml
 name: upload-product-image
@@ -337,83 +349,23 @@ steps:
     condition: status == 200
 ```
 
-Multipart file paths are relative to `__DIRECTORY__/`. Put local upload fixtures under `__FIXTURES_PATH__` by default.
-Commit fixture files only when they are safe and useful for repeatable tests; otherwise keep project-local files out of git according to the backend project policy.
-Spring endpoints such as `@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` should be modeled with `request.multipart`.
-k6 references: https://grafana.com/docs/k6/latest/examples/data-uploads/, https://grafana.com/docs/k6/latest/javascript-api/k6-http/file/, https://grafana.com/docs/k6/latest/javascript-api/init-context/open/.
+파일 경로는 `__DIRECTORY__/` 기준입니다. 업로드 fixture는 기본적으로 `__FIXTURES_PATH__` 아래에 둡니다.
+Spring의 `@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` endpoint는 `request.multipart`로 작성합니다.
+fixture 파일은 반복 테스트에 안전하고 유용할 때만 commit합니다.
 
-Supported templates:
-
-- `{{variableName}}`: value extracted into context by a previous step
-- `{{env.NAME}}`: runtime environment variable exported before k6 execution
-
-Supported conditions:
-
-- `status == 200`
-- `status != 500`
-- `status >= 200`
-- `status < 300`
-
-OperationId-based example:
-
-`__WORKFLOW_SCENARIO_PATH__`:
-
-```yaml
-name: login-flow
-
-steps:
-  - id: login
-    api:
-      operationId: loginUser
-    request:
-      body:
-        username: "{{env.LOGIN_ID}}"
-        password: "{{env.LOGIN_PASSWORD}}"
-    extract:
-      token:
-        from: $.token
-    condition: status == 200
-
-  - id: get-me
-    api:
-      operationId: getMe
-    request:
-      headers:
-        Authorization: "Bearer {{token}}"
-    condition: status < 300
-```
-
-Method-and-path example:
-
-```yaml
-name: order-read
-
-steps:
-  - id: get-order
-    api:
-      method: GET
-      path: /orders/{orderId}
-    request:
-      pathParams:
-        orderId: "123"
-      query:
-        includeItems: true
-    condition: status == 200
-```
-
-Validate a new scenario:
+새 시나리오 검증:
 
 ```bash
 __TEST_WORKFLOW_COMMAND__
 ```
 
-Generate a new scenario:
+새 시나리오 k6 스크립트 생성:
 
 ```bash
 __GENERATE_WORKFLOW_COMMAND__
 ```
 
-Generated output: `__WORKFLOW_OUTPUT_PATH__`
+생성 파일: `__WORKFLOW_OUTPUT_PATH__`
 
 ## 4. 자주 하는 수정
 
@@ -475,6 +427,108 @@ This section is for AI agents. Human users only need the Korean sections above u
 - `condition` compiles to a k6 `check`; it is not a branch. Later steps still run even if a check fails.
 - `pathParams` values are encoded as URL path segments.
 - Resolve config-relative paths from the directory containing `config.yaml`.
+- Multipart file paths are relative to `__DIRECTORY__/`. Put local upload fixtures under `__FIXTURES_PATH__` by default.
+- Commit fixture files only when they are safe and useful for repeatable tests; otherwise keep project-local files out of git according to the backend project policy.
+- Spring endpoints such as `@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` should be modeled with `request.multipart`.
+- k6 multipart references: https://grafana.com/docs/k6/latest/examples/data-uploads/, https://grafana.com/docs/k6/latest/javascript-api/k6-http/file/, https://grafana.com/docs/k6/latest/javascript-api/init-context/open/.
+
+### Scenario DSL Reference
+
+Endpoint selection:
+
+1. Prefer `api.operationId` when the catalog has a stable operationId.
+2. Use `api.method` and `api.path` when operationId is missing or unclear.
+3. Add `request.pathParams` for OpenAPI path templates such as `/orders/{orderId}`.
+4. Use `extract` to save response values into shared context.
+5. Reference extracted values with `{{variableName}}` in later steps.
+
+Supported request fields:
+
+- `headers`: HTTP headers
+- `query`: query string
+- `pathParams`: values for OpenAPI path template placeholders
+- `body`: JSON request body
+- `multipart`: multipart/form-data request body for file uploads
+
+Supported templates:
+
+- `{{variableName}}`: value extracted into context by a previous step
+- `{{env.NAME}}`: runtime environment variable exported before k6 execution
+
+Supported conditions:
+
+- `status == 200`
+- `status != 500`
+- `status >= 200`
+- `status < 300`
+
+OperationId-based example:
+
+```yaml
+name: login-flow
+
+steps:
+  - id: login
+    api:
+      operationId: loginUser
+    request:
+      body:
+        username: "{{env.LOGIN_ID}}"
+        password: "{{env.LOGIN_PASSWORD}}"
+    extract:
+      token:
+        from: $.token
+    condition: status == 200
+
+  - id: get-me
+    api:
+      operationId: getMe
+    request:
+      headers:
+        Authorization: "Bearer {{token}}"
+    condition: status < 300
+```
+
+Method-and-path example:
+
+```yaml
+name: order-read
+
+steps:
+  - id: get-order
+    api:
+      method: GET
+      path: /orders/{orderId}
+    request:
+      pathParams:
+        orderId: "123"
+      query:
+        includeItems: true
+    condition: status == 200
+```
+
+Multipart upload example:
+
+```yaml
+name: upload-product-image
+
+steps:
+  - id: upload-image
+    api:
+      operationId: uploadProductImage
+    request:
+      pathParams:
+        productId: "product-001"
+      multipart:
+        fields:
+          title: Main image
+        files:
+          image:
+            path: fixtures/product.png
+            filename: product.png
+            contentType: image/png
+    condition: status == 200
+```
 
 ### Files to inspect
 
