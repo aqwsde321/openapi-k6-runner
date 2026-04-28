@@ -20,7 +20,11 @@
 openapi-k6 --help
 ```
 
+도움말이 출력되면 아래 설정 방법은 건너뛰고 `빠른 시작`으로 이동합니다.
 `command not found`가 나오면 generator 저장소에서 CLI를 빌드하고 전역 link를 연결합니다.
+
+<details>
+<summary>openapi-k6 명령이 없을 때 설정 방법</summary>
 
 ```bash
 cd __BUILD_DIRECTORY__
@@ -78,6 +82,8 @@ pnpm run build:watch
 ```
 
 새 버전으로 업데이트한 뒤에는 watch를 다시 시작하는 편이 안전합니다.
+
+</details>
 
 ## 생성된 구조
 
