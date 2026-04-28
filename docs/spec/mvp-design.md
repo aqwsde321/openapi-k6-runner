@@ -35,6 +35,7 @@ backend-project/
     ├── config.yaml
     ├── .env.example
     ├── .gitignore
+    ├── run.sh
     ├── openapi/
     │   ├── pharma.openapi.json
     │   └── pharma.catalog.json
@@ -50,7 +51,7 @@ backend-project/
 openapi-k6 init
 openapi-k6 sync
 openapi-k6 generate -s smoke
-k6 run load-tests/generated/smoke.k6.js
+./load-tests/run.sh smoke
 ```
 
 `init`은 `TODO` placeholder를 생성한다. `sync`와 `generate`는 필요한 config 값이 `TODO`로 남아 있으면 실패한다.

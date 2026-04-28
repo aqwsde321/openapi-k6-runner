@@ -38,7 +38,7 @@ load-tests/
 | F-10 | k6 generator | P0 | O |
 | F-11 | Fixture 기반 테스트 | P0 | O |
 | F-12 | UI adapter 설계 | P1 | 문서만 |
-| F-13 | k6 실행 자동화 | P2 | X |
+| F-13 | k6 실행 편의 스크립트 | P2 | 부분 |
 | F-14 | 멀티모듈 OpenAPI 설정 | P1 | O |
 | F-15 | OpenAPI snapshot / catalog | P0 | O |
 | F-16 | 대상 프로젝트 init scaffold | P0 | O |
@@ -361,15 +361,16 @@ MVP에서 condition은 흐름 분기 조건이 아니라 check/assertion이다. 
 
 문서만 작성하고 구현하지 않는다.
 
-## 15. F-13 k6 실행 자동화
+## 15. F-13 k6 실행 편의 스크립트
 
 ### 책임
 
-- generated script를 `k6 run`으로 실행하는 wrapper를 제공한다.
+- init scaffold에서 generated script를 `k6 run`으로 실행하는 `run.sh`를 제공한다.
+- `.env`를 자동 export하고, 필요 시 k6 출력을 log file로 저장한다.
 
 ### MVP 상태
 
-제외한다. 사용자는 생성된 script를 직접 k6로 실행한다.
+부분 포함한다. `load-tests/run.sh <scenario>`와 `load-tests/run.sh <scenario> --log`는 제공하지만, CLI가 k6 실행을 직접 orchestration 하지는 않는다.
 
 ## 16. F-14 멀티모듈 OpenAPI 설정
 

@@ -159,6 +159,8 @@ backend-project/
 - `pathParams` 값은 URL path segment로 encode되어 `/`, 공백, `?`, `#` 등이 URL 구조를 깨지 않습니다.
 - `openapi-k6 generate`는 config의 `baseUrl`을 생성된 k6 스크립트의 기본값으로 넣습니다. k6 실행 시 `BASE_URL=... k6 run ...`처럼 환경 변수를 넘기면 이 기본값보다 우선합니다.
 - 실제 비밀 값은 scenario YAML에 쓰지 말고 `{{env.NAME}}`으로 참조합니다.
+- 생성된 k6 스크립트는 `condition` 실패 시 step, status, URL, 응답 body 일부를 console error로 출력합니다.
+- `load-tests/run.sh <scenario> --log`를 사용하면 k6 출력이 `load-tests/logs/<scenario>.log`에도 저장됩니다.
 
 ## 개발 검증
 

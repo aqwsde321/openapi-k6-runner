@@ -48,14 +48,37 @@ describe('k6 generator', () => {
         return \`\${baseUrl.replace(/\\/+$/, '')}/\${endpointPath.replace(/^\\/+/, '')}\`;
       }
 
+      function truncateLogValue(value, limit) {
+        if (value === undefined || value === null) {
+          return value;
+        }
+
+        const text = String(value);
+        return text.length > limit ? \`\${text.slice(0, limit)}...<truncated \${text.length - limit} chars>\` : text;
+      }
+
+      function logFailedCheck(stepId, condition, url, response) {
+        console.error(JSON.stringify({
+          type: 'openapi-k6-check-failed',
+          step: stepId,
+          condition,
+          status: response.status,
+          url,
+          responseBody: truncateLogValue(response.body, 2000),
+        }, null, 2));
+      }
+
       export default function () {
         const context = {};
 
         const url0 = joinUrl(BASE_URL, \`/health\`);
         const res0 = http.get(url0);
-        check(res0, {
+        const check0 = check(res0, {
           "health status == 200": (res) => res.status === 200,
         });
+        if (!check0) {
+          logFailedCheck("health", "status == 200", url0, res0);
+        }
       }
       "
     `);
@@ -156,6 +179,37 @@ describe('k6 generator', () => {
     expect(script).toContain('context.firstItemId = readJsonPath(res0Json, ["items",0,"id"]);');
     expect(script).toContain('context["order-id"] = readJsonPath(res0Json, ["data","id"]);');
     expect(script).toContain('"login status < 300": (res) => res.status < 300,');
+    expect(script).toContain('logFailedCheck("login", "status < 300", url0, res0);');
+    expect(script.indexOf('const check0 = check(res0')).toBeLessThan(script.indexOf('const res0Json = res0.json();'));
+  });
+
+  it('logs failed condition details without request headers or body', async () => {
+    const script = generateK6Script(
+      {
+        name: 'failure-debug',
+        steps: [
+          {
+            id: 'complete-signup',
+            method: 'POST',
+            path: '/signup',
+            pathParameters: [],
+            request: {
+              headers: { Authorization: 'Bearer {{token}}' },
+              body: { password: '{{env.PASSWORD}}' },
+            },
+            condition: 'status == 200',
+          },
+        ],
+      },
+      { baseUrl: 'https://api.test.local' },
+    );
+
+    expect(script).toContain("type: 'openapi-k6-check-failed'");
+    expect(script).toContain('responseBody: truncateLogValue(response.body, 2000),');
+    expect(script).toContain('logFailedCheck("complete-signup", "status == 200", url0, res0);');
+    expect(script).not.toContain('requestBody');
+    expect(script).not.toContain('requestHeaders');
+    await expectValidJavaScript(workspace, script);
   });
 
   it('fails for unsupported condition expressions and missing baseUrl', () => {

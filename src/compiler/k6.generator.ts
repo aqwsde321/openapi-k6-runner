@@ -87,6 +87,31 @@ function renderHelpers(ast: ASTScenario): string[] {
     );
   }
 
+  if (hasCondition(ast)) {
+    helpers.push(
+      '',
+      'function truncateLogValue(value, limit) {',
+      '  if (value === undefined || value === null) {',
+      '    return value;',
+      '  }',
+      '',
+      '  const text = String(value);',
+      "  return text.length > limit ? `${text.slice(0, limit)}...<truncated ${text.length - limit} chars>` : text;",
+      '}',
+      '',
+      'function logFailedCheck(stepId, condition, url, response) {',
+      '  console.error(JSON.stringify({',
+      "    type: 'openapi-k6-check-failed',",
+      '    step: stepId,',
+      '    condition,',
+      '    status: response.status,',
+      '    url,',
+      '    responseBody: truncateLogValue(response.body, 2000),',
+      '  }, null, 2));',
+      '}',
+    );
+  }
+
   return helpers;
 }
 
@@ -123,8 +148,8 @@ function renderStep(step: ASTStep, index: number): string[] {
   }
 
   lines.push(`  const ${responseVariable} = ${renderHttpCall(httpCall, method, urlVariable, bodyVariable, paramsVariable, hasBodyValue, headers !== undefined)};`);
+  lines.push(...renderCondition(step, index, responseVariable, urlVariable));
   lines.push(...renderExtract(step, index, responseVariable));
-  lines.push(...renderCondition(step, responseVariable));
   return lines;
 }
 
@@ -197,16 +222,25 @@ function renderExtract(step: ASTStep, index: number, responseVariable: string): 
   return lines;
 }
 
-function renderCondition(step: ASTStep, responseVariable: string): string[] {
+function renderCondition(
+  step: ASTStep,
+  index: number,
+  responseVariable: string,
+  urlVariable: string,
+): string[] {
   if (step.condition === undefined) {
     return [];
   }
 
   const condition = compileCondition(step.condition, step.id);
+  const checkVariable = `check${index}`;
   return [
-    `  check(${responseVariable}, {`,
+    `  const ${checkVariable} = check(${responseVariable}, {`,
     `    ${JSON.stringify(`${step.id} ${step.condition}`)}: (res) => res.status ${condition.operator} ${condition.status},`,
     '  });',
+    `  if (!${checkVariable}) {`,
+    `    logFailedCheck(${JSON.stringify(step.id)}, ${JSON.stringify(step.condition)}, ${urlVariable}, ${responseVariable});`,
+    '  }',
   ];
 }
 
