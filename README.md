@@ -116,6 +116,7 @@ Run the OpenAPI snapshot command from load-tests/README.md to create the catalog
 Read load-tests/openapi/*.catalog.json and choose one unauthenticated GET endpoint.
 Update load-tests/scenarios/smoke.yaml for that endpoint.
 Run the k6 script generation command from load-tests/README.md.
+Do not edit load-tests/README.md, load-tests/run.sh, load-tests/.env.example, or load-tests/.gitignore unless explicitly asked to change scaffold files.
 Do not edit load-tests/generated/*.k6.js or load-tests/openapi/*.openapi.json directly.
 Keep human-facing documentation in Korean. Keep AI instruction sections in English.
 ```
@@ -126,6 +127,7 @@ Keep human-facing documentation in Korean. Keep AI instruction sections in Engli
 Read load-tests/README.md and load-tests/openapi/*.catalog.json.
 Create load-tests/scenarios/basic-read.yaml for one read endpoint that can be called without login.
 Generate the k6 script using the command documented in load-tests/README.md.
+Do not edit load-tests/README.md, load-tests/run.sh, load-tests/.env.example, or load-tests/.gitignore unless explicitly asked to change scaffold files.
 Do not edit load-tests/generated/*.k6.js directly.
 Keep human-facing documentation in Korean. Keep AI instruction sections in English.
 ```
@@ -140,6 +142,7 @@ Extract the token from the login response.
 Use Bearer {{token}} in the Authorization header of the next step.
 Use {{env.NAME}} for secrets and keep real values in load-tests/.env only.
 Generate the k6 script using the command documented in load-tests/README.md.
+Do not edit load-tests/README.md, load-tests/run.sh, load-tests/.env.example, or load-tests/.gitignore unless explicitly asked to change scaffold files.
 Do not edit load-tests/generated/*.k6.js directly.
 Keep human-facing documentation in Korean. Keep AI instruction sections in English.
 ```

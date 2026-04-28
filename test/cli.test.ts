@@ -200,6 +200,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('사람이 꼭 이해해야 하는 내용은 이 README 앞부분에 있습니다.');
     expect(readme).toContain('## 사람이 꼭 알아야 하는 것');
     expect(readme).toContain('직접 수정하는 파일은 이 폴더의 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.');
+    expect(readme).toContain('일반적인 config/scenario 작업에서는 `README.md`, `run.sh`, `.env.example`, `.gitignore`를 수정하지 않습니다.');
     expect(readme).toContain('이 README는 `openapi-k6 init`으로 생성되었습니다.');
     expect(readme).toContain('먼저 현재 shell에서 명령이 실행되는지 확인합니다.');
     expect(readme).toContain('pnpm install');
@@ -259,6 +260,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('This section is for AI agents. Human users only need the Korean sections above unless they want implementation details.');
     expect(readme).toContain('### Workflow');
     expect(readme).toContain('Update or create `scenarios/*.yaml`.');
+    expect(readme).toContain('Do not edit scaffold-managed files during ordinary backend test work: `README.md`, `run.sh`, `.env.example`, `.gitignore`.');
+    expect(readme).toContain('If scaffold docs or helper scripts must change, update the generator template in openapi-k6-runner and rerun `openapi-k6 init --force` intentionally.');
     expect(readme).toContain('Do not edit `generated/*.k6.js` directly. Edit scenario YAML and regenerate.');
     expect(readme).toContain('Keep human-facing documentation in Korean.');
     expect(readme).toContain('Do not write secrets such as passwords directly in YAML. Use `{{env.NAME}}`.');
@@ -271,6 +274,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Read load-tests/README.md first and follow it.');
     expect(readme).toContain('Create load-tests/scenarios/basic-read.yaml.');
     expect(readme).toContain('Find the login API and a user-profile/read API.');
+    expect(readme).toContain('Do not edit load-tests/README.md, load-tests/run.sh, load-tests/.env.example, or load-tests/.gitignore unless explicitly asked to change scaffold files.');
     expect(readme.indexOf('## AI Work Guide')).toBeGreaterThan(readme.indexOf('## 5. 제거 방법'));
   });
 
