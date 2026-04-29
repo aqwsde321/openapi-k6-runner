@@ -77,15 +77,20 @@ function writeStepEnd(
   responseBodyLimit: number,
 ): void {
   const { result } = event;
+  const hasAssertions = result.condition !== undefined || result.extracts.length > 0;
 
   if (result.response !== undefined) {
     stream.write(formatField(
-      'result',
-      `${formatOutcome(result.passed, colors)}  ${colorStatus(result.response.status, formatStatus(result.response), colors)}  ${colors.dim(formatDuration(result.durationMs))}`,
+      'status',
+      `${formatStatusMark(result.response.status, colors)} ${colorStatus(result.response.status, formatStatus(result.response), colors)}  ${colors.dim(formatDuration(result.durationMs))}`,
       6,
     ));
   } else {
     stream.write(formatField('result', `${colors.red('✗ ERROR')}  ${colors.dim(formatDuration(result.durationMs))}`, 6));
+  }
+
+  if (result.response !== undefined && hasAssertions) {
+    stream.write(formatField('result', formatOutcome(result.passed, colors), 6));
   }
 
   if (result.condition !== undefined) {
@@ -142,6 +147,18 @@ function formatOutcome(passed: boolean, colors: AnsiColors): string {
 
 function formatCheckMark(passed: boolean, colors: AnsiColors): string {
   return passed ? colors.green('✓') : colors.red('✗');
+}
+
+function formatStatusMark(status: number, colors: AnsiColors): string {
+  if (status >= 200 && status < 300) {
+    return colors.green('✓');
+  }
+
+  if (status >= 400) {
+    return colors.red('✗');
+  }
+
+  return colors.yellow('→');
 }
 
 function colorStatus(status: number, value: string, colors: AnsiColors): string {

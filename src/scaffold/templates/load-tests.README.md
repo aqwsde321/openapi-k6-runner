@@ -210,7 +210,8 @@ __TEST_SMOKE_COMMAND__
        request: GET /health
            url: http://localhost:8080/health
          state: → running
-        result: ✓ PASS  200 OK  12ms
+        status: ✓ 200 OK  12ms
+        result: ✓ PASS
         checks: ✓ status == 200
 
       summary: ✓ PASS

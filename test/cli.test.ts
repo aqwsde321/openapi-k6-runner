@@ -928,8 +928,8 @@ describe('openapi-k6 CLI', () => {
     expect(stdout.output()).toContain('request: GET /app-health');
     expect(stdout.output()).toContain('url: https://config-base.test.local/app-health');
     expect(stdout.output()).toContain('state: → running');
+    expect(stdout.output()).toContain('status: ✓ 200 OK');
     expect(stdout.output()).toContain('result: ✓ PASS');
-    expect(stdout.output()).toContain('200 OK');
     expect(stdout.output()).toContain('checks: ✓ status == 200');
     expect(stdout.output()).toContain('extract: ✓ ok');
     expect(stdout.output()).toContain('summary: ✓ PASS');
@@ -988,9 +988,54 @@ describe('openapi-k6 CLI', () => {
     resolveResponse(new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' }));
     await runPromise;
 
+    expect(stdout.output()).toContain('status: ✓ 200 OK');
     expect(stdout.output()).toContain('result: ✓ PASS');
-    expect(stdout.output()).toContain('200 OK');
     expect(stdout.output()).toContain('summary: ✓ PASS');
+  });
+
+  it('does not print a PASS result badge for a response without assertions', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const stdout = createCapture();
+    await runCli(
+      ['test', '-s', 'smoke'],
+      {
+        cwd: workspace,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        env: {},
+        fetch: async () => new Response(JSON.stringify({ message: 'boom' }), {
+          status: 500,
+          statusText: 'Internal Server Error',
+        }),
+      },
+    );
+
+    expect(stdout.output()).toContain('status: ✗ 500 Internal Server Error');
+    expect(stdout.output()).not.toContain('result: ✓ PASS');
   });
 
   it('does not print ANSI color codes to captured streams', async () => {
