@@ -1089,6 +1089,9 @@ describe('openapi-k6 CLI', () => {
 
     expect(stdout.output()).toContain('\u001b[32m404 Not Found\u001b[0m');
     expect(stdout.output()).not.toContain('\u001b[31m404 Not Found');
+    expect(stdout.output()).not.toContain('\u001b[91m404 Not Found');
+    expect(stdout.output()).toContain('\u001b[36mGET\u001b[0m');
+    expect(stdout.output()).toContain('\u001b[36m→ running\u001b[0m');
     expect(stdout.output()).toContain('\u001b[32m✓ PASS\u001b[0m');
   });
 

@@ -22,6 +22,8 @@ export interface ScenarioConsoleReporterOptions {
 interface AnsiColors {
   bold(value: string): string;
   dim(value: string): string;
+  grey(value: string): string;
+  cyan(value: string): string;
   green(value: string): string;
   yellow(value: string): string;
   red(value: string): string;
@@ -39,7 +41,7 @@ export function createScenarioConsoleReporter(
       writeScenarioStart(stream, event, colors);
     },
     onStepStart(event) {
-      writeStepStart(stream, event);
+      writeStepStart(stream, event, colors);
     },
     onStepRequest(event) {
       writeStepRequest(stream, event, colors);
@@ -54,20 +56,20 @@ export function createScenarioConsoleReporter(
 }
 
 function writeScenarioStart(stream: WritableLike, event: ScenarioStartEvent, colors: AnsiColors): void {
-  stream.write(formatField('scenario', colors.bold(maskText(event.scenario, event.secretValues))));
-  stream.write(formatField('base url', maskText(event.baseUrl, event.secretValues)));
-  stream.write(formatField('steps', String(event.totalSteps)));
+  stream.write(formatField('scenario', colors.bold(colors.cyan(maskText(event.scenario, event.secretValues))), 5, colors));
+  stream.write(formatField('base url', colors.cyan(maskText(event.baseUrl, event.secretValues)), 5, colors));
+  stream.write(formatField('steps', colors.cyan(String(event.totalSteps)), 5, colors));
   stream.write('\n');
 }
 
-function writeStepStart(stream: WritableLike, event: StepStartEvent): void {
+function writeStepStart(stream: WritableLike, event: StepStartEvent, colors: AnsiColors): void {
   stream.write(`     [${event.index + 1}/${event.totalSteps}] ${event.id}\n`);
-  stream.write(formatField('request', `${event.method} ${event.path}`, 6));
+  stream.write(formatField('request', `${colors.cyan(event.method)} ${event.path}`, 6, colors));
 }
 
 function writeStepRequest(stream: WritableLike, event: StepRequestEvent, colors: AnsiColors): void {
-  stream.write(formatField('url', colors.dim(maskText(event.url, event.secretValues)), 6));
-  stream.write(formatField('state', colors.yellow('→ running'), 6));
+  stream.write(formatField('url', colors.dim(maskText(event.url, event.secretValues)), 6, colors));
+  stream.write(formatField('state', colors.cyan('→ running'), 6, colors));
 }
 
 function writeStepEnd(
@@ -82,15 +84,16 @@ function writeStepEnd(
   if (result.response !== undefined) {
     stream.write(formatField(
       'status',
-      `${formatStatusMark(result, colors)} ${colorStepStatus(result, formatStatus(result.response), colors)}  ${colors.dim(formatDuration(result.durationMs))}`,
+      `${formatStatusMark(result, colors)} ${colorStepStatus(result, formatStatus(result.response), colors)}  ${colors.cyan(formatDuration(result.durationMs))}`,
       6,
+      colors,
     ));
   } else {
-    stream.write(formatField('result', `${colors.red('✗ ERROR')}  ${colors.dim(formatDuration(result.durationMs))}`, 6));
+    stream.write(formatField('result', `${colors.red('✗ ERROR')}  ${colors.cyan(formatDuration(result.durationMs))}`, 6, colors));
   }
 
   if (result.response !== undefined && (hasAssertions || !result.passed)) {
-    stream.write(formatField('result', formatOutcome(result.passed, colors), 6));
+    stream.write(formatField('result', formatOutcome(result.passed, colors), 6, colors));
   }
 
   if (result.condition !== undefined) {
@@ -98,6 +101,7 @@ function writeStepEnd(
       'checks',
       `${formatCheckMark(result.condition.passed, colors)} ${result.condition.expression}`,
       6,
+      colors,
     ));
   }
 
@@ -106,15 +110,15 @@ function writeStepEnd(
     const message = extract.passed
       ? `${formatCheckMark(true, colors)} ${name}`
       : `${formatCheckMark(false, colors)} ${name} (${maskText(extract.error ?? 'unknown error', event.secretValues)})`;
-    stream.write(formatField('extract', message, 6));
+    stream.write(formatField('extract', message, 6, colors));
   }
 
   if (result.error !== undefined) {
-    stream.write(formatField('error', `${formatCheckMark(false, colors)} ${colors.red(maskText(result.error, event.secretValues))}`, 6));
+    stream.write(formatField('error', `${formatCheckMark(false, colors)} ${colors.red(maskText(result.error, event.secretValues))}`, 6, colors));
   }
 
   if (!result.passed && result.response?.body) {
-    stream.write(formatField('body', '', 6));
+    stream.write(formatField('body', '', 6, colors));
     stream.write(`${indentBody(truncateText(maskText(result.response.body, event.secretValues), responseBodyLimit))}\n`);
   }
 
@@ -124,13 +128,16 @@ function writeStepEnd(
 function writeScenarioEnd(stream: WritableLike, result: ScenarioExecutionResult, colors: AnsiColors): void {
   const passedSteps = result.steps.filter((step) => step.passed).length;
 
-  stream.write(formatField('summary', formatOutcome(result.passed, colors)));
-  stream.write(formatField('steps', `${passedSteps}/${result.steps.length} passed`));
-  stream.write(formatField('duration', formatDuration(result.durationMs)));
+  stream.write(formatField('summary', formatOutcome(result.passed, colors), 5, colors));
+  stream.write(formatField('steps', colors.cyan(`${passedSteps}/${result.steps.length} passed`), 5, colors));
+  stream.write(formatField('duration', colors.cyan(formatDuration(result.durationMs)), 5, colors));
 }
 
-function formatField(label: string, value: string, indent = 5): string {
-  return `${' '.repeat(indent)}${label.padStart(FIELD_WIDTH)}: ${value}\n`;
+function formatField(label: string, value: string, indent = 5, colors?: AnsiColors): string {
+  const paddedLabel = label.padStart(FIELD_WIDTH);
+  const formattedLabel = colors === undefined ? paddedLabel : colors.grey(paddedLabel);
+
+  return `${' '.repeat(indent)}${formattedLabel}: ${value}\n`;
 }
 
 function formatStatus(response: { status: number; statusText: string }): string {
@@ -173,7 +180,7 @@ function formatStatusMark(result: StepEndEvent['result'], colors: AnsiColors): s
 
 function colorStatus(status: number, value: string, colors: AnsiColors): string {
   if (status >= 200 && status < 300) {
-    return colors.green(value);
+    return colors.cyan(value);
   }
 
   if (status >= 400) {
@@ -217,9 +224,11 @@ function createAnsiColors(enabled: boolean): AnsiColors {
   return {
     bold: (value) => colorize(value, '1', enabled),
     dim: (value) => colorize(value, '2', enabled),
+    grey: (value) => colorize(value, '90', enabled),
+    cyan: (value) => colorize(value, '36', enabled),
     green: (value) => colorize(value, '32', enabled),
     yellow: (value) => colorize(value, '33', enabled),
-    red: (value) => colorize(value, '31', enabled),
+    red: (value) => colorize(value, '91', enabled),
   };
 }
 
