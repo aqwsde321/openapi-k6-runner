@@ -9,6 +9,7 @@ import type {
 
 const DEFAULT_RESPONSE_BODY_LIMIT = 2000;
 const FIELD_WIDTH = 8;
+const DEFAULT_LIVE_INTERVAL_MS = 250;
 
 type WritableLike = {
   write(chunk: string): unknown;
@@ -16,6 +17,8 @@ type WritableLike = {
 
 export interface ScenarioConsoleReporterOptions {
   color?: boolean;
+  live?: boolean;
+  liveIntervalMs?: number;
   responseBodyLimit?: number;
 }
 
@@ -29,12 +32,20 @@ interface AnsiColors {
   red(value: string): string;
 }
 
+interface LiveState {
+  lastLength: number;
+  timer: ReturnType<typeof setInterval>;
+}
+
 export function createScenarioConsoleReporter(
   stream: WritableLike,
   options: ScenarioConsoleReporterOptions = {},
 ): ScenarioExecutionReporter {
   const colors = createAnsiColors(options.color === true);
+  const live = options.live === true;
+  const liveIntervalMs = options.liveIntervalMs ?? DEFAULT_LIVE_INTERVAL_MS;
   const responseBodyLimit = options.responseBodyLimit ?? DEFAULT_RESPONSE_BODY_LIMIT;
+  let liveState: LiveState | undefined;
 
   return {
     onScenarioStart(event) {
@@ -44,12 +55,16 @@ export function createScenarioConsoleReporter(
       writeStepStart(stream, event, colors);
     },
     onStepRequest(event) {
-      writeStepRequest(stream, event, colors);
+      liveState = writeStepRequest(stream, event, colors, live, liveIntervalMs);
     },
     onStepEnd(event) {
+      finishLiveState(stream, liveState);
+      liveState = undefined;
       writeStepEnd(stream, event, colors, responseBodyLimit);
     },
     onScenarioEnd(result) {
+      finishLiveState(stream, liveState);
+      liveState = undefined;
       writeScenarioEnd(stream, result, colors);
     },
   };
@@ -67,9 +82,30 @@ function writeStepStart(stream: WritableLike, event: StepStartEvent, colors: Ans
   stream.write(formatField('request', `${colors.cyan(event.method)} ${event.path}`, 6, colors));
 }
 
-function writeStepRequest(stream: WritableLike, event: StepRequestEvent, colors: AnsiColors): void {
+function writeStepRequest(
+  stream: WritableLike,
+  event: StepRequestEvent,
+  colors: AnsiColors,
+  live: boolean,
+  liveIntervalMs: number,
+): LiveState | undefined {
   stream.write(formatField('url', colors.dim(maskText(event.url, event.secretValues)), 6, colors));
-  stream.write(formatField('state', colors.cyan('→ running'), 6, colors));
+
+  if (!live) {
+    stream.write(formatField('state', colors.cyan('→ running'), 6, colors));
+    return undefined;
+  }
+
+  const startedAt = Date.now();
+  const state: LiveState = {
+    lastLength: 0,
+    timer: setInterval(() => {
+      writeLiveState(stream, state, startedAt, colors);
+    }, liveIntervalMs),
+  };
+
+  writeLiveState(stream, state, startedAt, colors);
+  return state;
 }
 
 function writeStepEnd(
@@ -134,10 +170,14 @@ function writeScenarioEnd(stream: WritableLike, result: ScenarioExecutionResult,
 }
 
 function formatField(label: string, value: string, indent = 5, colors?: AnsiColors): string {
+  return `${formatFieldLine(label, value, indent, colors)}\n`;
+}
+
+function formatFieldLine(label: string, value: string, indent = 5, colors?: AnsiColors): string {
   const paddedLabel = label.padStart(FIELD_WIDTH);
   const formattedLabel = colors === undefined ? paddedLabel : colors.grey(paddedLabel);
 
-  return `${' '.repeat(indent)}${formattedLabel}: ${value}\n`;
+  return `${' '.repeat(indent)}${formattedLabel}: ${value}`;
 }
 
 function formatStatus(response: { status: number; statusText: string }): string {
@@ -146,6 +186,10 @@ function formatStatus(response: { status: number; statusText: string }): string 
 
 function formatDuration(durationMs: number): string {
   return `${Math.round(durationMs)}ms`;
+}
+
+function formatLiveDuration(durationMs: number): string {
+  return `${(durationMs / 1000).toFixed(1)}s`;
 }
 
 function formatOutcome(passed: boolean, colors: AnsiColors): string {
@@ -196,6 +240,38 @@ function colorStepStatus(result: StepEndEvent['result'], value: string, colors: 
   }
 
   return result.response === undefined ? colors.red(value) : colorStatus(result.response.status, value, colors);
+}
+
+function writeLiveState(
+  stream: WritableLike,
+  state: LiveState,
+  startedAt: number,
+  colors: AnsiColors,
+): void {
+  const line = formatFieldLine(
+    'state',
+    `${colors.cyan('→ running')} ${colors.cyan(formatLiveDuration(Date.now() - startedAt))}`,
+    6,
+    colors,
+  );
+  const length = visibleLength(line);
+  const padding = ' '.repeat(Math.max(0, state.lastLength - length));
+
+  stream.write(`\r${line}${padding}`);
+  state.lastLength = length;
+}
+
+function finishLiveState(stream: WritableLike, state: LiveState | undefined): void {
+  if (state === undefined) {
+    return;
+  }
+
+  clearInterval(state.timer);
+  stream.write('\n');
+}
+
+function visibleLength(value: string): number {
+  return value.replace(/\u001b\[[0-9;]*m/g, '').length;
 }
 
 function extractNameWidth(result: { extracts: Array<{ name: string }> }): number {

@@ -505,6 +505,17 @@ function shouldUseColor(
   return stream.isTTY === true;
 }
 
+function shouldUseLiveOutput(
+  stream: WritableLike,
+  env: Record<string, string | undefined>,
+): boolean {
+  if (env.TERM === 'dumb') {
+    return false;
+  }
+
+  return stream.isTTY === true;
+}
+
 export function createProgram(context: CliContext = {}): Command {
   const stdout = context.stdout ?? process.stdout;
   const stderr = context.stderr ?? process.stderr;
@@ -575,6 +586,7 @@ export function createProgram(context: CliContext = {}): Command {
       const colorEnv = context.env ?? process.env;
       const testReporter = context.testReporter ?? createScenarioConsoleReporter(stdout, {
         color: shouldUseColor(stdout, colorEnv, options.color),
+        live: shouldUseLiveOutput(stdout, colorEnv),
       });
       const result = await runTestCommand(options, {
         ...context,

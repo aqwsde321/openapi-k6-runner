@@ -993,6 +993,61 @@ describe('openapi-k6 CLI', () => {
     expect(stdout.output()).toContain('summary: ✓ PASS');
   });
 
+  it('updates running state with elapsed time for TTY streams', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    let resolveResponse: (response: Response) => void = () => {};
+    const responsePromise = new Promise<Response>((resolve) => {
+      resolveResponse = resolve;
+    });
+    const stdout = createCapture({ isTTY: true });
+    const runPromise = runCli(
+      ['test', '-s', 'smoke'],
+      {
+        cwd: workspace,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        env: { NO_COLOR: '1' },
+        fetch: async () => responsePromise,
+      },
+    );
+
+    await waitForOutput(stdout.output, 'state: → running 0.0s');
+
+    expect(stdout.output()).toContain('\r');
+    expect(stdout.output()).not.toContain('summary:');
+
+    resolveResponse(new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' }));
+    await runPromise;
+
+    expect(stdout.output()).toContain('status: ✓ 200 OK');
+    expect(stdout.output()).toContain('summary: ✓ PASS');
+  });
+
   it('fails an HTTP error response without explicit assertions', async () => {
     await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
     await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
