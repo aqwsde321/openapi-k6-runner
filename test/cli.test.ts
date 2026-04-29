@@ -993,7 +993,7 @@ describe('openapi-k6 CLI', () => {
     expect(stdout.output()).toContain('summary: ✓ PASS');
   });
 
-  it('does not print a PASS result badge for a response without assertions', async () => {
+  it('fails an HTTP error response without explicit assertions', async () => {
     await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
     await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
     await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
@@ -1020,21 +1020,28 @@ describe('openapi-k6 CLI', () => {
     ]);
 
     const stdout = createCapture();
-    await runCli(
-      ['test', '-s', 'smoke'],
-      {
-        cwd: workspace,
-        stdout: stdout.stream,
-        stderr: createSink(),
-        env: {},
-        fetch: async () => new Response(JSON.stringify({ message: 'boom' }), {
-          status: 500,
-          statusText: 'Internal Server Error',
-        }),
-      },
-    );
+    await expect(
+      runCli(
+        ['test', '-s', 'smoke'],
+        {
+          cwd: workspace,
+          stdout: stdout.stream,
+          stderr: createSink(),
+          env: {},
+          fetch: async () => new Response(JSON.stringify({ message: 'boom' }), {
+            status: 500,
+            statusText: 'Internal Server Error',
+          }),
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'openapi-k6.test.failed',
+    });
 
     expect(stdout.output()).toContain('status: ✗ 500 Internal Server Error');
+    expect(stdout.output()).toContain('result: ✗ FAIL');
+    expect(stdout.output()).toContain('summary: ✗ FAIL');
+    expect(stdout.output()).toContain('body:');
     expect(stdout.output()).not.toContain('result: ✓ PASS');
   });
 

@@ -146,6 +146,57 @@ describe('scenario executor', () => {
     expect(report).toContain('Result: FAIL');
   });
 
+  it('treats HTTP errors without an explicit condition as failures', async () => {
+    const result = await executeAstScenario({
+      name: 'default-status-failure',
+      steps: [
+        {
+          id: 'health',
+          method: 'GET',
+          path: '/health',
+          pathParameters: [],
+          request: {},
+        },
+      ],
+    }, {
+      baseUrl: 'https://api.test.local',
+      env: {},
+      fetch: async () => jsonResponse({ message: 'boom' }, 500, 'Internal Server Error'),
+    });
+    const report = formatScenarioExecutionReport(result);
+
+    expect(result.passed).toBe(false);
+    expect(result.steps[0].passed).toBe(false);
+    expect(result.steps[0].condition).toBeUndefined();
+    expect(report).toContain('status: 500 Internal Server Error');
+    expect(report).toContain('response body:');
+    expect(report).toContain('Result: FAIL');
+  });
+
+  it('allows explicit conditions to define expected HTTP error statuses', async () => {
+    const result = await executeAstScenario({
+      name: 'expected-error',
+      steps: [
+        {
+          id: 'not-found',
+          method: 'GET',
+          path: '/missing',
+          pathParameters: [],
+          request: {},
+          condition: 'status == 404',
+        },
+      ],
+    }, {
+      baseUrl: 'https://api.test.local',
+      env: {},
+      fetch: async () => jsonResponse({ message: 'not found' }, 404, 'Not Found'),
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.steps[0].passed).toBe(true);
+    expect(result.steps[0].condition).toEqual({ expression: 'status == 404', passed: true });
+  });
+
   it('records missing context template values as step failures', async () => {
     const result = await executeAstScenario({
       name: 'missing-context',

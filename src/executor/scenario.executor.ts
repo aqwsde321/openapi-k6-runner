@@ -293,7 +293,8 @@ async function executeStep(
           passed: evaluateCondition(response.status, parsedCondition),
         };
     const extracts = evaluateExtracts(step, body, options.state);
-    const passed = (condition?.passed ?? true) && extracts.every((extract) => extract.passed);
+    const statusPassed = condition?.passed ?? isDefaultStatusPassed(response.status);
+    const passed = statusPassed && extracts.every((extract) => extract.passed);
 
     result = {
       index,
@@ -569,6 +570,10 @@ function evaluateCondition(status: number, condition: ParsedCondition): boolean 
     case '<':
       return status < condition.status;
   }
+}
+
+function isDefaultStatusPassed(status: number): boolean {
+  return status < 400;
 }
 
 function evaluateRecord(

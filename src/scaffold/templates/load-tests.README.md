@@ -220,6 +220,7 @@ __TEST_SMOKE_COMMAND__
 ```
 
 실패하면 마지막 `summary`가 `✗ FAIL`이 되고, 실패한 step 아래에 status, error, response body 일부를 바로 보여줍니다. 비밀 값은 출력에서 마스킹됩니다.
+`condition`이 없는 step도 HTTP 4xx/5xx 응답은 실패로 처리합니다. 오류 응답을 기대하는 scenario는 `condition: status == 404`처럼 기대 status를 명시합니다.
 색상은 터미널에서만 켜지며 `--no-color` 옵션이나 `NO_COLOR=1` 환경변수로 끌 수 있습니다.
 
 `__ENV_PATH__`가 있으면 `{{env.NAME}}` template 값과 `BASE_URL`을 읽습니다. 현재 shell 환경변수가 같은 이름으로 있으면 shell 값이 우선합니다.

@@ -82,14 +82,14 @@ function writeStepEnd(
   if (result.response !== undefined) {
     stream.write(formatField(
       'status',
-      `${formatStatusMark(result.response.status, colors)} ${colorStatus(result.response.status, formatStatus(result.response), colors)}  ${colors.dim(formatDuration(result.durationMs))}`,
+      `${formatStatusMark(result, colors)} ${colorStatus(result.response.status, formatStatus(result.response), colors)}  ${colors.dim(formatDuration(result.durationMs))}`,
       6,
     ));
   } else {
     stream.write(formatField('result', `${colors.red('✗ ERROR')}  ${colors.dim(formatDuration(result.durationMs))}`, 6));
   }
 
-  if (result.response !== undefined && hasAssertions) {
+  if (result.response !== undefined && (hasAssertions || !result.passed)) {
     stream.write(formatField('result', formatOutcome(result.passed, colors), 6));
   }
 
@@ -149,7 +149,17 @@ function formatCheckMark(passed: boolean, colors: AnsiColors): string {
   return passed ? colors.green('✓') : colors.red('✗');
 }
 
-function formatStatusMark(status: number, colors: AnsiColors): string {
+function formatStatusMark(result: StepEndEvent['result'], colors: AnsiColors): string {
+  const status = result.response?.status;
+
+  if (status === undefined) {
+    return colors.red('✗');
+  }
+
+  if (result.condition !== undefined) {
+    return formatCheckMark(result.condition.passed, colors);
+  }
+
   if (status >= 200 && status < 300) {
     return colors.green('✓');
   }
