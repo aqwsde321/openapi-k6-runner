@@ -158,7 +158,7 @@ describe('openapi-k6 CLI', () => {
       'defaultModule: pharma',
       '',
       '# OpenAPI module 목록입니다.',
-      '# module을 여러 개 두면 openapi-k6 sync/generate에서 --module <name>으로 선택할 수 있습니다.',
+      '# module을 여러 개 두면 npx --yes openapi-k6 sync/generate에서 --module <name>으로 선택할 수 있습니다.',
       'modules:',
       '  pharma:',
       '    # sync가 읽을 OpenAPI URL 또는 파일 경로입니다.',
@@ -210,8 +210,8 @@ describe('openapi-k6 CLI', () => {
     expect(runScriptSyntax.stderr).toBe('');
     expect(runScriptSyntax.status).toBe(0);
     expect(scenario).toContain('path: /__dev/error-codes');
-    expect(readme).toContain('openapi-k6 sync');
-    expect(readme).toContain('openapi-k6 generate \\');
+    expect(readme).toContain('npx --yes openapi-k6 sync');
+    expect(readme).toContain('npx --yes openapi-k6 generate \\');
     expect(readme).toContain('  -s smoke');
     expect(readme).toContain('run.sh');
     expect(readme).toContain('./load-tests/run.sh smoke');
@@ -225,32 +225,22 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('`run.sh`는 자신과 같은 폴더의 `.env`(`load-tests/.env`)만 자동으로 로드한 뒤');
     expect(readme).toContain('백엔드 프로젝트 루트의 `.env`는 자동으로 읽지 않습니다.');
     expect(readme).toContain('빠른 사용법은 `run.sh --help`로 확인할 수 있습니다.');
-    expect(readme).toContain('## 0. openapi-k6 명령 준비');
+    expect(readme).toContain('## 0. openapi-k6 실행 방식');
     expect(readme).toContain('사람이 꼭 이해해야 하는 내용은 이 README 앞부분에 있습니다.');
     expect(readme).toContain('## 사람이 꼭 알아야 하는 것');
     expect(readme).toContain('직접 수정하는 파일은 이 폴더의 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.');
     expect(readme).toContain('일반적인 config/scenario 작업에서는 `README.md`, `run.sh`, `.env.example`, `.gitignore`를 수정하지 않습니다.');
-    expect(readme).toContain('이 README는 `openapi-k6 init`으로 생성되었습니다.');
-    expect(readme).toContain('먼저 현재 shell에서 명령이 실행되는지 확인합니다.');
-    expect(readme).toContain('pnpm install');
-    expect(readme).toContain('pnpm link --global');
-    expect(readme).toContain('<details>');
-    expect(readme).toContain('<summary>`pnpm link --global`에서 global bin directory 오류가 날 때</summary>');
-    expect(readme).toContain('pnpm setup');
-    expect(readme).toContain('source ~/.zshrc');
-    expect(readme).toContain(`alias openapi-k6='node ${cliPath}'`);
-    expect(readme).toContain('전역 link를 쓰지 않는 환경에서는 아래 alias를 현재 터미널에서 실행합니다.');
-    expect(readme).toContain('alias는 현재 터미널 세션에만 적용됩니다.');
-    expect(readme).toContain(`cd ${path.dirname(path.dirname(path.dirname(cliPath)))}`);
-    expect(readme).toContain('pnpm run build');
-    expect(readme).toContain('generator 로컬 코드만 수정한 뒤에는 generator 저장소에서 다시 빌드합니다.');
-    expect(readme).toContain('generator 저장소를 pull/checkout해서 새 버전으로 업데이트한 뒤에는 의존성도 다시 설치하고 빌드합니다.');
-    expect(readme).toContain('pnpm run build:watch');
-    expect(readme).toContain('개발 중 수동 빌드가 번거로우면 generator 저장소의 별도 터미널에서 watch 빌드를 켜둡니다.');
-    expect(readme).toContain('새 버전으로 업데이트한 뒤에는 watch를 다시 시작하는 편이 안전합니다.');
-    expect(readme).toContain('이 폴더는 백엔드 프로젝트 안에서 OpenAPI snapshot, scenario YAML, 생성된 k6 스크립트를 관리합니다.');
+    expect(readme).toContain('이 README는 `npx --yes openapi-k6 init`으로 생성되었습니다.');
+    expect(readme).toContain('npm 배포 버전은 설치 없이 `npx`로 실행하는 것을 기본으로 합니다.');
+    expect(readme).toContain('npx --yes openapi-k6 --help');
+    expect(readme).toContain('npm install -D openapi-k6');
+    expect(readme).toContain('pnpm exec openapi-k6 ...');
+    expect(readme).toContain('이 폴더는 백엔드 프로젝트 안에서 OpenAPI snapshot, scenario YAML, scenario test, 생성된 k6 스크립트를 관리합니다.');
+    expect(readme).toContain('핵심 흐름은 OpenAPI catalog에서 API를 고르고, scenario test로 실제 API 흐름을 먼저 검증한 뒤');
+    expect(readme).toContain('기본 흐름은 `npx --yes openapi-k6 sync` -> scenario 작성 -> `npx --yes openapi-k6 test` -> `npx --yes openapi-k6 generate` -> `run.sh`입니다.');
+    expect(readme).toContain('`npx --yes openapi-k6 test`가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 않습니다.');
     expect(readme).toContain('## 1. 최소 설정');
-    expect(readme).toContain('## 2. 기본 실행 흐름');
+    expect(readme).toContain('## 2. OpenAPI -> Scenario Test -> k6 흐름');
     expect(readme).toContain('| 순서 | 사용자가 준비하는 것 | 실행 명령 | 생성/갱신되는 것 |');
     expect(readme).toContain('`config.yaml`의 `baseUrl`, `modules.pharma.openapi` TODO 채우기');
     expect(readme).toContain('`load-tests/openapi/pharma.openapi.json`, `load-tests/openapi/pharma.catalog.json`');
@@ -265,7 +255,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('생성/갱신: `load-tests/openapi/pharma.openapi.json`, `load-tests/openapi/pharma.catalog.json`');
     expect(readme).toContain('`load-tests/openapi/pharma.catalog.json`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.');
     expect(readme).toContain('기본 smoke 테스트는 `load-tests/scenarios/smoke.yaml`를 수정합니다.');
-    expect(readme).toContain('openapi-k6 test -s smoke');
+    expect(readme).toContain('npx --yes openapi-k6 test -s smoke');
+    expect(readme).toContain('부하를 걸기 전에 API 흐름 자체가 맞는지 확인하는 gate입니다.');
     expect(readme).toContain('step 실행 중 URL, Running 상태, status, condition, extract 결과를 바로 확인한 뒤 통과한 scenario만 k6 스크립트로 생성합니다.');
     expect(readme).toContain('색상은 터미널에서만 켜지며 `--no-color` 옵션이나 `NO_COLOR=1` 환경변수로 끌 수 있습니다.');
     expect(readme).toContain('생성/갱신: `load-tests/generated/smoke.k6.js`');
@@ -279,13 +270,13 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Authorization: "Bearer {{token}}"');
     expect(readme).toContain('password: "{{env.LOGIN_PASSWORD}}"');
     expect(readme).toContain('Supported templates:');
-    expect(readme).toContain('openapi-k6 generate -s login-flow');
-    expect(readme).toContain('API base URL은 `openapi-k6 generate` 실행 시점의 `config.yaml` `baseUrl` 값이 생성된 k6 스크립트에 기본값으로 들어갑니다.');
+    expect(readme).toContain('npx --yes openapi-k6 generate -s login-flow');
+    expect(readme).toContain('API base URL은 `npx --yes openapi-k6 generate` 실행 시점의 `config.yaml` `baseUrl` 값이 생성된 k6 스크립트에 기본값으로 들어갑니다.');
     expect(readme).toContain('`config.yaml`을 수정한 뒤에는 스크립트를 다시 생성해야 반영됩니다.');
     expect(readme).toContain('실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.');
     expect(readme).toContain('시나리오에서 `{{env.NAME}}`을 사용한다면 `load-tests/.env.example`을 `load-tests/.env`로 복사한 뒤 비밀 값을 채웁니다.');
     expect(readme).toContain('cp load-tests/.env.example load-tests/.env');
-    expect(readme).toContain('`openapi-k6 test`와 `run.sh`가 `load-tests/.env`를 읽습니다.');
+    expect(readme).toContain('`npx --yes openapi-k6 test`와 `run.sh`가 `load-tests/.env`를 읽습니다.');
     expect(readme).toContain('Read `openapi/*.catalog.json` and inspect `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, and `requestBodyContentTypes`');
     expect(readme).toContain('rm -rf load-tests');
     expect(readme).toContain('필요한 scenario, snapshot, catalog가 있으면 먼저 백업합니다.');
@@ -293,9 +284,10 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('This section is for AI agents. Human users only need the Korean sections above unless they want implementation details.');
     expect(readme).toContain('### Workflow');
     expect(readme).toContain('Update or create `scenarios/*.yaml`.');
-    expect(readme).toContain('Run `openapi-k6 test` to validate the scenario API flow before generating k6.');
+    expect(readme).toContain('Run `npx --yes openapi-k6 test` to validate the scenario API flow before generating k6.');
+    expect(readme).toContain('Do not generate or run k6 until `npx --yes openapi-k6 test` passes.');
     expect(readme).toContain('Do not edit scaffold-managed files during ordinary backend test work: `README.md`, `run.sh`, `.env.example`, `.gitignore`.');
-    expect(readme).toContain('If scaffold docs or helper scripts must change, update the generator template in openapi-k6-runner and rerun `openapi-k6 init --force` intentionally.');
+    expect(readme).toContain('If scaffold docs or helper scripts must change, update the generator template in openapi-k6-runner and rerun `npx --yes openapi-k6 init --force` intentionally.');
     expect(readme).toContain('Do not edit `generated/*.k6.js` directly. Edit scenario YAML and regenerate.');
     expect(readme).toContain('Keep human-facing documentation in Korean.');
     expect(readme).toContain('Do not write secrets such as passwords directly in YAML. Use `{{env.NAME}}`.');
@@ -486,7 +478,7 @@ describe('openapi-k6 CLI', () => {
       'defaultModule: default',
       '',
       '# OpenAPI module 목록입니다.',
-      '# module을 여러 개 두면 openapi-k6 sync/generate에서 --module <name>으로 선택할 수 있습니다.',
+      '# module을 여러 개 두면 npx --yes openapi-k6 sync/generate에서 --module <name>으로 선택할 수 있습니다.',
       'modules:',
       '  default:',
       '    # sync가 읽을 OpenAPI URL 또는 파일 경로입니다.',
@@ -557,7 +549,7 @@ describe('openapi-k6 CLI', () => {
     const readme = await readFile(path.join(workspace, 'perf-tests/README.md'), 'utf8');
 
     expect(readme).toContain('# perf-tests');
-    expect(readme).toContain('openapi-k6 sync --config perf-tests/config.yaml --module pharma');
+    expect(readme).toContain('npx --yes openapi-k6 sync --config perf-tests/config.yaml --module pharma');
     expect(readme).toContain('--config perf-tests/config.yaml');
     expect(readme).toContain('--scenario perf-tests/scenarios/smoke.yaml');
     expect(readme).toContain('--write perf-tests/generated/smoke.k6.js');
@@ -588,7 +580,7 @@ describe('openapi-k6 CLI', () => {
 
     const readme = await readFile(path.join(workspace, 'perf tests/README.md'), 'utf8');
 
-    expect(readme).toContain("openapi-k6 sync --config 'perf tests/config.yaml' --module pharma");
+    expect(readme).toContain("npx --yes openapi-k6 sync --config 'perf tests/config.yaml' --module pharma");
     expect(readme).toContain("--config 'perf tests/config.yaml'");
     expect(readme).toContain("--scenario 'perf tests/scenarios/smoke.yaml'");
     expect(readme).toContain("--write 'perf tests/generated/smoke.k6.js'");

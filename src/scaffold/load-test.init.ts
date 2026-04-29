@@ -10,7 +10,6 @@ export interface InitLoadTestsOptions {
   openapi?: string;
   smokePath?: string;
   force?: boolean;
-  cliPath?: string;
 }
 
 export interface InitLoadTestsResult {
@@ -61,7 +60,7 @@ export async function initLoadTests(
   await writeTextFile(runScriptPath, renderRunScript(), options.force);
   await fs.chmod(runScriptPath, 0o755);
   await writeTextFile(scenarioPath, renderSmokeScenario(smokePath), options.force);
-  await writeTextFile(readmePath, renderReadme(moduleName, directory, options.cliPath), options.force);
+  await writeTextFile(readmePath, renderReadme(moduleName, directory), options.force);
 
   return {
     directoryPath,
@@ -172,7 +171,7 @@ function renderConfig(moduleName: string, baseUrl: string | undefined, openapi: 
     `defaultModule: ${moduleName}`,
     '',
     '# OpenAPI module 목록입니다.',
-    '# module을 여러 개 두면 openapi-k6 sync/generate에서 --module <name>으로 선택할 수 있습니다.',
+    '# module을 여러 개 두면 npx --yes openapi-k6 sync/generate에서 --module <name>으로 선택할 수 있습니다.',
     'modules:',
     `  ${moduleName}:`,
     '    # sync가 읽을 OpenAPI URL 또는 파일 경로입니다.',
@@ -318,7 +317,7 @@ function renderRunScript(): string {
     '',
     'if [[ ! -f "$SCRIPT_PATH" ]]; then',
     '  echo "Missing generated k6 script: $SCRIPT_PATH" >&2',
-    '  echo "Run: openapi-k6 generate -s $SCENARIO" >&2',
+    '  echo "Run: npx --yes openapi-k6 generate -s $SCENARIO" >&2',
     '  exit 1',
     'fi',
     '',
@@ -361,7 +360,7 @@ function renderRunScript(): string {
   ].join('\n');
 }
 
-function renderReadme(moduleName: string, directory: string, cliPath: string | undefined): string {
+function renderReadme(moduleName: string, directory: string): string {
   const configPath = directory + '/config.yaml';
   const scenarioPath = directory + '/scenarios/smoke.yaml';
   const outputPath = directory + '/generated/smoke.k6.js';
@@ -383,43 +382,41 @@ function renderReadme(moduleName: string, directory: string, cliPath: string | u
   const workflowScenarioArg = shellQuote(workflowScenarioPath);
   const workflowOutputArg = shellQuote(workflowOutputPath);
   const envArg = shellQuote(envPath);
-  const aliasCommand = renderAliasCommand(cliPath);
-  const buildDirectory = inferBuildDirectory(cliPath);
   const usesDefaultDirectory = directory === 'load-tests';
+  const cliCommand = 'npx --yes openapi-k6';
 
   const syncCommand = usesDefaultDirectory
-    ? 'openapi-k6 sync'
-    : 'openapi-k6 sync --config ' + configArg + ' --module ' + moduleName;
+    ? cliCommand + ' sync'
+    : cliCommand + ' sync --config ' + configArg + ' --module ' + moduleName;
   const testNameCommand = usesDefaultDirectory
-    ? 'openapi-k6 test -s <name>'
-    : 'openapi-k6 test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath);
+    ? cliCommand + ' test -s <name>'
+    : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath);
   const generateNameCommand = usesDefaultDirectory
-    ? 'openapi-k6 generate -s <name>'
-    : 'openapi-k6 generate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath) + ' --write ' + shellQuote(outputTemplatePath);
+    ? cliCommand + ' generate -s <name>'
+    : cliCommand + ' generate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath) + ' --write ' + shellQuote(outputTemplatePath);
   const testSmokeCommand = usesDefaultDirectory
-    ? 'openapi-k6 test -s smoke'
-    : 'openapi-k6 test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + scenarioArg;
+    ? cliCommand + ' test -s smoke'
+    : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + scenarioArg;
   const generateSmokeCommand = usesDefaultDirectory
-    ? 'openapi-k6 generate \\\n  -s smoke'
+    ? cliCommand + ' generate \\\n  -s smoke'
     : [
-        'openapi-k6 generate \\',
+        cliCommand + ' generate \\',
         '  --config ' + configArg + ' \\',
         '  --module ' + moduleName + ' \\',
         '  --scenario ' + scenarioArg + ' \\',
         '  --write ' + outputArg,
       ].join('\n');
   const testWorkflowCommand = usesDefaultDirectory
-    ? 'openapi-k6 test -s login-flow'
-    : 'openapi-k6 test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + workflowScenarioArg;
+    ? cliCommand + ' test -s login-flow'
+    : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + workflowScenarioArg;
   const generateWorkflowCommand = usesDefaultDirectory
-    ? 'openapi-k6 generate -s login-flow'
-    : 'openapi-k6 generate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + workflowScenarioArg + ' --write ' + workflowOutputArg;
+    ? cliCommand + ' generate -s login-flow'
+    : cliCommand + ' generate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + workflowScenarioArg + ' --write ' + workflowOutputArg;
 
   return renderReadmeTemplate({
-    ALIAS_COMMAND: aliasCommand,
     BASE_URL_RUN_COMMAND: 'BASE_URL=https://api.example.com ' + runScriptArg + ' smoke',
-    BUILD_DIRECTORY: shellQuote(buildDirectory),
     CATALOG_PATH: catalogPath,
+    CLI_COMMAND: cliCommand,
     CONFIG_PATH: configPath,
     DIRECTORY: directory,
     DIRECTORY_SHELL_ARG: shellQuote(directory),
@@ -463,29 +460,6 @@ function renderReadmeTemplate(values: Record<string, string>): string {
 
     return value;
   }).trimEnd() + '\n';
-}
-
-function renderAliasCommand(cliPath: string | undefined): string {
-  const resolvedCliPath = cliPath ?? '/path/to/openapi-k6-runner/dist/cli/index.js';
-  const command = `node ${shellQuote(resolvedCliPath)}`;
-
-  return `alias openapi-k6=${shellQuote(command)}`;
-}
-
-function inferBuildDirectory(cliPath: string | undefined): string {
-  if (cliPath === undefined) {
-    return '/path/to/openapi-k6-runner';
-  }
-
-  const cliDirectory = path.dirname(cliPath);
-  const parent = path.basename(cliDirectory);
-  const grandParent = path.basename(path.dirname(cliDirectory));
-
-  if (parent === 'cli' && grandParent === 'dist') {
-    return path.resolve(cliDirectory, '../..');
-  }
-
-  return path.dirname(cliPath);
 }
 
 function shellQuote(value: string): string {

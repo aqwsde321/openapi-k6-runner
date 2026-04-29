@@ -1,16 +1,35 @@
 {
-  "name": "openapi-k6-runner",
+  "name": "openapi-k6",
   "version": "0.1.0",
-  "private": true,
+  "description": "OpenAPI-based scenario validation and k6 load test generator",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aqwsde321/openapi-k6-runner.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aqwsde321/openapi-k6-runner/issues"
+  },
+  "homepage": "https://github.com/aqwsde321/openapi-k6-runner#readme",
   "type": "module",
   "bin": {
-    "openapi-k6": "./dist/cli/index.js"
+    "openapi-k6": "dist/cli/index.js"
   },
   "files": [
     "dist",
     "README.md",
+    "docs/03-maintainer-notes.md",
     ".env.example"
   ],
+  "keywords": [
+    "openapi",
+    "k6",
+    "load-test",
+    "scenario",
+    "api-testing"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "clean": "rm -rf dist",
     "build": "tsc -p tsconfig.build.json && pnpm run build:assets",
