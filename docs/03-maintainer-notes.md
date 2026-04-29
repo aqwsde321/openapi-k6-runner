@@ -115,7 +115,7 @@ npm --cache /private/tmp/npm-cache pack --dry-run
 
 ```bash
 # package.json version을 먼저 올리고 커밋
-git tag v0.1.0
+git tag v0.1.1
 git push origin main --tags
 ```
 

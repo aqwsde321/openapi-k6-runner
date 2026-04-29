@@ -1,6 +1,6 @@
 {
   "name": "openapi-k6",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OpenAPI-based scenario validation and k6 load test generator",
   "repository": {
     "type": "git",
