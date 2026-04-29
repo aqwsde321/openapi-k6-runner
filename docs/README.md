@@ -2,6 +2,10 @@
 
 현재 사용자 사용법은 루트 [README](../README.md)를 기준으로 한다.
 
+## 릴리스
+
+- [변경 이력](../CHANGELOG.md): 공개 npm 배포 버전별 변경 사항
+
 ## 유지보수
 
 - [도구 개발/유지보수](./03-maintainer-notes.md): 로컬 checkout 실행, 검증, npm 배포 절차

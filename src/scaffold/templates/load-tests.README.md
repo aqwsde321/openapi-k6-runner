@@ -4,9 +4,37 @@
 
 핵심 흐름은 OpenAPI catalog에서 API를 고르고, scenario test로 실제 API 흐름을 먼저 검증한 뒤, 통과한 scenario만 k6 부하 테스트로 넘기는 것입니다.
 
-사람이 꼭 이해해야 하는 내용은 이 README 앞부분에 있습니다. 자세한 반복 작업 절차와 AI 작업 규칙은 아래 `AI Work Guide`를 AI에게 읽히면 됩니다.
+AI에게 맡길 때는 아래 프롬프트를 먼저 사용하세요. 사람이 직접 실행할 때의 명령은 그 다음 섹션에 있습니다.
 
-## 사람이 꼭 알아야 하는 것
+## AI에게 작업 맡기기
+
+AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다.
+
+```text
+이 백엔드 프로젝트에 openapi-k6 시나리오 테스트와 k6 부하 테스트 준비를 적용해줘.
+
+1. 먼저 __DIRECTORY__/README.md를 읽어.
+2. __CONFIG_PATH__의 TODO 값을 이 백엔드 프로젝트에 맞게 채워.
+3. __SYNC_COMMAND__를 실행해서 OpenAPI snapshot과 catalog를 만들어.
+4. __DIRECTORY__/openapi/*.catalog.json을 읽고 테스트할 endpoint 후보를 확인해.
+5. 내가 원하는 API 흐름을 확인한 뒤 __DIRECTORY__/scenarios/*.yaml을 작성하거나 수정해.
+6. __TEST_NAME_COMMAND__ 형식으로 실제 API 흐름을 먼저 검증해.
+7. scenario test가 통과하기 전에는 k6 script를 생성하거나 실행하지 마.
+8. 통과한 scenario만 __GENERATE_NAME_COMMAND__ 형식으로 k6 script를 생성해.
+9. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 예상 확인 포인트를 알려줘.
+
+__DIRECTORY__/README.md, __RUN_SCRIPT_PATH__, __DIRECTORY__/.env.example, __DIRECTORY__/.gitignore는 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.
+__DIRECTORY__/openapi/*.openapi.json과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.
+비밀 값은 scenario YAML에 직접 쓰지 말고 {{env.NAME}}으로 참조해. 실제 값은 __ENV_PATH__에만 둬.
+```
+
+사람이 직접 볼 핵심은 여기까지입니다. 직접 명령을 실행하거나 Scenario DSL 예시가 필요하면 아래 섹션을 이어서 보세요.
+
+## 사람이 직접 실행할 때
+
+아래는 사람이 직접 명령을 실행할 때 보는 요약입니다. AI에게 맡기는 경우에는 위 프롬프트를 사용하세요.
+
+### 꼭 알아야 하는 것
 
 - 직접 수정하는 파일은 이 폴더의 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.
 - 기본 흐름은 `__CLI_COMMAND__ sync` -> scenario 작성 -> `__CLI_COMMAND__ test` -> `__CLI_COMMAND__ generate` -> `run.sh`입니다.
@@ -15,6 +43,28 @@
 - `openapi/*.openapi.json`은 `__CLI_COMMAND__ sync`로 갱신합니다. 직접 고치지 않습니다.
 - `generated/*.k6.js`는 `__CLI_COMMAND__ generate`로 다시 만듭니다. 직접 고치지 않습니다.
 - 실제 비밀 값은 YAML에 쓰지 말고 이 폴더의 `.env`에만 둡니다. YAML에서는 `{{env.NAME}}`으로 참조합니다.
+
+### 빠른 시작
+
+처음에는 아래 순서만 따라가면 됩니다.
+
+```bash
+# 1. config.yaml의 TODO 값을 먼저 채웁니다.
+# 2. OpenAPI snapshot/catalog를 만듭니다.
+__SYNC_COMMAND__
+
+# 3. scenario YAML을 수정한 뒤 실제 API 흐름을 검증합니다.
+__TEST_SMOKE_COMMAND__
+
+# 4. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.
+__GENERATE_SMOKE_COMMAND__
+__RUN_SMOKE_LOG_COMMAND__
+```
+
+`__CLI_COMMAND__ test`는 보조 확인이 아니라 k6 부하 테스트 전 gate입니다. `run.sh`는 이 gate를 통과한 scenario로 생성한 k6 스크립트를 실행합니다.
+
+<details>
+<summary>상세 사용 가이드 보기</summary>
 
 ## 0. openapi-k6 실행 방식
 
@@ -45,25 +95,6 @@ __DIRECTORY__/
 └── generated/
     └── smoke.k6.js
 ```
-
-## 빠른 시작
-
-처음에는 아래 순서만 따라가면 됩니다.
-
-```bash
-# 1. config.yaml의 TODO 값을 먼저 채웁니다.
-# 2. OpenAPI snapshot/catalog를 만듭니다.
-__SYNC_COMMAND__
-
-# 3. scenario YAML을 수정한 뒤 실제 API 흐름을 검증합니다.
-__TEST_SMOKE_COMMAND__
-
-# 4. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.
-__GENERATE_SMOKE_COMMAND__
-__RUN_SMOKE_LOG_COMMAND__
-```
-
-`__CLI_COMMAND__ test`는 보조 확인이 아니라 k6 부하 테스트 전 gate입니다. `run.sh`는 이 gate를 통과한 scenario로 생성한 k6 스크립트를 실행합니다.
 
 ## 1. 최소 설정
 
@@ -344,6 +375,8 @@ rm -rf __DIRECTORY_SHELL_ARG__
 주의: 이 명령은 `__DIRECTORY__/config.yaml`, `__DIRECTORY__/.env.example`, `__DIRECTORY__/.gitignore`, `__DIRECTORY__/run.sh`, `__DIRECTORY__/scenarios/`, `__DIRECTORY__/openapi/`, `__DIRECTORY__/generated/`를 모두 삭제합니다.
 필요한 scenario, snapshot, catalog가 있으면 먼저 백업합니다.
 
+</details>
+
 ## AI Work Guide
 
 <details>
@@ -492,53 +525,5 @@ steps:
 - `__CATALOG_PATH__`: endpoint catalog
 - `__SCENARIO_PATH__`: scenario DSL
 - `__OUTPUT_PATH__`: generated k6 script
-
-### Prompt Examples
-
-Basic smoke test:
-
-```text
-Read __DIRECTORY__/README.md first and follow it.
-Fill TODO values in __CONFIG_PATH__ for this project.
-Run the OpenAPI snapshot command from this README to create the catalog.
-Read __DIRECTORY__/openapi/*.catalog.json and choose one unauthenticated GET endpoint.
-Update __SCENARIO_PATH__ for that endpoint.
-Run the scenario validation command from this README before generating k6.
-Do not generate or run k6 until the scenario validation passes.
-Run the k6 script generation command from this README.
-Do not edit __DIRECTORY__/README.md, __RUN_SCRIPT_PATH__, __DIRECTORY__/.env.example, or __DIRECTORY__/.gitignore unless explicitly asked to change scaffold files.
-Do not edit __DIRECTORY__/generated/*.k6.js or __DIRECTORY__/openapi/*.openapi.json directly.
-Keep human-facing documentation in Korean. Keep AI instruction sections in English.
-```
-
-New scenario:
-
-```text
-Read __DIRECTORY__/README.md and __DIRECTORY__/openapi/*.catalog.json.
-Choose one read endpoint that can be called without login.
-Create __DIRECTORY__/scenarios/basic-read.yaml.
-Validate the scenario using the command documented in this README.
-Do not generate or run k6 until the scenario validation passes.
-Then generate the k6 script using the new scenario generation command in this README.
-Do not edit __DIRECTORY__/README.md, __RUN_SCRIPT_PATH__, __DIRECTORY__/.env.example, or __DIRECTORY__/.gitignore unless explicitly asked to change scaffold files.
-Do not edit __DIRECTORY__/generated/*.k6.js directly.
-Keep human-facing documentation in Korean. Keep AI instruction sections in English.
-```
-
-Authenticated flow:
-
-```text
-Read __DIRECTORY__/README.md and __DIRECTORY__/openapi/*.catalog.json.
-Find the login API and a user-profile/read API.
-Create a login-flow scenario.
-Extract token from the login response.
-Use Bearer {{token}} in the Authorization header of the next step.
-Use {{env.NAME}} for secrets and keep real values in __ENV_PATH__ only.
-Validate the scenario using the command documented in this README.
-Do not generate or run k6 until the scenario validation passes.
-Then generate the k6 script using the new scenario generation command in this README.
-Do not edit __DIRECTORY__/README.md, __RUN_SCRIPT_PATH__, __DIRECTORY__/.env.example, or __DIRECTORY__/.gitignore unless explicitly asked to change scaffold files.
-Keep human-facing documentation in Korean. Keep AI instruction sections in English.
-```
 
 </details>

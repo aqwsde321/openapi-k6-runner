@@ -114,12 +114,15 @@ npm --cache /private/tmp/npm-cache pack --dry-run
 배포 절차:
 
 ```bash
-# package.json version을 먼저 올리고 커밋
-git tag v0.1.1
+# package.json, src/cli/index.ts, CHANGELOG.md를 먼저 갱신하고 커밋
+VERSION="$(node -p "require('./package.json').version")"
+git tag "v$VERSION"
 git push origin main --tags
 ```
 
 `.github/workflows/publish.yml`은 태그의 `v`를 제외한 값과 `package.json`의 `version`이 같을 때만 `pnpm run typecheck`, `pnpm test`, `pnpm run build`, `npm pack --dry-run`, `npm publish`를 실행합니다.
+
+릴리스 커밋 전에는 `CHANGELOG.md`의 `[Unreleased]` 항목을 새 버전 섹션으로 옮기고, 하단 compare 링크를 새 버전에 맞게 갱신합니다.
 
 ## bootstrap 시나리오
 
