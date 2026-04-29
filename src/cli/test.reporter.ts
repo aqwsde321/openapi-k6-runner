@@ -82,7 +82,7 @@ function writeStepEnd(
   if (result.response !== undefined) {
     stream.write(formatField(
       'status',
-      `${formatStatusMark(result, colors)} ${colorStatus(result.response.status, formatStatus(result.response), colors)}  ${colors.dim(formatDuration(result.durationMs))}`,
+      `${formatStatusMark(result, colors)} ${colorStepStatus(result, formatStatus(result.response), colors)}  ${colors.dim(formatDuration(result.durationMs))}`,
       6,
     ));
   } else {
@@ -181,6 +181,14 @@ function colorStatus(status: number, value: string, colors: AnsiColors): string 
   }
 
   return colors.yellow(value);
+}
+
+function colorStepStatus(result: StepEndEvent['result'], value: string, colors: AnsiColors): string {
+  if (result.condition !== undefined) {
+    return result.condition.passed ? colors.green(value) : colors.red(value);
+  }
+
+  return result.response === undefined ? colors.red(value) : colorStatus(result.response.status, value, colors);
 }
 
 function extractNameWidth(result: { extracts: Array<{ name: string }> }): number {

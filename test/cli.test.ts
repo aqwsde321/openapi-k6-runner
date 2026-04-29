@@ -1045,6 +1045,53 @@ describe('openapi-k6 CLI', () => {
     expect(stdout.output()).not.toContain('result: ✓ PASS');
   });
 
+  it('colors an explicitly expected HTTP error status as passing', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 404',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const stdout = createCapture({ isTTY: true });
+    await runCli(
+      ['test', '-s', 'smoke'],
+      {
+        cwd: workspace,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        env: {},
+        fetch: async () => new Response(JSON.stringify({ message: 'not found' }), {
+          status: 404,
+          statusText: 'Not Found',
+        }),
+      },
+    );
+
+    expect(stdout.output()).toContain('\u001b[32m404 Not Found\u001b[0m');
+    expect(stdout.output()).not.toContain('\u001b[31m404 Not Found');
+    expect(stdout.output()).toContain('\u001b[32m✓ PASS\u001b[0m');
+  });
+
   it('does not print ANSI color codes to captured streams', async () => {
     await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
     await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
