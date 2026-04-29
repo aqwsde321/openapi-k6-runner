@@ -921,17 +921,18 @@ describe('openapi-k6 CLI', () => {
       },
     );
 
-    expect(stdout.output()).toContain('Scenario  smoke');
-    expect(stdout.output()).toContain('Base URL  https://config-base.test.local');
+    expect(stdout.output()).toContain('scenario: smoke');
+    expect(stdout.output()).toContain('base url: https://config-base.test.local');
+    expect(stdout.output()).toContain('steps: 1');
     expect(stdout.output()).toContain('[1/1] health');
-    expect(stdout.output()).toContain('GET     /app-health');
-    expect(stdout.output()).toContain('URL     https://config-base.test.local/app-health');
-    expect(stdout.output()).toContain('Running...');
-    expect(stdout.output()).toContain('Status  200 OK');
-    expect(stdout.output()).toContain('Check   status == 200  PASS');
-    expect(stdout.output()).toContain('Extract ok  OK');
-    expect(stdout.output()).toContain('Result');
-    expect(stdout.output()).toContain('Status    PASS');
+    expect(stdout.output()).toContain('request: GET /app-health');
+    expect(stdout.output()).toContain('url: https://config-base.test.local/app-health');
+    expect(stdout.output()).toContain('state: → running');
+    expect(stdout.output()).toContain('result: ✓ PASS');
+    expect(stdout.output()).toContain('200 OK');
+    expect(stdout.output()).toContain('checks: ✓ status == 200');
+    expect(stdout.output()).toContain('extract: ✓ ok');
+    expect(stdout.output()).toContain('summary: ✓ PASS');
   });
 
   it('streams scenario test output before the request finishes', async () => {
@@ -977,18 +978,19 @@ describe('openapi-k6 CLI', () => {
       },
     );
 
-    await waitForOutput(stdout.output, 'Running...');
+    await waitForOutput(stdout.output, 'state: → running');
 
-    expect(stdout.output()).toContain('Scenario  smoke');
+    expect(stdout.output()).toContain('scenario: smoke');
     expect(stdout.output()).toContain('[1/1] health');
-    expect(stdout.output()).toContain('URL     https://config-base.test.local/app-health');
-    expect(stdout.output()).not.toContain('Status    PASS');
+    expect(stdout.output()).toContain('url: https://config-base.test.local/app-health');
+    expect(stdout.output()).not.toContain('summary:');
 
     resolveResponse(new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' }));
     await runPromise;
 
-    expect(stdout.output()).toContain('Status  200 OK');
-    expect(stdout.output()).toContain('Status    PASS');
+    expect(stdout.output()).toContain('result: ✓ PASS');
+    expect(stdout.output()).toContain('200 OK');
+    expect(stdout.output()).toContain('summary: ✓ PASS');
   });
 
   it('does not print ANSI color codes to captured streams', async () => {
@@ -1176,10 +1178,11 @@ describe('openapi-k6 CLI', () => {
       code: 'openapi-k6.test.failed',
     });
 
-    expect(stdout.output()).toContain('Check   status == 200  FAIL');
-    expect(stdout.output()).toContain('Response body');
+    expect(stdout.output()).toContain('result: ✗ FAIL');
+    expect(stdout.output()).toContain('checks: ✗ status == 200');
+    expect(stdout.output()).toContain('body:');
     expect(stdout.output()).toContain('"message":"boom"');
-    expect(stdout.output()).toContain('Status    FAIL');
+    expect(stdout.output()).toContain('summary: ✗ FAIL');
   });
 
   it('masks env secrets in CLI reporter URLs, errors, and truncated response bodies', async () => {
@@ -1250,9 +1253,9 @@ describe('openapi-k6 CLI', () => {
 
     const output = stdout.output();
 
-    expect(output).toContain('URL     https://config-base.test.local/app-health?token=***');
-    expect(output).toContain('Response body');
-    expect(output).toContain('Error   network failed for https://config-base.test.local/app-health?token=***');
+    expect(output).toContain('url: https://config-base.test.local/app-health?token=***');
+    expect(output).toContain('body:');
+    expect(output).toContain('error: ✗ network failed for https://config-base.test.local/app-health?token=***');
     expect(output).toContain('***');
     expect(output).not.toContain(secret);
     expect(output).not.toContain(secret.slice(0, 8));

@@ -202,23 +202,23 @@ __TEST_SMOKE_COMMAND__
 예상 출력:
 
 ```text
-Scenario  smoke
-Base URL  http://localhost:8080
+     scenario: smoke
+     base url: http://localhost:8080
+        steps: 1
 
-[1/1] health
-  GET     /health
-  URL     http://localhost:8080/health
-  Running...
-  Status  200 OK  12ms
-  Check   status == 200  PASS
+     [1/1] health
+       request: GET /health
+           url: http://localhost:8080/health
+         state: → running
+        result: ✓ PASS  200 OK  12ms
+        checks: ✓ status == 200
 
-Result
-  Steps    1 passed / 1 total
-  Duration  12ms
-  Status    PASS
+      summary: ✓ PASS
+        steps: 1/1 passed
+     duration: 12ms
 ```
 
-실패하면 마지막 `Status`가 `FAIL`이 되고, 실패한 step 아래에 status, error, response body 일부를 바로 보여줍니다. 비밀 값은 출력에서 마스킹됩니다.
+실패하면 마지막 `summary`가 `✗ FAIL`이 되고, 실패한 step 아래에 status, error, response body 일부를 바로 보여줍니다. 비밀 값은 출력에서 마스킹됩니다.
 색상은 터미널에서만 켜지며 `--no-color` 옵션이나 `NO_COLOR=1` 환경변수로 끌 수 있습니다.
 
 `__ENV_PATH__`가 있으면 `{{env.NAME}}` template 값과 `BASE_URL`을 읽습니다. 현재 shell 환경변수가 같은 이름으로 있으면 shell 값이 우선합니다.

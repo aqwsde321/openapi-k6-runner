@@ -8,8 +8,7 @@ import type {
 } from '../executor/scenario.executor.js';
 
 const DEFAULT_RESPONSE_BODY_LIMIT = 2000;
-const STEP_FIELD_WIDTH = 8;
-const SUMMARY_FIELD_WIDTH = 10;
+const FIELD_WIDTH = 8;
 
 type WritableLike = {
   write(chunk: string): unknown;
@@ -55,18 +54,20 @@ export function createScenarioConsoleReporter(
 }
 
 function writeScenarioStart(stream: WritableLike, event: ScenarioStartEvent, colors: AnsiColors): void {
-  stream.write(`${colors.bold('Scenario')}  ${maskText(event.scenario, event.secretValues)}\n`);
-  stream.write(`${colors.bold('Base URL')}  ${maskText(event.baseUrl, event.secretValues)}\n\n`);
+  stream.write(formatField('scenario', colors.bold(maskText(event.scenario, event.secretValues))));
+  stream.write(formatField('base url', maskText(event.baseUrl, event.secretValues)));
+  stream.write(formatField('steps', String(event.totalSteps)));
+  stream.write('\n');
 }
 
 function writeStepStart(stream: WritableLike, event: StepStartEvent): void {
-  stream.write(`[${event.index + 1}/${event.totalSteps}] ${event.id}\n`);
-  stream.write(`  ${event.method.padEnd(STEP_FIELD_WIDTH)}${event.path}\n`);
+  stream.write(`     [${event.index + 1}/${event.totalSteps}] ${event.id}\n`);
+  stream.write(formatField('request', `${event.method} ${event.path}`, 6));
 }
 
 function writeStepRequest(stream: WritableLike, event: StepRequestEvent, colors: AnsiColors): void {
-  stream.write(formatField('URL', colors.dim(maskText(event.url, event.secretValues))));
-  stream.write(`  ${colors.dim('Running...')}\n`);
+  stream.write(formatField('url', colors.dim(maskText(event.url, event.secretValues)), 6));
+  stream.write(formatField('state', colors.yellow('→ running'), 6));
 }
 
 function writeStepEnd(
@@ -79,32 +80,36 @@ function writeStepEnd(
 
   if (result.response !== undefined) {
     stream.write(formatField(
-      'Status',
-      `${colorStatus(result.response.status, formatStatus(result.response), colors)}  ${colors.dim(formatDuration(result.durationMs))}`,
+      'result',
+      `${formatOutcome(result.passed, colors)}  ${colorStatus(result.response.status, formatStatus(result.response), colors)}  ${colors.dim(formatDuration(result.durationMs))}`,
+      6,
     ));
   } else {
-    stream.write(formatField('Status', `${colors.red('ERROR')}  ${colors.dim(formatDuration(result.durationMs))}`));
+    stream.write(formatField('result', `${colors.red('✗ ERROR')}  ${colors.dim(formatDuration(result.durationMs))}`, 6));
   }
 
   if (result.condition !== undefined) {
     stream.write(formatField(
-      'Check',
-      `${result.condition.expression}  ${formatOutcome(result.condition.passed, colors)}`,
+      'checks',
+      `${formatCheckMark(result.condition.passed, colors)} ${result.condition.expression}`,
+      6,
     ));
   }
 
   for (const extract of result.extracts) {
-    const outcome = extract.passed ? colors.green('OK') : colors.red('FAIL');
-    const message = extract.passed ? outcome : `${outcome} (${maskText(extract.error ?? 'unknown error', event.secretValues)})`;
-    stream.write(formatField('Extract', `${extract.name.padEnd(extractNameWidth(result))}  ${message}`));
+    const name = extract.name.padEnd(extractNameWidth(result));
+    const message = extract.passed
+      ? `${formatCheckMark(true, colors)} ${name}`
+      : `${formatCheckMark(false, colors)} ${name} (${maskText(extract.error ?? 'unknown error', event.secretValues)})`;
+    stream.write(formatField('extract', message, 6));
   }
 
   if (result.error !== undefined) {
-    stream.write(formatField('Error', colors.red(maskText(result.error, event.secretValues))));
+    stream.write(formatField('error', `${formatCheckMark(false, colors)} ${colors.red(maskText(result.error, event.secretValues))}`, 6));
   }
 
   if (!result.passed && result.response?.body) {
-    stream.write('  Response body\n');
+    stream.write(formatField('body', '', 6));
     stream.write(`${indentBody(truncateText(maskText(result.response.body, event.secretValues), responseBodyLimit))}\n`);
   }
 
@@ -114,14 +119,13 @@ function writeStepEnd(
 function writeScenarioEnd(stream: WritableLike, result: ScenarioExecutionResult, colors: AnsiColors): void {
   const passedSteps = result.steps.filter((step) => step.passed).length;
 
-  stream.write(`${colors.bold('Result')}\n`);
-  stream.write(formatField('Steps', `${passedSteps} passed / ${result.steps.length} total`, SUMMARY_FIELD_WIDTH));
-  stream.write(formatField('Duration', formatDuration(result.durationMs), SUMMARY_FIELD_WIDTH));
-  stream.write(formatField('Status', formatOutcome(result.passed, colors), SUMMARY_FIELD_WIDTH));
+  stream.write(formatField('summary', formatOutcome(result.passed, colors)));
+  stream.write(formatField('steps', `${passedSteps}/${result.steps.length} passed`));
+  stream.write(formatField('duration', formatDuration(result.durationMs)));
 }
 
-function formatField(label: string, value: string, width = STEP_FIELD_WIDTH): string {
-  return `  ${label.padEnd(width)}${value}\n`;
+function formatField(label: string, value: string, indent = 5): string {
+  return `${' '.repeat(indent)}${label.padStart(FIELD_WIDTH)}: ${value}\n`;
 }
 
 function formatStatus(response: { status: number; statusText: string }): string {
@@ -133,7 +137,11 @@ function formatDuration(durationMs: number): string {
 }
 
 function formatOutcome(passed: boolean, colors: AnsiColors): string {
-  return passed ? colors.green('PASS') : colors.red('FAIL');
+  return passed ? colors.green('✓ PASS') : colors.red('✗ FAIL');
+}
+
+function formatCheckMark(passed: boolean, colors: AnsiColors): string {
+  return passed ? colors.green('✓') : colors.red('✗');
 }
 
 function colorStatus(status: number, value: string, colors: AnsiColors): string {
