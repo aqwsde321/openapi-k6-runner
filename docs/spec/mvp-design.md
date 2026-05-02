@@ -54,7 +54,7 @@ openapi-k6 generate -s smoke
 ./load-tests/run.sh smoke
 ```
 
-`init`은 `TODO` placeholder를 생성한다. `sync`와 `generate`는 필요한 config 값이 `TODO`로 남아 있으면 실패한다.
+대화형 `init`은 `baseUrl`을 입력받고 `<baseUrl>/v3/api-docs`, `/api-docs`, `/openapi.json`, `/swagger.json`, `/swagger/v1/swagger.json` 순서로 OpenAPI URL을 자동 탐색해 `config.yaml`을 채운다. 비대화형 환경이나 `--no-input`에서는 `TODO` placeholder를 생성한다. `sync`와 `generate`는 필요한 config 값이 `TODO`로 남아 있으면 실패한다.
 
 ## Config
 

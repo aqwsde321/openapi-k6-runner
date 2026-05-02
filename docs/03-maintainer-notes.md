@@ -126,14 +126,15 @@ git push origin main --tags
 
 ## bootstrap 시나리오
 
-새 빈 백엔드 프로젝트 디렉터리에서 `init`이 `load-tests/`를 만들고, `config.yaml` 설정 후 `sync -> test -> generate -> run.sh`가 정상 진행해야 합니다.
+새 빈 백엔드 프로젝트 디렉터리에서 `init`이 `load-tests/`를 만들고, 대화형 입력으로 `baseUrl`을 받은 뒤 OpenAPI URL을 자동 탐색해야 합니다. OpenAPI URL이 채워진 config로 `sync -> test -> generate -> run.sh`가 정상 진행해야 합니다.
 
 예:
 
 ```bash
 cd /tmp/smoke-backend
 node <openapi-k6-runner 저장소 루트>/dist/cli/index.js init
-# load-tests/config.yaml 의 baseUrl, modules.default.openapi 값을 실제 값으로 설정
+# 대화형 init이 baseUrl만 묻고 /v3/api-docs, /api-docs, /openapi.json 등을 자동 탐색한다.
+# 비대화형 실행으로 TODO가 남았다면 load-tests/config.yaml의 baseUrl, modules.default.openapi 값을 설정한다.
 node <openapi-k6-runner 저장소 루트>/dist/cli/index.js sync
 node <openapi-k6-runner 저장소 루트>/dist/cli/index.js test -s smoke
 node <openapi-k6-runner 저장소 루트>/dist/cli/index.js generate -s smoke

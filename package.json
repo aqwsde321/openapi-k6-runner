@@ -1,7 +1,7 @@
 {
   "name": "openapi-k6",
-  "version": "0.1.2",
-  "description": "OpenAPI-based scenario validation and k6 load test generator",
+  "version": "0.1.3",
+  "description": "Scenario-first OpenAPI CLI for validating API flows and generating k6 scripts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/aqwsde321/openapi-k6-runner.git"

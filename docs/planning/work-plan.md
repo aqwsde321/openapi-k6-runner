@@ -317,13 +317,15 @@ CLI/compiler MVP가 동작하고 README 사용법이 정리된 뒤 진행한다.
 ### 완료 기준
 
 - 처음 사용하는 프로젝트에서 한 명령으로 기본 구조를 만들 수 있다.
-- 생성된 config의 `TODO` 값을 채우면 `sync`를 실행할 수 있다.
+- 대화형 `init`은 `baseUrl` 입력만으로 흔한 OpenAPI 경로를 자동 탐색해 config를 채울 수 있다.
+- 비대화형 환경이나 `--no-input`에서 생성된 config의 `TODO` 값을 채우면 `sync`를 실행할 수 있다.
 - 생성된 smoke scenario의 path를 채우거나 선택한 endpoint로 바꾸면 `generate` 입력으로 사용할 수 있다.
 - `sync`와 `generate`는 남은 `TODO` 값을 발견하면 명확한 에러를 낸다.
 
 ### 테스트
 
 - scaffold 생성
+- interactive init OpenAPI auto-discovery
 - 기존 파일 overwrite 방지
 - `--force` overwrite
 - TODO config validation

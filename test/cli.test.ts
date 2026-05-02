@@ -2,7 +2,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { Writable } from 'node:stream';
+import { PassThrough, Writable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { runCli } from '../src/cli/index.js';
@@ -30,6 +30,41 @@ function createCapture(options: { isTTY?: boolean } = {}): { stream: Writable & 
     stream,
     output: () => Buffer.concat(chunks).toString('utf8'),
   };
+}
+
+function createInput(): PassThrough & { isTTY?: boolean } {
+  const stream = new PassThrough() as PassThrough & { isTTY?: boolean };
+  stream.isTTY = true;
+  return stream;
+}
+
+function createOpenApiResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      openapi: '3.0.3',
+      info: {
+        title: 'Fixture API',
+        version: '1.0.0',
+      },
+      paths: {
+        '/health': {
+          get: {
+            responses: {
+              '200': {
+                description: 'OK',
+              },
+            },
+          },
+        },
+      },
+    }),
+    {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+      },
+    },
+  );
 }
 
 async function waitForOutput(readOutput: () => string, expected: string): Promise<void> {
@@ -226,13 +261,19 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('백엔드 프로젝트 루트의 `.env`는 자동으로 읽지 않습니다.');
     expect(readme).toContain('빠른 사용법은 `run.sh --help`로 확인할 수 있습니다.');
     expect(readme).toContain('## 0. openapi-k6 실행 방식');
-    expect(readme).toContain('AI에게 맡길 때는 아래 프롬프트를 먼저 사용하세요.');
+    expect(readme).toContain('사람은 빠른 시작을 먼저 보면 됩니다. AI coding agent는 아래 프롬프트와 접힌 상세 지침까지 읽고 작업합니다.');
     expect(readme).toContain('## 사람이 직접 실행할 때');
     expect(readme).toContain('### 꼭 알아야 하는 것');
     expect(readme).toContain('### 빠른 시작');
+    expect(readme).toContain('처음에는 아래 순서만 따라가면 됩니다. 모든 명령은 백엔드 프로젝트 루트에서 실행합니다.');
+    expect(readme).toContain('1. `load-tests/config.yaml`에 TODO가 남아 있으면 먼저 채웁니다.');
+    expect(readme).toContain('2. OpenAPI snapshot/catalog를 만듭니다.');
+    expect(readme).toContain('3. `load-tests/scenarios/smoke.yaml`를 수정한 뒤 실제 API 흐름을 검증합니다.');
+    expect(readme).toContain('4. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.');
     expect(readme).toContain('AI에게 맡기는 경우에는 위 프롬프트를 사용하세요.');
-    expect(readme).toContain('직접 수정하는 파일은 이 폴더의 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.');
-    expect(readme).toContain('일반적인 config/scenario 작업에서는 `README.md`, `run.sh`, `.env.example`, `.gitignore`를 수정하지 않습니다.');
+    expect(readme).toContain('직접 수정하는 파일은 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.');
+    expect(readme).toContain('명령은 백엔드 프로젝트 루트에서 실행합니다.');
+    expect(readme).toContain('생성물은 직접 고치지 않습니다. `openapi/*.openapi.json`은 `sync`, `generated/*.k6.js`는 `generate`로 다시 만듭니다.');
     expect(readme).toContain('이 README는 `npx --yes openapi-k6 init`으로 생성되었습니다.');
     expect(readme).toContain('npm 배포 버전은 설치 없이 `npx`로 실행하는 것을 기본으로 합니다.');
     expect(readme).toContain('npx --yes openapi-k6 --help');
@@ -240,12 +281,15 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('pnpm exec openapi-k6 ...');
     expect(readme).toContain('이 폴더는 백엔드 프로젝트 안에서 OpenAPI snapshot, scenario YAML, scenario test, 생성된 k6 스크립트를 관리합니다.');
     expect(readme).toContain('핵심 흐름은 OpenAPI catalog에서 API를 고르고, scenario test로 실제 API 흐름을 먼저 검증한 뒤');
-    expect(readme).toContain('기본 흐름은 `npx --yes openapi-k6 sync` -> scenario 작성 -> `npx --yes openapi-k6 test` -> `npx --yes openapi-k6 generate` -> `run.sh`입니다.');
-    expect(readme).toContain('`npx --yes openapi-k6 test`가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 않습니다.');
+    expect(readme).toContain('다음 단계로 넘어가는 기준은 간단합니다. `npx --yes openapi-k6 test`가 통과한 scenario만 generate/run 합니다.');
+    expect(readme).toContain('`npx --yes openapi-k6 test`가 통과한 scenario만 `generate`하거나 `run.sh`로 실행합니다.');
     expect(readme).toContain('## 1. 최소 설정');
     expect(readme).toContain('## 2. OpenAPI -> Scenario Test -> k6 흐름');
     expect(readme).toContain('| 순서 | 사용자가 준비하는 것 | 실행 명령 | 생성/갱신되는 것 |');
-    expect(readme).toContain('`config.yaml`의 `baseUrl`, `modules.pharma.openapi` TODO 채우기');
+    expect(readme).toContain('대화형 `init`은 `baseUrl`만 입력받고 `<baseUrl>/v3/api-docs`를 먼저 확인합니다.');
+    expect(readme).toContain('실패하면 `/api-docs`, `/openapi.json`, `/swagger.json`, `/swagger/v1/swagger.json` 같은 흔한 OpenAPI 경로를 자동으로 시도합니다.');
+    expect(readme).toContain('자동 탐색이 실패하면 CLI 안내에 따라 직접 URL/파일 경로를 입력하거나 `skip`으로 넘어간 뒤 config를 나중에 수정할 수 있습니다.');
+    expect(readme).toContain('`config.yaml`의 `baseUrl`, `modules.pharma.openapi` 확인 또는 TODO 채우기');
     expect(readme).toContain('`load-tests/openapi/pharma.openapi.json`, `load-tests/openapi/pharma.catalog.json`');
     expect(readme).toContain('`load-tests/scenarios/<name>.yaml`');
     expect(readme).toContain('`load-tests/generated/<name>.k6.js`');
@@ -259,50 +303,50 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('`load-tests/openapi/pharma.catalog.json`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.');
     expect(readme).toContain('기본 smoke 테스트는 `load-tests/scenarios/smoke.yaml`를 수정합니다.');
     expect(readme).toContain('npx --yes openapi-k6 test -s smoke');
-    expect(readme).toContain('부하를 걸기 전에 API 흐름 자체가 맞는지 확인하는 gate입니다.');
-    expect(readme).toContain('step 실행 중 URL, Running 상태, status, condition, extract 결과를 바로 확인한 뒤 통과한 scenario만 k6 스크립트로 생성합니다.');
+    expect(readme).toContain('`npx --yes openapi-k6 test`는 scenario YAML을 Node.js에서 1회 실행해 URL, status, condition, extract를 확인합니다.');
+    expect(readme).toContain('k6 스크립트 생성 전 gate입니다.');
     expect(readme).toContain('색상은 터미널에서만 켜지며 `--no-color` 옵션이나 `NO_COLOR=1` 환경변수로 끌 수 있습니다.');
+    expect(readme).toContain('`condition`은 분기 조건이 아니라 검증식입니다. k6 생성 시 `check`로 들어가며 다음 step 실행을 막는 용도로 쓰지 않습니다.');
     expect(readme).toContain('생성/갱신: `load-tests/generated/smoke.k6.js`');
     expect(readme).toContain('## 3. 비밀 값 사용');
     expect(readme).toContain('## 4. 자주 하는 수정');
     expect(readme).toContain('## 5. 제거 방법');
-    expect(readme).toContain('### Scenario DSL Reference');
-    expect(readme).toContain('Endpoint selection:');
-    expect(readme).toContain('OperationId-based example:');
-    expect(readme).toContain('Method-and-path example:');
     expect(readme).toContain('Authorization: "Bearer {{token}}"');
     expect(readme).toContain('password: "{{env.LOGIN_PASSWORD}}"');
-    expect(readme).toContain('Supported templates:');
+    expect(readme).toContain('여러 API를 이어야 할 때는 이전 step의 `extract`로 응답 값을 저장하고');
+    expect(readme).toContain('다음 step의 `request.headers`, `request.query`, `request.pathParams`, `request.body`에서 `{{token}}`처럼 참조합니다.');
+    expect(readme).toContain('응답 값을 다음 API에 연결하는 예시:');
     expect(readme).toContain('npx --yes openapi-k6 generate -s login-flow');
+    expect(readme).toContain('`openapi`: `sync`가 읽을 OpenAPI URL 또는 파일 경로. 상대 경로는 `config.yaml` 위치 기준입니다.');
+    expect(readme).toContain('`body`와 `multipart`는 같은 step에서 함께 쓰지 않습니다.');
     expect(readme).toContain('API base URL은 `npx --yes openapi-k6 generate` 실행 시점의 `config.yaml` `baseUrl` 값이 생성된 k6 스크립트에 기본값으로 들어갑니다.');
     expect(readme).toContain('`config.yaml`을 수정한 뒤에는 스크립트를 다시 생성해야 반영됩니다.');
     expect(readme).toContain('실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.');
     expect(readme).toContain('시나리오에서 `{{env.NAME}}`을 사용한다면 `load-tests/.env.example`을 `load-tests/.env`로 복사한 뒤 비밀 값을 채웁니다.');
     expect(readme).toContain('cp load-tests/.env.example load-tests/.env');
     expect(readme).toContain('`npx --yes openapi-k6 test`와 `run.sh`가 `load-tests/.env`를 읽습니다.');
-    expect(readme).toContain('Read `openapi/*.catalog.json` and inspect `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, and `requestBodyContentTypes`');
     expect(readme).toContain('rm -rf load-tests');
     expect(readme).toContain('필요한 scenario, snapshot, catalog가 있으면 먼저 백업합니다.');
     expect(readme).toContain('## AI Work Guide');
-    expect(readme).toContain('This section is for AI agents. Human users only need the Korean sections above unless they want implementation details.');
-    expect(readme).toContain('### Workflow');
-    expect(readme).toContain('Update or create `scenarios/*.yaml`.');
-    expect(readme).toContain('Run `npx --yes openapi-k6 test` to validate the scenario API flow before generating k6.');
-    expect(readme).toContain('Do not generate or run k6 until `npx --yes openapi-k6 test` passes.');
-    expect(readme).toContain('Do not edit scaffold-managed files during ordinary backend test work: `README.md`, `run.sh`, `.env.example`, `.gitignore`.');
+    expect(readme).toContain('This section is for AI agents. Use it as a compact checklist after reading the Korean quick start.');
+    expect(readme).toContain('### Guardrails');
+    expect(readme).toContain('Run commands from the backend project root and follow the quick start order above.');
+    expect(readme).toContain('During ordinary backend test work, edit only `config.yaml`, `.env`, and `scenarios/*.yaml`.');
     expect(readme).toContain('If scaffold docs or helper scripts must change, update the generator template in openapi-k6-runner and rerun `npx --yes openapi-k6 init --force` intentionally.');
-    expect(readme).toContain('Do not edit `generated/*.k6.js` directly. Edit scenario YAML and regenerate.');
+    expect(readme).toContain('Regenerate `openapi/*.openapi.json` and `generated/*.k6.js` with `sync`/`generate`; do not edit them directly.');
     expect(readme).toContain('Keep human-facing documentation in Korean.');
-    expect(readme).toContain('Do not write secrets such as passwords directly in YAML. Use `{{env.NAME}}`.');
-    expect(readme).toContain('Store real secret values in `load-tests/.env` and do not commit it.');
+    expect(readme).toContain('Do not write secrets in YAML. Use `{{env.NAME}}` and store real values only in `load-tests/.env`.');
+    expect(readme).toContain('### Scenario Notes');
+    expect(readme).toContain('Read `openapi/*.catalog.json` to pick endpoints; `generate` reads the OpenAPI snapshot, not the catalog.');
     expect(readme).toContain('Do not use `request.body` and `request.multipart` in the same step.');
-    expect(readme).toContain('Resolve config-relative paths from the directory containing `config.yaml`.');
+    expect(readme).toContain('Config-relative paths resolve from the directory containing `config.yaml`.');
     expect(readme).toContain('`load-tests/run.sh`: k6 runner that auto-loads `load-tests/.env` values');
     expect(readme).toContain('### Files to inspect');
     expect(readme).toContain('## AI에게 작업 맡기기');
     expect(readme).toContain('이 백엔드 프로젝트에 openapi-k6 시나리오 테스트와 k6 부하 테스트 준비를 적용해줘.');
     expect(readme).toContain('먼저 load-tests/README.md를 읽어.');
-    expect(readme).toContain('load-tests/config.yaml의 TODO 값을 이 백엔드 프로젝트에 맞게 채워.');
+    expect(readme).toContain('아래 명령은 백엔드 프로젝트 루트에서 실행해.');
+    expect(readme).toContain('load-tests/config.yaml에 TODO가 남아 있으면 이 백엔드 프로젝트에 맞게 채워.');
     expect(readme).toContain('npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 만들어.');
     expect(readme).toContain('npx --yes openapi-k6 test -s <name> 형식으로 실제 API 흐름을 먼저 검증해.');
     expect(readme).toContain('scenario test가 통과하기 전에는 k6 script를 생성하거나 실행하지 마.');
@@ -310,8 +354,10 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고');
     expect(readme).not.toContain('### Prompt Examples');
     expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore는 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.');
-    expect(readme).toContain('`multipart`: multipart/form-data request body for file uploads');
-    expect(readme).toContain('Multipart upload example:');
+    expect(readme).not.toContain('### Scenario DSL Reference');
+    expect(readme).not.toContain('Follow this order: fill remaining TODO values');
+    expect(readme).not.toContain('사람이 직접 볼 핵심은 여기까지입니다.');
+    expect(readme).toContain('파일 업로드 예시:');
     expect(readme).toContain('path: fixtures/product.png');
     expect(readme).toContain('Multipart file paths are relative to `load-tests/`.');
     expect(readme).toContain('Spring endpoints such as `@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` should be modeled with `request.multipart`.');
@@ -507,6 +553,198 @@ describe('openapi-k6 CLI', () => {
     expect(envExample).not.toContain('BASE_URL=');
     expect(envExample).toContain('LOGIN_PASSWORD=');
     expect(scenario).toContain('path: /health');
+  });
+
+  it('prompts for the base URL and checks the default OpenAPI URL in interactive terminals', async () => {
+    const input = createInput();
+    const output = createCapture();
+    const fetchCalls: string[] = [];
+    const fetchMock: typeof fetch = async (input) => {
+      fetchCalls.push(String(input));
+      return createOpenApiResponse();
+    };
+
+    const run = runCli(
+      ['init'],
+      {
+        cwd: workspace,
+        stdin: input,
+        stdout: output.stream,
+        stderr: createSink(),
+        interactive: true,
+        fetch: fetchMock,
+      },
+    );
+
+    await waitForOutput(output.output, 'API base URL [http://localhost:8080]:');
+    input.write('\n');
+    await run;
+    input.end();
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(fetchCalls).toEqual(['http://localhost:8080/v3/api-docs']);
+    expect(config).toContain('baseUrl: http://localhost:8080');
+    expect(config).toContain('    openapi: http://localhost:8080/v3/api-docs');
+    expect(output.output()).toContain('API base URL [http://localhost:8080]:');
+    expect(output.output()).not.toContain('OpenAPI spec URL/file path');
+    expect(output.output()).toContain('✓ http://localhost:8080/v3/api-docs  OpenAPI 3.0.3');
+    expect(output.output()).toContain('✓ Created load-tests');
+    expect(output.output()).toContain('Next');
+    expect(output.output()).toContain('npx --yes openapi-k6 sync');
+    expect(output.output()).toContain('./load-tests/run.sh smoke --log');
+  });
+
+  it('discovers a common OpenAPI path from the entered base URL', async () => {
+    const input = createInput();
+    const output = createCapture();
+    const fetchCalls: string[] = [];
+    const fetchMock: typeof fetch = async (input) => {
+      const url = String(input);
+      fetchCalls.push(url);
+
+      if (url === 'http://localhost:8080/api-docs') {
+        return createOpenApiResponse();
+      }
+
+      return new Response('not found', {
+        status: 404,
+        headers: {
+          'content-type': 'text/plain',
+        },
+      });
+    };
+
+    const run = runCli(
+      ['init'],
+      {
+        cwd: workspace,
+        stdin: input,
+        stdout: output.stream,
+        stderr: createSink(),
+        interactive: true,
+        fetch: fetchMock,
+      },
+    );
+
+    await waitForOutput(output.output, 'API base URL [http://localhost:8080]:');
+    input.write('http://localhost:8080\n');
+    await run;
+    input.end();
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(fetchCalls).toContain('http://localhost:8080/v3/api-docs');
+    expect(fetchCalls).toContain('http://localhost:8080/api-docs');
+    expect(config).toContain('baseUrl: http://localhost:8080');
+    expect(config).toContain('    openapi: http://localhost:8080/api-docs');
+    expect(output.output()).toContain('✗ http://localhost:8080/v3/api-docs  HTTP 404');
+    expect(output.output()).toContain('✓ http://localhost:8080/api-docs  OpenAPI 3.0.3');
+    expect(output.output()).not.toContain('OpenAPI spec URL/file path');
+  });
+
+  it('asks for an explicit OpenAPI URL only when automatic discovery fails', async () => {
+    const input = createInput();
+    const output = createCapture();
+    const fetchCalls: string[] = [];
+    const fetchMock: typeof fetch = async (input) => {
+      const url = String(input);
+      fetchCalls.push(url);
+
+      if (url === 'http://localhost:8081/custom-openapi.json') {
+        return createOpenApiResponse();
+      }
+
+      return new Response('not found', {
+        status: 404,
+        headers: {
+          'content-type': 'text/plain',
+        },
+      });
+    };
+
+    const run = runCli(
+      ['init'],
+      {
+        cwd: workspace,
+        stdin: input,
+        stdout: output.stream,
+        stderr: createSink(),
+        interactive: true,
+        fetch: fetchMock,
+      },
+    );
+
+    await waitForOutput(output.output, 'API base URL [http://localhost:8080]:');
+    input.write('http://localhost:8081\n');
+    await waitForOutput(output.output, 'OpenAPI spec URL/file path or "skip" [http://localhost:8081/v3/api-docs]:');
+    input.write('http://localhost:8081/custom-openapi.json\n');
+    await run;
+    input.end();
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(fetchCalls).toContain('http://localhost:8081/v3/api-docs');
+    expect(fetchCalls).toContain('http://localhost:8081/custom-openapi.json');
+    expect(config).toContain('baseUrl: http://localhost:8081');
+    expect(config).toContain('    openapi: http://localhost:8081/custom-openapi.json');
+    expect(output.output()).toContain('! OpenAPI auto-discovery failed.');
+  });
+
+  it('lets interactive init skip the OpenAPI check after automatic discovery fails', async () => {
+    const input = createInput();
+    const output = createCapture();
+    const fetchMock: typeof fetch = async () => new Response('not found', {
+      status: 404,
+      headers: {
+        'content-type': 'text/plain',
+      },
+    });
+
+    const run = runCli(
+      ['init'],
+      {
+        cwd: workspace,
+        stdin: input,
+        stdout: output.stream,
+        stderr: createSink(),
+        interactive: true,
+        fetch: fetchMock,
+      },
+    );
+
+    await waitForOutput(output.output, 'API base URL [http://localhost:8080]:');
+    input.write('http://localhost:8081\n');
+    await waitForOutput(output.output, 'OpenAPI spec URL/file path or "skip" [http://localhost:8081/v3/api-docs]:');
+    input.write('skip\n');
+    await run;
+    input.end();
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(config).toContain('baseUrl: http://localhost:8081');
+    expect(config).toContain('    openapi: http://localhost:8081/v3/api-docs');
+    expect(output.output()).toContain('Saved http://localhost:8081/v3/api-docs without checking.');
+  });
+
+  it('keeps non-interactive init behavior when --no-input is used', async () => {
+    const output = createCapture();
+
+    await runCli(
+      ['init', '--no-input'],
+      {
+        cwd: workspace,
+        stdout: output.stream,
+        stderr: createSink(),
+        interactive: true,
+      },
+    );
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(config).toContain('baseUrl: TODO');
+    expect(config).toContain('    openapi: TODO');
+    expect(output.output()).not.toContain('API base URL');
   });
 
   it('stores relative OpenAPI paths from the generated config directory', async () => {

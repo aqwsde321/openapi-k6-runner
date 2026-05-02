@@ -1,8 +1,18 @@
 # openapi-k6
 
-OpenAPI 스펙에서 테스트할 API를 고르고, 사람이 읽기 쉬운 Scenario DSL로 API 흐름을 먼저 검증한 뒤, 통과한 시나리오를 k6 부하 테스트로 실행하게 만드는 CLI 도구입니다.
+OpenAPI 기반으로 **Scenario YAML을 만들고**, 실제 API 흐름을 먼저 검증한 뒤, 통과한 시나리오를 k6 부하 테스트로 실행하게 만드는 CLI 도구입니다.
+
+`openapi-k6`의 중심은 k6 파일 생성이 아니라 scenario 작성입니다. OpenAPI에서 endpoint catalog를 만들고, 로그인 -> 토큰 추출 -> 인증 API 호출 같은 여러 API 흐름을 사람이 읽기 쉬운 YAML로 연결합니다.
 
 백엔드 프로젝트 루트에 `load-tests/` 작업 공간을 만들고 OpenAPI snapshot, endpoint catalog, scenario YAML, scenario test, generated k6 script를 한곳에서 관리합니다.
+
+## 할 수 있는 것
+
+- OpenAPI spec에서 테스트 가능한 endpoint catalog 생성
+- `operationId` 또는 `method + path`로 API step 선택
+- 이전 API 응답 값을 `extract`로 저장하고 다음 API의 header, query, path, body에 연결
+- k6 실행 전에 `openapi-k6 test`로 실제 API 흐름을 1회 검증
+- 검증된 scenario만 k6 script로 생성하고 `run.sh`로 실행
 
 ## 핵심 흐름
 
@@ -16,22 +26,74 @@ OpenAPI snapshot/catalog
 
 `openapi-k6 test`는 보조 명령이 아니라 k6 실행 전 필수 gate입니다. 실제 백엔드에 요청을 보내 status, condition, extract, template 치환을 먼저 확인하고, 통과한 scenario만 부하 테스트 스크립트로 넘깁니다.
 
+## Scenario YAML 예시
+
+아래처럼 여러 API를 하나의 사용자 흐름으로 작성할 수 있습니다.
+
+```yaml
+name: login-and-read-profile
+
+steps:
+  - id: login
+    api:
+      operationId: loginUser
+    request:
+      body:
+        username: "{{env.LOGIN_ID}}"
+        password: "{{env.LOGIN_PASSWORD}}"
+    extract:
+      token:
+        from: $.token
+    condition: status == 200
+
+  - id: get-me
+    api:
+      operationId: getMe
+    request:
+      headers:
+        Authorization: "Bearer {{token}}"
+    condition: status == 200
+```
+
+이 YAML은 `openapi-k6 test`에서는 실제 API 요청으로 실행되고, `openapi-k6 generate`에서는 같은 흐름의 k6 script로 변환됩니다.
+
 ## 빠른 시작
 
-테스트를 추가할 백엔드 프로젝트 루트 터미널에서 바로 실행합니다.
+### 1. 작업 공간 생성
 
 ```bash
 npx --yes openapi-k6 init
 ```
 
-생성된 `load-tests/config.yaml`의 TODO 값을 채운 뒤 기본 흐름은 아래 순서입니다.
+테스트를 추가할 백엔드 프로젝트 루트 터미널에서 실행합니다.
+대화형 터미널에서는 `baseUrl`만 묻고 `<baseUrl>/v3/api-docs`가 OpenAPI 3.x JSON인지 먼저 확인합니다. 실패하면 `/api-docs`, `/openapi.json`, `/swagger.json` 같은 흔한 경로를 자동으로 시도하고, 그래도 찾지 못할 때만 OpenAPI spec URL 또는 파일 경로를 따로 묻습니다.
+
+### 2. 설정 확인
+
+OpenAPI URL을 찾았으면 `load-tests/config.yaml`의 `baseUrl`과 `openapi`가 바로 채워집니다. 자동 탐색이 실패하면 CLI 안내에 따라 직접 URL/파일 경로를 입력하거나 `skip`으로 넘어간 뒤 config를 나중에 수정할 수 있습니다.
+
+### 3. OpenAPI snapshot/catalog 생성
 
 ```bash
 npx --yes openapi-k6 sync
+```
+
+### 4. Scenario 검증
+
+```bash
 npx --yes openapi-k6 test -s smoke
+```
+
+`test`가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 않습니다.
+
+### 5. k6 스크립트 생성 및 실행
+
+```bash
 npx --yes openapi-k6 generate -s smoke
 ./load-tests/run.sh smoke --log
 ```
+
+### 선택: 버전 고정
 
 같은 버전을 프로젝트에 고정하고 싶으면 devDependency로 설치합니다.
 
@@ -40,7 +102,7 @@ pnpm add -D openapi-k6
 pnpm exec openapi-k6 --help
 ```
 
-생성된 k6 스크립트를 실행하려면 별도로 k6가 설치되어 있어야 합니다. npm 배포 버전이 아니라 현재 저장소 코드를 직접 실행하려면 [도구 개발/유지보수](docs/03-maintainer-notes.md)를 참고하세요.
+생성된 k6 스크립트를 실행하려면 별도로 k6가 설치되어 있어야 합니다. npm 배포 버전이 아니라 현재 저장소 코드를 직접 실행하려면 [도구 개발/유지보수](https://github.com/aqwsde321/openapi-k6-runner/blob/main/docs/03-maintainer-notes.md)를 참고하세요.
 
 ## 생성되는 작업 공간
 
@@ -71,20 +133,12 @@ npx --yes openapi-k6 init --force
 
 루트 README는 npm 설치와 전체 흐름만 안내합니다. 실제 작업 프롬프트는 init 시 선택한 디렉터리와 명령이 반영된 생성 README를 기준으로 합니다.
 
-## 알아둘 점
-
-- 상세한 config 작성, scenario DSL, k6 실행 옵션은 생성된 `load-tests/README.md`를 기준으로 진행합니다.
-- `npx --yes openapi-k6 test -s <scenario>`는 k6 파일을 만들기 전에 scenario YAML을 Node.js에서 1회 직접 실행해 API 흐름을 검증합니다.
-- `load-tests/run.sh`는 `run.sh`와 같은 폴더의 `load-tests/.env`만 자동으로 읽습니다. 백엔드 프로젝트 루트의 `.env`는 자동으로 읽지 않습니다.
-- `sync`는 외부 파일이나 URL을 가리키는 `$ref`를 snapshot 내부 참조로 묶어 저장합니다.
-- `pathParams` 값은 URL path segment로 encode되어 `/`, 공백, `?`, `#` 등이 URL 구조를 깨지 않습니다.
-
 ## 문서
 
-- [변경 이력](CHANGELOG.md)
-- [문서 색인](docs/README.md)
-- [도구 개발/유지보수](docs/03-maintainer-notes.md)
-- [MVP 설계](docs/spec/mvp-design.md)
-- [기능 세분화](docs/spec/feature-breakdown.md)
-- [작업 계획](docs/planning/work-plan.md)
-- [참조 프로젝트 분석](docs/reference/reference-projects.md)
+- [변경 이력](https://github.com/aqwsde321/openapi-k6-runner/blob/main/CHANGELOG.md)
+- [문서 색인](https://github.com/aqwsde321/openapi-k6-runner/blob/main/docs/README.md)
+- [도구 개발/유지보수](https://github.com/aqwsde321/openapi-k6-runner/blob/main/docs/03-maintainer-notes.md)
+- [MVP 설계](https://github.com/aqwsde321/openapi-k6-runner/blob/main/docs/spec/mvp-design.md)
+- [기능 세분화](https://github.com/aqwsde321/openapi-k6-runner/blob/main/docs/spec/feature-breakdown.md)
+- [작업 계획](https://github.com/aqwsde321/openapi-k6-runner/blob/main/docs/planning/work-plan.md)
+- [참조 프로젝트 분석](https://github.com/aqwsde321/openapi-k6-runner/blob/main/docs/reference/reference-projects.md)
