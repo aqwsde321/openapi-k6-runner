@@ -8,6 +8,18 @@
 
 - 아직 릴리스되지 않은 변경 사항을 여기에 기록합니다.
 
+## [0.2.0] - 2026-05-07
+
+### Added
+
+- 기존 `load-tests` 작업공간의 `config.yaml`, `.env`, `scenarios/`, `openapi/`, `generated/`, `logs/`를 보존하면서 README, runner, `.env.example`, `.gitignore`를 갱신하는 `openapi-k6 update` 명령을 추가했습니다.
+
+### Changed
+
+- 기존 작업공간에서 `init`을 다시 실행하면 `init --force` 대신 `update` 사용을 먼저 안내하도록 했습니다.
+- 생성되는 `load-tests/README.md`가 선택 module의 실제 snapshot/catalog 경로와 `--config`/`--module` 옵션을 반영하도록 개선했습니다.
+- TODO config 값 오류 메시지를 수정 위치와 필드가 더 명확하게 보이도록 정리했습니다.
+
 ## [0.1.3] - 2026-05-02
 
 ### Added
@@ -69,7 +81,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.1.0...v0.1.1

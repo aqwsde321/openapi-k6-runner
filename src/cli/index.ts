@@ -1075,7 +1075,7 @@ export function createProgram(context: CliContext = {}): Command {
   program
     .name('openapi-k6')
     .description('Generate k6 scripts from OpenAPI specs and Scenario DSL files.')
-    .version('0.1.3')
+    .version('0.2.0')
     .exitOverride()
     .configureOutput({
       writeOut: (value) => stdout.write(value),
