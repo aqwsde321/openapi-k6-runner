@@ -522,7 +522,7 @@ openapi-k6 init
 
 - 대화형 `init`은 `baseUrl` 입력만으로 흔한 OpenAPI 경로를 자동 탐색해 config를 채울 수 있다.
 - 비대화형 환경이나 `--no-input`에서 생성된 config의 `TODO` 값을 채우면 `sync`를 실행할 수 있다.
-- `.env.example`에는 secret placeholder만 있고 실제 `.env`는 ignore된다.
+- `.env.example`에는 secret placeholder만 있고, `load-tests/.gitignore`는 기본적으로 `scenarios/**`만 git 추적 대상에 남긴다.
 - 생성된 smoke scenario의 path를 채우거나 선택한 endpoint로 바꾸면 `generate`를 실행할 수 있다.
 - `sync`와 `generate`는 남은 `TODO` 값을 발견하면 명확한 에러를 낸다.
 - `--force` 없이는 기존 파일을 덮어쓰지 않는다.

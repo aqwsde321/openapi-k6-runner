@@ -352,7 +352,7 @@ CLI/compiler MVP가 동작하고 README 사용법이 정리된 뒤 진행한다.
 
 - `{{env.LOGIN_PASSWORD}}`가 generated script에서 `__ENV.LOGIN_PASSWORD`로 생성된다.
 - context template인 `{{token}}`은 기존처럼 `context.token`으로 유지된다.
-- 실제 `.env`는 커밋되지 않고 `.env.example`만 scaffold에 포함된다.
+- `load-tests/.gitignore`는 기본적으로 `scenarios/**`만 git 추적 대상에 남긴다.
 
 ### 테스트
 
