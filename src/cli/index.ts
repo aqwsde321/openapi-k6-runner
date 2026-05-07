@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command, CommanderError } from 'commander';
 import { parse as parseDotEnv } from 'dotenv';
+import { realpathSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
@@ -1075,7 +1076,7 @@ export function createProgram(context: CliContext = {}): Command {
   program
     .name('openapi-k6')
     .description('Generate k6 scripts from OpenAPI specs and Scenario DSL files.')
-    .version('0.2.0')
+    .version('0.2.1')
     .exitOverride()
     .configureOutput({
       writeOut: (value) => stdout.write(value),
@@ -1183,7 +1184,15 @@ async function main(): Promise<void> {
   }
 }
 
-const entryPath = process.argv[1] ? path.resolve(process.argv[1]) : '';
+function resolveEntryPath(value: string): string {
+  try {
+    return realpathSync(value);
+  } catch {
+    return path.resolve(value);
+  }
+}
+
+const entryPath = process.argv[1] ? resolveEntryPath(process.argv[1]) : '';
 
 if (fileURLToPath(import.meta.url) === entryPath) {
   void main();

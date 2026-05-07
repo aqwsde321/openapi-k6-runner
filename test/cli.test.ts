@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -152,6 +152,25 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('const params0 = { tags: tags0 };');
     expect(output).toContain('const res0 = http.get(url0, params0);');
     expect(output).toContain('"health status == 200": (res) => res.status === 200,');
+  });
+
+  it('runs the CLI when invoked through a symlinked npm bin entrypoint', async () => {
+    const packageJson = JSON.parse(
+      await readFile(path.join(process.cwd(), 'package.json'), 'utf8'),
+    ) as { version: string };
+    const binPath = path.join(workspace, 'openapi-k6');
+
+    await symlink(path.join(process.cwd(), 'src/cli/index.ts'), binPath);
+
+    const result = spawnSync(
+      process.execPath,
+      ['--import', 'tsx', binPath, '--version'],
+      { cwd: process.cwd(), encoding: 'utf8' },
+    );
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stderr).toBe('');
+    expect(result.stdout.trim()).toBe(packageJson.version);
   });
 
   it('initializes a load-tests scaffold in the target project', async () => {

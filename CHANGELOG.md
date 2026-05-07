@@ -8,6 +8,12 @@
 
 - 아직 릴리스되지 않은 변경 사항을 여기에 기록합니다.
 
+## [0.2.1] - 2026-05-07
+
+### Fixed
+
+- npm/npx가 bin을 symlink로 실행할 때 CLI entrypoint가 실행되지 않던 문제를 수정했습니다.
+
 ## [0.2.0] - 2026-05-07
 
 ### Added
@@ -81,7 +87,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.1.1...v0.1.2
