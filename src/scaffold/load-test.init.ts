@@ -22,6 +22,24 @@ export interface InitLoadTestsResult {
   readmePath: string;
 }
 
+export interface UpdateLoadTestsOptions {
+  cwd: string;
+  directory?: string;
+  module?: string;
+  includeModuleOption?: boolean;
+  snapshot?: string;
+  catalog?: string;
+}
+
+export interface UpdateLoadTestsResult {
+  directoryPath: string;
+  configPath: string;
+  envExamplePath: string;
+  gitignorePath: string;
+  runScriptPath: string;
+  readmePath: string;
+}
+
 export class InitLoadTestsError extends Error {
   constructor(message: string) {
     super(message);
@@ -48,6 +66,19 @@ export async function initLoadTests(
   const readmePath = path.join(directoryPath, 'README.md');
   const smokePath = normalizeEndpointPath(options.smokePath ?? '/health');
 
+  if (!options.force && (await pathExists(configPath))) {
+    throw new InitLoadTestsError(
+      [
+        `${configPath}: already exists.`,
+        '',
+        'Use this for existing workspaces:',
+        `  ${formatUpdateCommand(directory)}`,
+        '',
+        'Use init --force only when intentionally resetting scaffold files.',
+      ].join('\n'),
+    );
+  }
+
   await fs.mkdir(path.join(directoryPath, 'openapi'), { recursive: true });
   await fs.mkdir(path.join(directoryPath, 'scenarios'), { recursive: true });
   await fs.mkdir(path.join(directoryPath, 'generated'), { recursive: true });
@@ -69,6 +100,57 @@ export async function initLoadTests(
     gitignorePath,
     runScriptPath,
     scenarioPath,
+    readmePath,
+  };
+}
+
+export async function updateLoadTests(
+  options: UpdateLoadTestsOptions,
+): Promise<UpdateLoadTestsResult> {
+  const moduleName = normalizeModuleName(options.module ?? 'default');
+  const directory = normalizeDirectory(options.directory ?? 'load-tests');
+  const directoryPath = path.resolve(options.cwd, directory);
+  const configPath = path.join(directoryPath, 'config.yaml');
+  const envExamplePath = path.join(directoryPath, '.env.example');
+  const gitignorePath = path.join(directoryPath, '.gitignore');
+  const runScriptPath = path.join(directoryPath, 'run.sh');
+  const readmePath = path.join(directoryPath, 'README.md');
+
+  if (!(await pathExists(configPath))) {
+    throw new InitLoadTestsError(
+      [
+        'load-tests workspace was not found.',
+        `Missing: ${configPath}`,
+        '',
+        'Run this first:',
+        '  npx --yes openapi-k6 init',
+      ].join('\n'),
+    );
+  }
+
+  await fs.mkdir(path.join(directoryPath, 'openapi'), { recursive: true });
+  await fs.mkdir(path.join(directoryPath, 'generated'), { recursive: true });
+  await fs.mkdir(path.join(directoryPath, 'scenarios'), { recursive: true });
+  await writeTextFile(envExamplePath, renderEnvExample(), true);
+  await writeTextFile(gitignorePath, renderGitignore(), true);
+  await writeTextFile(runScriptPath, renderRunScript(), true);
+  await fs.chmod(runScriptPath, 0o755);
+  await writeTextFile(
+    readmePath,
+    renderReadme(moduleName, directory, {
+      includeModuleOption: options.includeModuleOption,
+      snapshot: options.snapshot,
+      catalog: options.catalog,
+    }),
+    true,
+  );
+
+  return {
+    directoryPath,
+    configPath,
+    envExamplePath,
+    gitignorePath,
+    runScriptPath,
     readmePath,
   };
 }
@@ -159,6 +241,32 @@ async function writeTextFile(
   }
 }
 
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === 'ENOENT'
+    ) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+function formatUpdateCommand(directory: string): string {
+  if (directory === 'load-tests') {
+    return 'npx --yes openapi-k6 update';
+  }
+
+  return `npx --yes openapi-k6 update --config ${shellQuote(`${directory}/config.yaml`)}`;
+}
+
 function renderConfig(moduleName: string, baseUrl: string | undefined, openapi: string | undefined): string {
   return [
     '# API 호출 기준 URL입니다. 생성된 k6 스크립트의 기본 BASE_URL로 사용됩니다.',
@@ -217,8 +325,10 @@ function renderEnvExample(): string {
 
 function renderGitignore(): string {
   return [
-    '.env',
-    'logs/',
+    '*',
+    '!.gitignore',
+    '!scenarios/',
+    '!scenarios/**',
     '',
   ].join('\n');
 }
@@ -360,12 +470,36 @@ function renderRunScript(): string {
   ].join('\n');
 }
 
-function renderReadme(moduleName: string, directory: string): string {
+function renderReadme(
+  moduleName: string,
+  directory: string,
+  options: {
+    includeModuleOption?: boolean;
+    snapshot?: string;
+    catalog?: string;
+  } = {},
+): string {
   const configPath = directory + '/config.yaml';
   const scenarioPath = directory + '/scenarios/smoke.yaml';
   const outputPath = directory + '/generated/smoke.k6.js';
-  const snapshotPath = directory + '/openapi/' + moduleName + '.openapi.json';
-  const catalogPath = directory + '/openapi/' + moduleName + '.catalog.json';
+  const snapshotPath = renderConfigRelativePath(
+    directory,
+    options.snapshot,
+    'openapi/' + moduleName + '.openapi.json',
+  );
+  const snapshotConfigValue = renderConfigPathValue(
+    options.snapshot,
+    'openapi/' + moduleName + '.openapi.json',
+  );
+  const catalogPath = renderConfigRelativePath(
+    directory,
+    options.catalog,
+    'openapi/' + moduleName + '.catalog.json',
+  );
+  const catalogConfigValue = renderConfigPathValue(
+    options.catalog,
+    'openapi/' + moduleName + '.catalog.json',
+  );
   const logPath = directory + '/logs/smoke.log';
   const reportPath = directory + '/logs/smoke-report.html';
   const runScriptPath = directory + '/run.sh';
@@ -383,22 +517,28 @@ function renderReadme(moduleName: string, directory: string): string {
   const workflowOutputArg = shellQuote(workflowOutputPath);
   const envArg = shellQuote(envPath);
   const usesDefaultDirectory = directory === 'load-tests';
+  const shouldIncludeModuleOption = options.includeModuleOption === true || !usesDefaultDirectory;
   const cliCommand = 'npx --yes openapi-k6';
+  const configOption = usesDefaultDirectory ? '' : ' --config ' + configArg;
+  const moduleOption = shouldIncludeModuleOption ? ' --module ' + moduleName : '';
 
-  const syncCommand = usesDefaultDirectory
-    ? cliCommand + ' sync'
-    : cliCommand + ' sync --config ' + configArg + ' --module ' + moduleName;
+  const syncCommand = cliCommand + ' sync' + configOption + moduleOption;
+  const updateCommand = cliCommand + ' update' + configOption + moduleOption;
   const testNameCommand = usesDefaultDirectory
-    ? cliCommand + ' test -s <name>'
+    ? cliCommand + ' test' + moduleOption + ' -s <name>'
     : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath);
   const generateNameCommand = usesDefaultDirectory
-    ? cliCommand + ' generate -s <name>'
+    ? cliCommand + ' generate' + moduleOption + ' -s <name>'
     : cliCommand + ' generate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath) + ' --write ' + shellQuote(outputTemplatePath);
   const testSmokeCommand = usesDefaultDirectory
-    ? cliCommand + ' test -s smoke'
+    ? cliCommand + ' test' + moduleOption + ' -s smoke'
     : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + scenarioArg;
   const generateSmokeCommand = usesDefaultDirectory
-    ? cliCommand + ' generate \\\n  -s smoke'
+    ? [
+        cliCommand + ' generate \\',
+        ...(shouldIncludeModuleOption ? ['  --module ' + moduleName + ' \\'] : []),
+        '  -s smoke',
+      ].join('\n')
     : [
         cliCommand + ' generate \\',
         '  --config ' + configArg + ' \\',
@@ -407,10 +547,10 @@ function renderReadme(moduleName: string, directory: string): string {
         '  --write ' + outputArg,
       ].join('\n');
   const testWorkflowCommand = usesDefaultDirectory
-    ? cliCommand + ' test -s login-flow'
+    ? cliCommand + ' test' + moduleOption + ' -s login-flow'
     : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + workflowScenarioArg;
   const generateWorkflowCommand = usesDefaultDirectory
-    ? cliCommand + ' generate -s login-flow'
+    ? cliCommand + ' generate' + moduleOption + ' -s login-flow'
     : cliCommand + ' generate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + workflowScenarioArg + ' --write ' + workflowOutputArg;
 
   return renderReadmeTemplate({
@@ -440,14 +580,38 @@ function renderReadme(moduleName: string, directory: string): string {
     RUN_SMOKE_TRACE_REPORT_COMMAND: runScriptArg + ' smoke --trace --log --report --duration 10s --vus 1',
     SCENARIO_PATH: scenarioPath,
     SCENARIO_TEMPLATE_PATH: scenarioTemplatePath,
+    CATALOG_CONFIG_VALUE: catalogConfigValue,
+    SNAPSHOT_CONFIG_VALUE: snapshotConfigValue,
     SNAPSHOT_PATH: snapshotPath,
     SYNC_COMMAND: syncCommand,
     TEST_NAME_COMMAND: testNameCommand,
     TEST_SMOKE_COMMAND: testSmokeCommand,
     TEST_WORKFLOW_COMMAND: testWorkflowCommand,
+    UPDATE_COMMAND: updateCommand,
     WORKFLOW_OUTPUT_PATH: workflowOutputPath,
     WORKFLOW_SCENARIO_PATH: workflowScenarioPath,
   });
+}
+
+function renderConfigRelativePath(
+  directory: string,
+  configuredPath: string | undefined,
+  fallbackConfigRelativePath: string,
+): string {
+  const value = renderConfigPathValue(configuredPath, fallbackConfigRelativePath);
+
+  if (isHttpUrl(value) || path.isAbsolute(value)) {
+    return normalizePathSeparators(value);
+  }
+
+  return normalizePathSeparators(path.join(directory, value));
+}
+
+function renderConfigPathValue(
+  configuredPath: string | undefined,
+  fallbackConfigRelativePath: string,
+): string {
+  return normalizePathSeparators(configuredPath?.trim() || fallbackConfigRelativePath);
 }
 
 function renderReadmeTemplate(values: Record<string, string>): string {

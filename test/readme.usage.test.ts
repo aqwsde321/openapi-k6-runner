@@ -80,7 +80,8 @@ describe('README usage guide', () => {
     expect(readme).toContain('OpenAPI snapshot과 생성된 k6 스크립트는 명령으로 다시 만듭니다.');
     expect(readme).toContain('load-tests/run.sh');
     expect(readme).toContain('기본 `load-tests/.gitignore`는 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.');
-    expect(readme).toContain('`--force`는 scaffold 파일만 다시 쓰며');
+    expect(readme).toContain('기존 `load-tests/config.yaml`과 scenario를 보존한 채 README, runner, `.env.example`, `.gitignore` 같은 scaffold 파일만 최신화하려면 `update`를 사용합니다.');
+    expect(readme).toContain('`update`는 `load-tests/config.yaml`, `.env`, `scenarios/`, `openapi/`, `generated/`, `logs/`를 보존합니다.');
 
     expect(readme).toContain('<summary>검증 규칙과 제약</summary>');
     expect(readme).toContain('OpenAPI 3.x 문서를 대상으로 합니다. Swagger/OpenAPI 2.0 문서는 지원하지 않습니다.');
@@ -94,6 +95,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('| scenario 검증 | `npx --yes openapi-k6 test -s <name>` |');
     expect(readme).toContain('| k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <name>` |');
     expect(readme).toContain('| k6 설치 후 실행 | `./load-tests/run.sh <name> --log` |');
+    expect(readme).toContain('| 기존 scaffold 안전 갱신 | `npx --yes openapi-k6 update` |');
     expect(readme).toContain('| scaffold 파일 재생성 | `npx --yes openapi-k6 init --force` |');
 
     expect(readme).toContain('## AI에게 맡기기');

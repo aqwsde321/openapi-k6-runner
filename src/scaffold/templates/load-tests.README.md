@@ -17,7 +17,7 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
 2. 아래 명령은 백엔드 프로젝트 루트에서 실행해.
 3. __CONFIG_PATH__에 TODO가 남아 있으면 이 백엔드 프로젝트에 맞게 채워.
 4. __SYNC_COMMAND__를 실행해서 OpenAPI snapshot과 catalog를 만들어.
-5. __DIRECTORY__/openapi/*.catalog.json을 읽고 테스트할 endpoint 후보를 확인해.
+5. __CATALOG_PATH__을 읽고 테스트할 endpoint 후보를 확인해.
 6. 내가 원하는 API 흐름을 확인한 뒤 __DIRECTORY__/scenarios/*.yaml을 작성하거나 수정해.
 7. __TEST_NAME_COMMAND__ 형식으로 실제 API 흐름을 먼저 검증해.
 8. scenario test가 통과하기 전에는 k6 script를 생성하거나 실행하지 마.
@@ -25,7 +25,7 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
 10. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 예상 확인 포인트를 알려줘.
 
 __DIRECTORY__/README.md, __RUN_SCRIPT_PATH__, __DIRECTORY__/.env.example, __DIRECTORY__/.gitignore는 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.
-__DIRECTORY__/openapi/*.openapi.json과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.
+__SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.
 비밀 값은 scenario YAML에 직접 쓰지 말고 {{env.NAME}}으로 참조해. 실제 값은 __ENV_PATH__에만 둬.
 ```
 
@@ -39,7 +39,8 @@ __DIRECTORY__/openapi/*.openapi.json과 __DIRECTORY__/generated/*.k6.js도 직�
 
 - 명령은 백엔드 프로젝트 루트에서 실행합니다.
 - 직접 수정하는 파일은 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.
-- 생성물은 직접 고치지 않습니다. `openapi/*.openapi.json`은 `sync`, `generated/*.k6.js`는 `generate`로 다시 만듭니다.
+- 기본 `.gitignore`는 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.
+- 생성물은 직접 고치지 않습니다. OpenAPI snapshot은 `sync`, `generated/*.k6.js`는 `generate`로 다시 만듭니다.
 - `__CLI_COMMAND__ test`가 통과한 scenario만 `generate`하거나 `run.sh`로 실행합니다.
 - 비밀 값은 YAML에 쓰지 말고 `.env`에 둔 뒤 `{{env.NAME}}`으로 참조합니다.
 
@@ -93,9 +94,8 @@ __DIRECTORY__/
 ├── .env          # 필요 시 직접 생성, git commit 금지
 ├── .gitignore
 ├── run.sh
-├── openapi/
-│   ├── __MODULE_NAME__.openapi.json
-│   └── __MODULE_NAME__.catalog.json
+├── __SNAPSHOT_CONFIG_VALUE__
+├── __CATALOG_CONFIG_VALUE__
 ├── scenarios/
 │   └── smoke.yaml
 ├── fixtures/     # 파일 업로드 fixture가 필요할 때 직접 생성
@@ -119,8 +119,8 @@ defaultModule: __MODULE_NAME__
 modules:
   __MODULE_NAME__:
     openapi: https://api.example.com/v3/api-docs
-    snapshot: openapi/__MODULE_NAME__.openapi.json
-    catalog: openapi/__MODULE_NAME__.catalog.json
+    snapshot: __SNAPSHOT_CONFIG_VALUE__
+    catalog: __CATALOG_CONFIG_VALUE__
 ```
 
 - `baseUrl`: 생성된 k6 스크립트가 호출할 API base URL 기본값
@@ -288,7 +288,8 @@ __RUN_SMOKE_COMMAND__
 
 `__CLI_COMMAND__ test`와 `run.sh`가 `__ENV_PATH__`를 읽습니다. 이 파일은 `run.sh`와 같은 폴더에 있어야 합니다.
 백엔드 프로젝트 루트의 `.env`는 자동으로 읽지 않습니다. 루트 `.env` 값을 쓰려면 필요한 키만 이 파일로 복사하거나, 실행 전에 shell에서 직접 export합니다.
-`__DIRECTORY__/.gitignore`가 `.env`를 무시하므로 실제 값은 commit하지 않습니다.
+`__DIRECTORY__/.gitignore`는 기본적으로 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다. 실제 비밀 값은 commit하지 않습니다.
+이미 git에 올라간 `__DIRECTORY__/` 파일은 ignore 규칙만으로 빠지지 않으므로 필요하면 `git rm -r --cached __DIRECTORY__`로 추적에서만 제거합니다.
 
 ## Scenario 작성법
 
@@ -359,7 +360,7 @@ steps:
 
 파일 경로는 `__DIRECTORY__/` 기준입니다. 업로드 fixture는 기본적으로 `__FIXTURES_PATH__` 아래에 둡니다.
 Spring의 `@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` endpoint는 `request.multipart`로 작성합니다.
-fixture 파일은 반복 테스트에 안전하고 유용할 때만 commit합니다.
+fixture 파일은 반복 테스트에 안전하고 유용할 때만 백엔드 git 정책에 맞게 ignore 예외를 풀어 commit합니다.
 
 새 시나리오 검증:
 
@@ -384,7 +385,13 @@ __GENERATE_WORKFLOW_COMMAND__
 
 ## 5. 제거 방법
 
-`init --force`는 scaffold 관리 파일만 다시 씁니다. `.env`, `openapi/`, `generated/`, `logs/`, 추가 scenario 파일은 지우지 않습니다.
+`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore` 같은 scaffold 파일만 최신화합니다.
+
+```bash
+__UPDATE_COMMAND__
+```
+
+초기 scaffold를 의도적으로 다시 만들 때만 `init --force`를 사용합니다.
 
 이 scaffold를 제거하려면 대상 프로젝트 루트에서 `__DIRECTORY__/` 폴더를 삭제합니다.
 
@@ -414,13 +421,13 @@ This section is for AI agents. Use it as a compact checklist after reading the K
 - Run commands from the backend project root and follow the quick start order above.
 - Do not skip the test gate: only generate/run scenarios after `__CLI_COMMAND__ test` passes.
 - During ordinary backend test work, edit only `config.yaml`, `.env`, and `scenarios/*.yaml`.
-- If scaffold docs or helper scripts must change, update the generator template in openapi-k6-runner and rerun `__CLI_COMMAND__ init --force` intentionally.
-- Regenerate `openapi/*.openapi.json` and `generated/*.k6.js` with `sync`/`generate`; do not edit them directly.
+- If scaffold docs or helper scripts must change, update the generator template in openapi-k6-runner and rerun `__UPDATE_COMMAND__` intentionally.
+- Regenerate `__SNAPSHOT_PATH__` and `generated/*.k6.js` with `sync`/`generate`; do not edit them directly.
 - Do not write secrets in YAML. Use `{{env.NAME}}` and store real values only in `__ENV_PATH__`.
 
 ### Scenario Notes
 
-- Read `openapi/*.catalog.json` to pick endpoints; `generate` reads the OpenAPI snapshot, not the catalog.
+- Read `__CATALOG_PATH__` to pick endpoints; `generate` reads the OpenAPI snapshot, not the catalog.
 - Prefer `api.operationId`; use `api.method` and `api.path` when operationId is missing or unclear.
 - Use `extract` for response values and reference them later as `{{variableName}}`; use `{{env.NAME}}` for runtime secrets.
 - Put auth tokens under `request.headers`.
@@ -428,7 +435,7 @@ This section is for AI agents. Use it as a compact checklist after reading the K
 - `condition` compiles to a k6 `check`; it is not a branch. Later steps still run even if a check fails.
 - `pathParams` values are encoded as URL path segments.
 - Config-relative paths resolve from the directory containing `config.yaml`.
-- Multipart file paths are relative to `__DIRECTORY__/`. Put local upload fixtures under `__FIXTURES_PATH__` by default and commit them only when repeatable tests need them.
+- Multipart file paths are relative to `__DIRECTORY__/`. Put local upload fixtures under `__FIXTURES_PATH__` by default and unignore/commit them only when repeatable tests need them.
 - Spring endpoints such as `@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` should be modeled with `request.multipart`.
 - k6 multipart references: https://grafana.com/docs/k6/latest/examples/data-uploads/, https://grafana.com/docs/k6/latest/javascript-api/k6-http/file/, https://grafana.com/docs/k6/latest/javascript-api/init-context/open/.
 

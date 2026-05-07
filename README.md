@@ -166,13 +166,14 @@ $ npx --yes openapi-k6 test -s login-and-read-profile
 
 기본 `load-tests/.gitignore`는 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다. 전체 작업 공간을 git에 포함하려면 해당 ignore 규칙을 조정하세요.
 
-기존 scaffold 파일은 덮어쓰지 않습니다. 다시 만들려면 `--force`를 명시합니다.
+기존 `load-tests/config.yaml`과 scenario를 보존한 채 README, runner, `.env.example`, `.gitignore` 같은 scaffold 파일만 최신화하려면 `update`를 사용합니다.
 
 ```bash
-npx --yes openapi-k6 init --force
+npx --yes openapi-k6 update
 ```
 
-`--force`는 scaffold 파일만 다시 쓰며 `.env`, `openapi/`, `generated/`, `logs/`, 추가 scenario 파일은 지우지 않습니다.
+`update`는 `load-tests/config.yaml`, `.env`, `scenarios/`, `openapi/`, `generated/`, `logs/`를 보존합니다.
+초기 scaffold를 의도적으로 다시 만들 때만 `init --force`를 사용합니다.
 
 </details>
 
@@ -212,6 +213,7 @@ pnpm exec openapi-k6 --help
 | scenario 검증 | `npx --yes openapi-k6 test -s <name>` |
 | k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <name>` |
 | k6 설치 후 실행 | `./load-tests/run.sh <name> --log` |
+| 기존 scaffold 안전 갱신 | `npx --yes openapi-k6 update` |
 | scaffold 파일 재생성 | `npx --yes openapi-k6 init --force` |
 
 ## AI에게 맡기기

@@ -23,7 +23,7 @@ import {
 import { syncOpenApiSnapshot } from '../openapi/openapi.catalog.js';
 import { parseOpenApiFile } from '../openapi/openapi.parser.js';
 import { parseScenarioFile } from '../parser/scenario.parser.js';
-import { initLoadTests } from '../scaffold/load-test.init.js';
+import { initLoadTests, updateLoadTests } from '../scaffold/load-test.init.js';
 import { createScenarioConsoleReporter } from './test.reporter.js';
 
 type WritableLike = {
@@ -95,6 +95,11 @@ export interface InitOptions {
   noInput?: boolean;
 }
 
+export interface UpdateOptions {
+  config?: string;
+  module?: string;
+}
+
 export interface GenerateResult {
   outputPath: string;
   scenarioPath: string;
@@ -122,6 +127,15 @@ export interface InitResult {
   configPath: string;
   runScriptPath: string;
   scenarioPath: string;
+  readmePath: string;
+}
+
+export interface UpdateResult {
+  directoryPath: string;
+  configPath: string;
+  envExamplePath: string;
+  gitignorePath: string;
+  runScriptPath: string;
   readmePath: string;
 }
 
@@ -609,9 +623,7 @@ function resolveConfiguredOpenApiInput(
   }
 
   if (config !== undefined) {
-    throw new Error(
-      `${config.path}: ${configFieldLabel} is not configured. Replace TODO before running ${commandName}.`,
-    );
+    throw new Error(formatMissingConfigValueError(config.path, configFieldLabel, commandName));
   }
 
   throw new Error(message);
@@ -635,9 +647,7 @@ function resolveConfiguredFilePath(
   }
 
   if (config !== undefined) {
-    throw new Error(
-      `${config.path}: ${configFieldLabel} is not configured. Replace TODO before running ${commandName}.`,
-    );
+    throw new Error(formatMissingConfigValueError(config.path, configFieldLabel, commandName));
   }
 
   throw new Error(message);
@@ -645,6 +655,25 @@ function resolveConfiguredFilePath(
 
 function isConfiguredValue(value: string | undefined): value is string {
   return value !== undefined && value.trim() !== '' && value.trim().toUpperCase() !== TODO_VALUE;
+}
+
+function formatMissingConfigValueError(
+  configPath: string,
+  configFieldLabel: string,
+  commandName: string,
+): string {
+  return [
+    `${configPath}: ${configFieldLabel} is not configured.`,
+    '',
+    'Edit:',
+    `  ${configPath}`,
+    '',
+    'Set:',
+    `  ${configFieldLabel}`,
+    '',
+    'After editing:',
+    '  rerun the command',
+  ].join('\n');
 }
 
 function normalizeConfiguredValue(value: string | undefined): string | undefined {
@@ -863,6 +892,28 @@ export async function runInitCommand(
   });
 }
 
+export async function runUpdateCommand(
+  options: UpdateOptions,
+  context: CliContext = {},
+): Promise<UpdateResult> {
+  const cwd = resolveCwd(context);
+  const config = await loadOptionalConfig(cwd, options.config, true);
+  const moduleConfig = selectConfigModule(config, options.module);
+
+  if (config === undefined) {
+    throw new Error(`${DEFAULT_CONFIG_PATH} was not found. Run openapi-k6 init or pass --config.`);
+  }
+
+  return updateLoadTests({
+    cwd,
+    directory: path.relative(cwd, config.dir) || '.',
+    module: moduleConfig?.name,
+    includeModuleOption: options.module !== undefined,
+    snapshot: moduleConfig?.snapshot,
+    catalog: moduleConfig?.catalog,
+  });
+}
+
 function writeLine(stream: WritableLike, message: string): void {
   stream.write(`${message}\n`);
 }
@@ -975,6 +1026,20 @@ function writeInitSummary(
   writeLine(stdout, `  ${formatRunScriptCommand(cwd, result.runScriptPath)} smoke --log`);
 }
 
+function writeUpdateSummary(
+  stdout: WritableLike,
+  result: UpdateResult,
+  cwd: string,
+): void {
+  writeLine(stdout, `${initStatusSymbol(stdout, 'success')} Updated load-tests scaffold metadata in ${formatDisplayPath(cwd, result.directoryPath)}`);
+  writeLine(stdout, `  kept config  ${formatDisplayPath(cwd, result.configPath)}`);
+  writeLine(stdout, `  guide        ${formatDisplayPath(cwd, result.readmePath)}`);
+  writeLine(stdout, `  runner       ${formatDisplayPath(cwd, result.runScriptPath)}`);
+  writeLine(stdout, `  env example  ${formatDisplayPath(cwd, result.envExamplePath)}`);
+  writeLine(stdout, `  gitignore    ${formatDisplayPath(cwd, result.gitignorePath)}`);
+  writeLine(stdout, '  kept scenarios, snapshots, generated scripts, logs, and .env unchanged');
+}
+
 function shouldUseColor(
   stream: WritableLike,
   env: Record<string, string | undefined>,
@@ -1030,6 +1095,16 @@ export function createProgram(context: CliContext = {}): Command {
     .action(async (options: InitOptions) => {
       const result = await runInitCommand(options, context);
       writeInitSummary(stdout, result, options, resolveCwd(context));
+    });
+
+  program
+    .command('update')
+    .description('Update existing load-tests scaffold files without touching config or scenarios.')
+    .option('--config <path>', 'Load test config file path')
+    .option('-m, --module <name>', 'Module name from config')
+    .action(async (options: UpdateOptions) => {
+      const result = await runUpdateCommand(options, context);
+      writeUpdateSummary(stdout, result, resolveCwd(context));
     });
 
   program
