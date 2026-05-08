@@ -17,7 +17,7 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
 2. 아래 명령은 백엔드 프로젝트 루트에서 실행해.
 3. __CONFIG_PATH__에 TODO가 남아 있으면 이 백엔드 프로젝트에 맞게 채워.
 4. __SYNC_COMMAND__를 실행해서 OpenAPI snapshot과 catalog를 만들어.
-5. __CATALOG_PATH__을 읽고 테스트할 endpoint 후보를 확인해.
+5. __CATALOG_QUERY_COMMAND__로 테스트할 endpoint 후보를 확인해. 필요하면 __CATALOG_PATH__도 열어봐.
 6. 내가 원하는 API 흐름을 확인한 뒤 __DIRECTORY__/scenarios/*.yaml을 작성하거나 수정해.
 7. __TEST_NAME_COMMAND__ 형식으로 실제 API 흐름을 먼저 검증해.
 8. scenario test가 통과하기 전에는 k6 script를 생성하거나 실행하지 마.
@@ -56,13 +56,19 @@ __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말�
    __SYNC_COMMAND__
    ```
 
-3. `__SCENARIO_PATH__`를 수정한 뒤 실제 API 흐름을 검증합니다.
+3. scenario에 쓸 endpoint 후보를 검색합니다.
+
+   ```bash
+   __CATALOG_QUERY_COMMAND__
+   ```
+
+4. `__SCENARIO_PATH__`를 수정한 뒤 실제 API 흐름을 검증합니다.
 
    ```bash
    __TEST_SMOKE_COMMAND__
    ```
 
-4. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.
+5. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.
 
    ```bash
    __GENERATE_SMOKE_COMMAND__
@@ -138,7 +144,7 @@ modules:
 | --- | --- | --- | --- |
 | 1 | `config.yaml`의 `baseUrl`, `modules.__MODULE_NAME__.openapi` 확인 또는 TODO 채우기 | - | - |
 | 2 | - | `__SYNC_COMMAND__` | `__SNAPSHOT_PATH__`, `__CATALOG_PATH__` |
-| 3 | `__CATALOG_PATH__`를 보고 scenario 작성/수정 | - | `__SCENARIO_TEMPLATE_PATH__` |
+| 3 | catalog에서 endpoint 후보 검색 후 scenario 작성/수정 | `__CATALOG_QUERY_COMMAND__` | `__SCENARIO_TEMPLATE_PATH__` |
 | 4 | `{{env.NAME}}`을 쓰는 경우 `__ENV_PATH__` 작성 | `__TEST_NAME_COMMAND__` | scenario test 결과, step별 API 검증 결과 |
 | 5 | scenario test 통과 확인 | `__GENERATE_NAME_COMMAND__` | `__OUTPUT_TEMPLATE_PATH__` |
 | 6 | 생성된 k6 스크립트 확인 | `__RUN_SCRIPT_ARG__ <name> --log` | k6 부하 테스트 실행, `__DIRECTORY__/logs/<name>.log` |
@@ -155,7 +161,13 @@ __SYNC_COMMAND__
 
 ### 2-2. Scenario YAML 작성
 
-`__CATALOG_PATH__`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.
+`catalog` 명령으로 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.
+
+```bash
+__CATALOG_QUERY_COMMAND__
+```
+
+전체 catalog 파일은 `__CATALOG_PATH__`에 있습니다.
 
 기본 smoke 테스트는 `__SCENARIO_PATH__`를 수정합니다. 새 테스트는 `__SCENARIO_TEMPLATE_PATH__` 파일을 만듭니다.
 
@@ -294,7 +306,7 @@ __RUN_SMOKE_COMMAND__
 ## Scenario 작성법
 
 Scenario YAML은 `__DIRECTORY__/scenarios/*.yaml`에 작성합니다.
-먼저 `__CATALOG_PATH__`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.
+먼저 `__CATALOG_QUERY_COMMAND__`로 테스트할 endpoint 후보를 찾습니다. 전체 catalog 파일은 `__CATALOG_PATH__`입니다.
 
 자주 쓰는 request 필드입니다.
 
@@ -427,7 +439,7 @@ This section is for AI agents. Use it as a compact checklist after reading the K
 
 ### Scenario Notes
 
-- Read `__CATALOG_PATH__` to pick endpoints; `generate` reads the OpenAPI snapshot, not the catalog.
+- Use `__CATALOG_QUERY_COMMAND__` or read `__CATALOG_PATH__` to pick endpoints; `generate` reads the OpenAPI snapshot, not the catalog.
 - Prefer `api.operationId`; use `api.method` and `api.path` when operationId is missing or unclear.
 - Use `extract` for response values and reference them later as `{{variableName}}`; use `{{env.NAME}}` for runtime secrets.
 - Put auth tokens under `request.headers`.

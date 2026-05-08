@@ -13,18 +13,18 @@ describe('README usage guide', () => {
     expect(readme).toContain('`openapi-k6`의 중심은 k6 파일 생성이 아니라 scenario 작성과 검증입니다.');
 
     expect(readme).toContain('## 한눈에 보기');
-    expect(readme).toContain('init -> sync -> scenario YAML 수정 -> test -> generate -> run.sh');
+    expect(readme).toContain('init -> sync -> catalog 검색 -> scenario YAML 수정 -> test -> generate -> run.sh');
     expect(readme).toContain('| 1 | `npx --yes openapi-k6 init` | 백엔드 프로젝트에 `load-tests/` 생성 |');
-    expect(readme).toContain('| 3 | `load-tests/scenarios/smoke.yaml` 수정 | catalog 기준으로 API 흐름 작성 |');
-    expect(readme).toContain('| 4 | `npx --yes openapi-k6 test -s smoke` | Node.js에서 scenario 1회 검증 |');
-    expect(readme).toContain('| 6 | `./load-tests/run.sh smoke --log` | k6 설치 후 스크립트 실행 |');
+    expect(readme).toContain('| 3 | `npx --yes openapi-k6 catalog --query login` | scenario에 쓸 endpoint 후보 검색 |');
+    expect(readme).toContain('| 5 | `npx --yes openapi-k6 test -s smoke` | Node.js에서 scenario 1회 검증 |');
+    expect(readme).toContain('| 7 | `./load-tests/run.sh smoke --log` | k6 설치 후 스크립트 실행 |');
     expect(readme).toContain('`openapi-k6 test`는 보조 명령이 아니라 k6 실행 전 검증 관문입니다.');
     expect(readme).toContain('URL, header, query, path, body, 환경변수, condition, extract를 확인하고');
 
     expect(readme).toContain('## 핵심 기능');
     expect(readme).toContain('| Scenario YAML | 로그인, 추출, 인증 요청 같은 API 흐름을 YAML로 표현합니다. |');
     expect(readme).toContain('| 검증 관문 | k6 실행 전에 요청 구성, 추출, 설정 오류를 잡습니다. |');
-    expect(readme).toContain('| OpenAPI catalog | scenario에 쓸 `operationId`, `method`, `path`를 고르기 쉽게 합니다. |');
+    expect(readme).toContain('| OpenAPI catalog | `catalog` 명령으로 scenario에 쓸 `operationId`, `method`, `path`를 찾습니다. |');
     expect(readme).toContain('| `load-tests/` 작업 공간 | config, scenario, snapshot, 생성된 k6 스크립트, runner를 백엔드 프로젝트 안에서 관리합니다. |');
     expect(readme).toContain('| AI 작업 프롬프트 | 루트 README에서 시작하고 생성 README로 이어지는 작업 지침을 제공합니다. |');
 
@@ -62,8 +62,9 @@ describe('README usage guide', () => {
     expect(readme).toContain('### 3. OpenAPI snapshot/catalog 생성');
     expect(readme).toContain('npx --yes openapi-k6 sync');
     expect(readme).toContain('### 4. Scenario 작성/수정');
-    expect(readme).toContain('`load-tests/openapi/*.catalog.json`에서 테스트할 endpoint의 `operationId`, `method`, `path`, request body 여부를 확인하고');
-    expect(readme).toContain('`load-tests/scenarios/smoke.yaml`을 API 흐름에 맞게 수정합니다.');
+    expect(readme).toContain('`catalog` 명령으로 테스트할 endpoint의 `operationId`, `method`, `path`, request body 여부를 확인합니다.');
+    expect(readme).toContain('npx --yes openapi-k6 catalog --query login');
+    expect(readme).toContain('그 다음 `load-tests/scenarios/smoke.yaml`을 API 흐름에 맞게 수정합니다.');
     expect(readme).toContain('### 5. Scenario 검증');
     expect(readme).toContain('npx --yes openapi-k6 test -s smoke');
     expect(readme).toContain('`test`가 통과해야 k6 스크립트를 생성하거나 실행합니다.');
@@ -92,6 +93,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('## 명령 모음');
     expect(readme).toContain('| 작업 공간 생성 | `npx --yes openapi-k6 init` |');
     expect(readme).toContain('| OpenAPI snapshot/catalog 갱신 | `npx --yes openapi-k6 sync` |');
+    expect(readme).toContain('| scenario용 endpoint 검색 | `npx --yes openapi-k6 catalog --query <keyword>` |');
     expect(readme).toContain('| scenario 검증 | `npx --yes openapi-k6 test -s <name>` |');
     expect(readme).toContain('| k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <name>` |');
     expect(readme).toContain('| k6 설치 후 실행 | `./load-tests/run.sh <name> --log` |');
@@ -106,6 +108,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('baseUrl 또는 OpenAPI spec URL을 확실히 모르면 나에게 물어봐.');
     expect(readme).toContain('init 후 생성된 load-tests/README.md를 읽고, 그 문서의 작업 순서와 규칙을 기준으로 진행해.');
     expect(readme).toContain('npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 생성해.');
+    expect(readme).toContain('npx --yes openapi-k6 catalog --query <keyword>로 테스트할 endpoint 후보를 확인해.');
     expect(readme).toContain('npx --yes openapi-k6 test -s <name>으로 scenario를 먼저 검증해.');
     expect(readme).toContain('scenario test가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 마.');
     expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore는 scaffold 파일이므로 명시 요청 없이는 수정하지 마.');

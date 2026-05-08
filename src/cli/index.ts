@@ -16,13 +16,14 @@ import {
   type LoadTestConfig,
   type LoadTestModuleConfig,
 } from '../config/load-test.config.js';
+import type { ApiCatalog, ApiCatalogOperation } from '../core/types.js';
 import {
   executeAstScenario,
   type ScenarioExecutionReporter,
   type ScenarioExecutionResult,
 } from '../executor/scenario.executor.js';
 import { syncOpenApiSnapshot } from '../openapi/openapi.catalog.js';
-import { parseOpenApiFile } from '../openapi/openapi.parser.js';
+import { HTTP_METHOD_ORDER, parseOpenApiFile } from '../openapi/openapi.parser.js';
 import { parseScenarioFile } from '../parser/scenario.parser.js';
 import { initLoadTests, updateLoadTests } from '../scaffold/load-test.init.js';
 import { createScenarioConsoleReporter } from './test.reporter.js';
@@ -85,6 +86,16 @@ export interface TestOptions {
   color?: boolean;
 }
 
+export interface CatalogOptions {
+  config?: string;
+  module?: string;
+  query?: string;
+  method?: string;
+  tag?: string;
+  all?: boolean;
+  json?: boolean;
+}
+
 export interface InitOptions {
   dir?: string;
   module?: string;
@@ -123,6 +134,18 @@ export interface TestResult extends ScenarioExecutionResult {
   moduleName?: string;
 }
 
+export interface CatalogResult {
+  catalogPath: string;
+  source: string;
+  generatedAt: string;
+  totalOperationCount: number;
+  operations: ApiCatalogOperation[];
+  tagCounts: Array<{ tag: string; count: number }>;
+  warnings: string[];
+  filters: CatalogFilters;
+  moduleName?: string;
+}
+
 export interface InitResult {
   directoryPath: string;
   configPath: string;
@@ -138,6 +161,13 @@ export interface UpdateResult {
   gitignorePath: string;
   runScriptPath: string;
   readmePath: string;
+}
+
+interface CatalogFilters {
+  query?: string;
+  method?: string;
+  tag?: string;
+  all?: boolean;
 }
 
 function resolveCwd(context: CliContext): string {
@@ -822,6 +852,43 @@ export async function runSyncCommand(
   };
 }
 
+export async function runCatalogCommand(
+  options: CatalogOptions,
+  context: CliContext = {},
+): Promise<CatalogResult> {
+  const cwd = resolveCwd(context);
+  const config = await loadOptionalConfig(cwd, options.config, true);
+  const moduleConfig = selectConfigModule(config, options.module);
+  const moduleName = moduleConfig?.name ?? '<none>';
+  const catalogPath = resolveConfiguredFilePath(
+    cwd,
+    config,
+    undefined,
+    moduleConfig?.catalog,
+    'modules.<name>.catalog is required to search catalog',
+    `modules.${moduleName}.catalog`,
+    'catalog',
+  );
+  const catalog = await readCatalogFile(catalogPath);
+  const filters = normalizeCatalogFilters(options);
+  const shouldList = shouldListCatalogOperations(filters);
+  const operations = shouldList
+    ? sortCatalogOperations(filterCatalogOperations(catalog.operations, filters))
+    : [];
+
+  return {
+    catalogPath,
+    source: catalog.source,
+    generatedAt: catalog.generatedAt,
+    totalOperationCount: catalog.operations.length,
+    operations,
+    tagCounts: countCatalogTags(catalog.operations),
+    warnings: shouldList ? findDuplicateOperationWarnings(operations) : [],
+    filters,
+    ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
+  };
+}
+
 export async function runTestCommand(
   options: TestOptions,
   context: CliContext = {},
@@ -1041,6 +1108,361 @@ function writeUpdateSummary(
   writeLine(stdout, '  kept scenarios, snapshots, generated scripts, logs, and .env unchanged');
 }
 
+async function readCatalogFile(catalogPath: string): Promise<ApiCatalog> {
+  const raw = await fs.readFile(catalogPath, 'utf8');
+
+  try {
+    return parseCatalog(JSON.parse(raw), catalogPath);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error(`${catalogPath}: failed to parse catalog JSON: ${error.message}`);
+    }
+
+    throw error;
+  }
+}
+
+function parseCatalog(value: unknown, catalogPath: string): ApiCatalog {
+  const catalog = expectCatalogRecord(value, `${catalogPath}: catalog must be an object`);
+  const generatedAt = expectCatalogString(catalog.generatedAt, `${catalogPath}: generatedAt must be a string`);
+  const source = expectCatalogString(catalog.source, `${catalogPath}: source must be a string`);
+
+  if (!Array.isArray(catalog.operations)) {
+    throw new Error(`${catalogPath}: operations must be an array`);
+  }
+
+  return {
+    generatedAt,
+    source,
+    operations: catalog.operations.map((operation, index) =>
+      parseCatalogOperation(operation, `${catalogPath}: operations[${index}]`)),
+  };
+}
+
+function parseCatalogOperation(value: unknown, label: string): ApiCatalogOperation {
+  const operation = expectCatalogRecord(value, `${label} must be an object`);
+  const method = expectCatalogString(operation.method, `${label}.method must be a string`);
+  const endpointPath = expectCatalogString(operation.path, `${label}.path must be a string`);
+  const tags = Array.isArray(operation.tags)
+    ? operation.tags.flatMap((tag) => typeof tag === 'string' ? [tag] : [])
+    : [];
+
+  return {
+    method: method.toUpperCase(),
+    path: endpointPath,
+    tags,
+    parameters: Array.isArray(operation.parameters) ? operation.parameters : [],
+    hasRequestBody: operation.hasRequestBody === true,
+    ...(typeof operation.operationId === 'string' ? { operationId: operation.operationId } : {}),
+    ...(typeof operation.summary === 'string' ? { summary: operation.summary } : {}),
+    ...(typeof operation.description === 'string' ? { description: operation.description } : {}),
+    ...(Array.isArray(operation.requestBodyContentTypes)
+      ? {
+          requestBodyContentTypes: operation.requestBodyContentTypes.flatMap((contentType) =>
+            typeof contentType === 'string' ? [contentType] : []),
+        }
+      : {}),
+  };
+}
+
+function expectCatalogRecord(value: unknown, message: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(message);
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function expectCatalogString(value: unknown, message: string): string {
+  if (typeof value !== 'string') {
+    throw new Error(message);
+  }
+
+  return value;
+}
+
+function normalizeCatalogFilters(options: CatalogOptions): CatalogFilters {
+  const query = normalizeCatalogTextFilter(options.query);
+  const method = normalizeCatalogMethodFilter(options.method);
+  const tag = normalizeCatalogTextFilter(options.tag);
+
+  return {
+    ...(query === undefined ? {} : { query }),
+    ...(method === undefined ? {} : { method }),
+    ...(tag === undefined ? {} : { tag }),
+    ...(options.all === true ? { all: true } : {}),
+  };
+}
+
+function normalizeCatalogTextFilter(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeCatalogMethodFilter(value: string | undefined): string | undefined {
+  const method = normalizeCatalogTextFilter(value)?.toUpperCase();
+
+  if (method === undefined) {
+    return undefined;
+  }
+
+  const supportedMethods = new Set(HTTP_METHOD_ORDER.map((item) => item.toUpperCase()));
+
+  if (!supportedMethods.has(method)) {
+    throw new Error(`--method must be one of ${[...supportedMethods].join(', ')}`);
+  }
+
+  return method;
+}
+
+function shouldListCatalogOperations(filters: CatalogFilters): boolean {
+  return filters.all === true ||
+    filters.query !== undefined ||
+    filters.method !== undefined ||
+    filters.tag !== undefined;
+}
+
+function filterCatalogOperations(
+  operations: ApiCatalogOperation[],
+  filters: CatalogFilters,
+): ApiCatalogOperation[] {
+  return operations.filter((operation) => {
+    if (filters.method !== undefined && operation.method.toUpperCase() !== filters.method) {
+      return false;
+    }
+
+    if (
+      filters.tag !== undefined &&
+      !operation.tags.some((tag) => tag.toLowerCase() === filters.tag?.toLowerCase())
+    ) {
+      return false;
+    }
+
+    if (filters.query !== undefined && !matchesCatalogQuery(operation, filters.query)) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function matchesCatalogQuery(operation: ApiCatalogOperation, query: string): boolean {
+  const normalizedQuery = query.toLowerCase();
+
+  return catalogSearchValues(operation).some((value) =>
+    value.toLowerCase().includes(normalizedQuery));
+}
+
+function catalogSearchValues(operation: ApiCatalogOperation): string[] {
+  return [
+    operation.method,
+    operation.path,
+    operation.operationId,
+    ...operation.tags,
+    operation.summary,
+    operation.description,
+    ...(operation.requestBodyContentTypes ?? []),
+    ...readCatalogParameterLabels(operation.parameters),
+  ].flatMap((value) => value === undefined ? [] : [value]);
+}
+
+function readCatalogParameterLabels(parameters: unknown[]): string[] {
+  return parameters.flatMap((parameter) => {
+    if (!parameter || typeof parameter !== 'object' || Array.isArray(parameter)) {
+      return [];
+    }
+
+    const record = parameter as Record<string, unknown>;
+    const name = typeof record.name === 'string' ? record.name : undefined;
+    const location = typeof record.in === 'string' ? record.in : undefined;
+
+    if (name === undefined && location === undefined) {
+      return [];
+    }
+
+    return [`${location ?? 'param'} ${name ?? '<unnamed>'}`];
+  });
+}
+
+function sortCatalogOperations(operations: ApiCatalogOperation[]): ApiCatalogOperation[] {
+  return [...operations].sort((left, right) =>
+    compareCatalogMethod(left.method, right.method) ||
+    left.path.localeCompare(right.path) ||
+    (left.operationId ?? '').localeCompare(right.operationId ?? ''));
+}
+
+function compareCatalogMethod(left: string, right: string): number {
+  const methodOrder = new Map(HTTP_METHOD_ORDER.map((method, index) => [method.toUpperCase(), index]));
+  const leftIndex = methodOrder.get(left.toUpperCase()) ?? Number.MAX_SAFE_INTEGER;
+  const rightIndex = methodOrder.get(right.toUpperCase()) ?? Number.MAX_SAFE_INTEGER;
+
+  return leftIndex - rightIndex;
+}
+
+function countCatalogTags(operations: ApiCatalogOperation[]): Array<{ tag: string; count: number }> {
+  const tagCounts = new Map<string, number>();
+
+  for (const operation of operations) {
+    for (const tag of operation.tags) {
+      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+    }
+  }
+
+  return [...tagCounts.entries()]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((left, right) => left.tag.localeCompare(right.tag));
+}
+
+function findDuplicateOperationWarnings(operations: ApiCatalogOperation[]): string[] {
+  const counts = new Map<string, number>();
+
+  for (const operation of operations) {
+    const key = `${operation.method.toUpperCase()} ${operation.path}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([key, count]) => `duplicate operation key: ${key} (${count} entries)`);
+}
+
+function writeCatalogOutput(
+  stdout: WritableLike,
+  result: CatalogResult,
+  cwd: string,
+  json: boolean | undefined,
+): void {
+  if (json === true) {
+    writeLine(stdout, JSON.stringify(formatCatalogJson(result), null, 2));
+    return;
+  }
+
+  if (shouldListCatalogOperations(result.filters)) {
+    writeCatalogOperations(stdout, result, cwd);
+    return;
+  }
+
+  writeCatalogSummary(stdout, result, cwd);
+}
+
+function formatCatalogJson(result: CatalogResult): Record<string, unknown> {
+  return {
+    catalogPath: result.catalogPath,
+    ...(result.moduleName === undefined ? {} : { moduleName: result.moduleName }),
+    source: result.source,
+    generatedAt: result.generatedAt,
+    totalOperationCount: result.totalOperationCount,
+    operationCount: result.operations.length,
+    filters: result.filters,
+    tagCounts: result.tagCounts,
+    warnings: result.warnings,
+    operations: result.operations,
+  };
+}
+
+function writeCatalogSummary(stdout: WritableLike, result: CatalogResult, cwd: string): void {
+  writeLine(stdout, `Catalog: ${formatDisplayPath(cwd, result.catalogPath)}`);
+
+  if (result.moduleName !== undefined) {
+    writeLine(stdout, `Module: ${result.moduleName}`);
+  }
+
+  writeLine(stdout, `Operations: ${result.totalOperationCount}`);
+  writeLine(stdout, '');
+  writeLine(stdout, 'Tags:');
+
+  if (result.tagCounts.length === 0) {
+    writeLine(stdout, '  (none)');
+  } else {
+    const width = Math.max(...result.tagCounts.map(({ tag }) => tag.length));
+
+    for (const { tag, count } of result.tagCounts) {
+      writeLine(stdout, `  ${tag.padEnd(width)}  ${count}`);
+    }
+  }
+
+  writeLine(stdout, '');
+  writeLine(stdout, 'Use filters:');
+  writeLine(stdout, '  openapi-k6 catalog --query login');
+  writeLine(stdout, '  openapi-k6 catalog --tag auth');
+  writeLine(stdout, '  openapi-k6 catalog --method POST');
+  writeLine(stdout, '  openapi-k6 catalog --all');
+}
+
+function writeCatalogOperations(stdout: WritableLike, result: CatalogResult, cwd: string): void {
+  writeLine(stdout, `Catalog: ${formatDisplayPath(cwd, result.catalogPath)}`);
+
+  if (result.moduleName !== undefined) {
+    writeLine(stdout, `Module: ${result.moduleName}`);
+  }
+
+  if (result.filters.query !== undefined) {
+    writeLine(stdout, `Query: ${result.filters.query}`);
+  }
+
+  if (result.filters.method !== undefined) {
+    writeLine(stdout, `Method: ${result.filters.method}`);
+  }
+
+  if (result.filters.tag !== undefined) {
+    writeLine(stdout, `Tag: ${result.filters.tag}`);
+  }
+
+  writeLine(stdout, `Operations: ${result.operations.length}`);
+
+  if (result.warnings.length > 0) {
+    writeLine(stdout, '');
+    writeLine(stdout, 'Warnings:');
+
+    for (const warning of result.warnings) {
+      writeLine(stdout, `  ${warning}`);
+    }
+  }
+
+  if (result.operations.length === 0) {
+    writeLine(stdout, '');
+    writeLine(stdout, 'No operations matched.');
+    return;
+  }
+
+  for (const operation of result.operations) {
+    writeLine(stdout, '');
+    writeLine(stdout, `${operation.method.padEnd(6)} ${operation.path}`);
+    writeCatalogOperationDetail(stdout, operation);
+  }
+}
+
+function writeCatalogOperationDetail(stdout: WritableLike, operation: ApiCatalogOperation): void {
+  if (operation.operationId !== undefined) {
+    writeLine(stdout, `  operationId: ${operation.operationId}`);
+  }
+
+  writeLine(stdout, `  tags: ${operation.tags.length === 0 ? '-' : operation.tags.join(', ')}`);
+  writeLine(stdout, `  body: ${formatCatalogBody(operation)}`);
+
+  const parameters = readCatalogParameterLabels(operation.parameters);
+
+  if (parameters.length > 0) {
+    writeLine(stdout, `  parameters: ${parameters.join(', ')}`);
+  }
+
+  if (operation.summary !== undefined) {
+    writeLine(stdout, `  summary: ${operation.summary}`);
+  }
+}
+
+function formatCatalogBody(operation: ApiCatalogOperation): string {
+  if (!operation.hasRequestBody) {
+    return 'no';
+  }
+
+  if (!operation.requestBodyContentTypes || operation.requestBodyContentTypes.length === 0) {
+    return 'yes';
+  }
+
+  return `yes (${operation.requestBodyContentTypes.join(', ')})`;
+}
+
 function shouldUseColor(
   stream: WritableLike,
   env: Record<string, string | undefined>,
@@ -1133,6 +1555,21 @@ export function createProgram(context: CliContext = {}): Command {
       const result = await runSyncCommand(options, context);
       writeLine(stdout, `Synced ${result.snapshotPath}`);
       writeLine(stdout, `Catalog ${result.catalogPath} (${result.operationCount} operations)`);
+    });
+
+  program
+    .command('catalog')
+    .description('Search the configured endpoint catalog for scenario YAML authoring.')
+    .option('--config <path>', 'Load test config file path')
+    .option('-m, --module <name>', 'Module name from config')
+    .option('-q, --query <text>', 'Search operationId, path, tags, summary, description, or parameters')
+    .option('--method <method>', 'Filter by HTTP method')
+    .option('--tag <tag>', 'Filter by exact tag')
+    .option('--all', 'List all operations instead of only the summary')
+    .option('--json', 'Print JSON output')
+    .action(async (options: CatalogOptions) => {
+      const result = await runCatalogCommand(options, context);
+      writeCatalogOutput(stdout, result, resolveCwd(context), options.json);
     });
 
   program

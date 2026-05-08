@@ -523,6 +523,7 @@ function renderReadme(
   const moduleOption = shouldIncludeModuleOption ? ' --module ' + moduleName : '';
 
   const syncCommand = cliCommand + ' sync' + configOption + moduleOption;
+  const catalogQueryCommand = cliCommand + ' catalog' + configOption + moduleOption + ' --query <keyword>';
   const updateCommand = cliCommand + ' update' + configOption + moduleOption;
   const testNameCommand = usesDefaultDirectory
     ? cliCommand + ' test' + moduleOption + ' -s <name>'
@@ -556,6 +557,7 @@ function renderReadme(
   return renderReadmeTemplate({
     BASE_URL_RUN_COMMAND: 'BASE_URL=https://api.example.com ' + runScriptArg + ' smoke',
     CATALOG_PATH: catalogPath,
+    CATALOG_QUERY_COMMAND: catalogQueryCommand,
     CLI_COMMAND: cliCommand,
     CONFIG_PATH: configPath,
     DIRECTORY: directory,

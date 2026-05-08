@@ -287,8 +287,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('처음에는 아래 순서만 따라가면 됩니다. 모든 명령은 백엔드 프로젝트 루트에서 실행합니다.');
     expect(readme).toContain('1. `load-tests/config.yaml`에 TODO가 남아 있으면 먼저 채웁니다.');
     expect(readme).toContain('2. OpenAPI snapshot/catalog를 만듭니다.');
-    expect(readme).toContain('3. `load-tests/scenarios/smoke.yaml`를 수정한 뒤 실제 API 흐름을 검증합니다.');
-    expect(readme).toContain('4. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.');
+    expect(readme).toContain('3. scenario에 쓸 endpoint 후보를 검색합니다.');
+    expect(readme).toContain('4. `load-tests/scenarios/smoke.yaml`를 수정한 뒤 실제 API 흐름을 검증합니다.');
+    expect(readme).toContain('5. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.');
     expect(readme).toContain('AI에게 맡기는 경우에는 위 프롬프트를 사용하세요.');
     expect(readme).toContain('직접 수정하는 파일은 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.');
     expect(readme).toContain('명령은 백엔드 프로젝트 루트에서 실행합니다.');
@@ -311,6 +312,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('자동 탐색이 실패하면 CLI 안내에 따라 직접 URL/파일 경로를 입력하거나 `skip`으로 넘어간 뒤 config를 나중에 수정할 수 있습니다.');
     expect(readme).toContain('`config.yaml`의 `baseUrl`, `modules.pharma.openapi` 확인 또는 TODO 채우기');
     expect(readme).toContain('`load-tests/openapi/pharma.openapi.json`, `load-tests/openapi/pharma.catalog.json`');
+    expect(readme).toContain('catalog에서 endpoint 후보 검색 후 scenario 작성/수정');
+    expect(readme).toContain('`npx --yes openapi-k6 catalog --query <keyword>`');
     expect(readme).toContain('`load-tests/scenarios/<name>.yaml`');
     expect(readme).toContain('`load-tests/generated/<name>.k6.js`');
     expect(readme).toContain('`./load-tests/run.sh <name> --log`');
@@ -320,7 +323,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('### 2-4. k6 스크립트 생성');
     expect(readme).toContain('### 2-5. k6 실행');
     expect(readme).toContain('생성/갱신: `load-tests/openapi/pharma.openapi.json`, `load-tests/openapi/pharma.catalog.json`');
-    expect(readme).toContain('`load-tests/openapi/pharma.catalog.json`에서 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.');
+    expect(readme).toContain('`catalog` 명령으로 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.');
+    expect(readme).toContain('전체 catalog 파일은 `load-tests/openapi/pharma.catalog.json`에 있습니다.');
     expect(readme).toContain('기본 smoke 테스트는 `load-tests/scenarios/smoke.yaml`를 수정합니다.');
     expect(readme).toContain('npx --yes openapi-k6 test -s smoke');
     expect(readme).toContain('`npx --yes openapi-k6 test`는 scenario YAML을 Node.js에서 1회 실행해 URL, status, condition, extract를 확인합니다.');
@@ -359,7 +363,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Keep human-facing documentation in Korean.');
     expect(readme).toContain('Do not write secrets in YAML. Use `{{env.NAME}}` and store real values only in `load-tests/.env`.');
     expect(readme).toContain('### Scenario Notes');
-    expect(readme).toContain('Read `load-tests/openapi/pharma.catalog.json` to pick endpoints; `generate` reads the OpenAPI snapshot, not the catalog.');
+    expect(readme).toContain('Use `npx --yes openapi-k6 catalog --query <keyword>` or read `load-tests/openapi/pharma.catalog.json` to pick endpoints; `generate` reads the OpenAPI snapshot, not the catalog.');
     expect(readme).toContain('Do not use `request.body` and `request.multipart` in the same step.');
     expect(readme).toContain('Config-relative paths resolve from the directory containing `config.yaml`.');
     expect(readme).toContain('`load-tests/run.sh`: k6 runner that auto-loads `load-tests/.env` values');
@@ -370,6 +374,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('아래 명령은 백엔드 프로젝트 루트에서 실행해.');
     expect(readme).toContain('load-tests/config.yaml에 TODO가 남아 있으면 이 백엔드 프로젝트에 맞게 채워.');
     expect(readme).toContain('npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 만들어.');
+    expect(readme).toContain('npx --yes openapi-k6 catalog --query <keyword>로 테스트할 endpoint 후보를 확인해.');
     expect(readme).toContain('npx --yes openapi-k6 test -s <name> 형식으로 실제 API 흐름을 먼저 검증해.');
     expect(readme).toContain('scenario test가 통과하기 전에는 k6 script를 생성하거나 실행하지 마.');
     expect(readme).toContain('통과한 scenario만 npx --yes openapi-k6 generate -s <name> 형식으로 k6 script를 생성해.');
@@ -1179,6 +1184,131 @@ describe('openapi-k6 CLI', () => {
         operationId: 'getHealth',
         hasRequestBody: false,
       }),
+    ]);
+  });
+
+  it('summarizes the configured catalog without dumping every operation', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    await writeCatalog('openapi/app.catalog.json', createCatalogOperations());
+    const stdout = createCapture();
+
+    await runCli(
+      ['catalog'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const output = stdout.output();
+
+    expect(output).toContain('Catalog: load-tests/openapi/app.catalog.json');
+    expect(output).toContain('Module: app');
+    expect(output).toContain('Operations: 4');
+    expect(output).toContain('Tags:');
+    expect(output).toContain('auth');
+    expect(output).toContain('orders');
+    expect(output).toContain('Use filters:');
+    expect(output).toContain('openapi-k6 catalog --query login');
+    expect(output).not.toContain('operationId: loginUser');
+  });
+
+  it('filters catalog operations for scenario authoring', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '  vendor:',
+      '    snapshot: openapi/vendor.openapi.json',
+      '    catalog: openapi/vendor.catalog.json',
+      '',
+    ]);
+    await writeCatalog('openapi/app.catalog.json', createCatalogOperations());
+    await writeCatalog('openapi/vendor.catalog.json', [
+      {
+        method: 'GET',
+        path: '/vendors',
+        operationId: 'searchVendors',
+        tags: ['vendor'],
+        summary: 'Search vendors',
+        parameters: [
+          { name: 'keyword', in: 'query', schema: { type: 'string' } },
+        ],
+        hasRequestBody: false,
+      },
+    ]);
+    const queryOutput = createCapture();
+    const methodTagOutput = createCapture();
+    const moduleOutput = createCapture();
+
+    await runCli(
+      ['catalog', '--query', 'login'],
+      { cwd: workspace, stdout: queryOutput.stream, stderr: createSink() },
+    );
+    await runCli(
+      ['catalog', '--method', 'POST', '--tag', 'orders'],
+      { cwd: workspace, stdout: methodTagOutput.stream, stderr: createSink() },
+    );
+    await runCli(
+      ['catalog', '--module', 'vendor', '--query', 'vendor'],
+      { cwd: workspace, stdout: moduleOutput.stream, stderr: createSink() },
+    );
+
+    expect(queryOutput.output()).toContain('Query: login');
+    expect(queryOutput.output()).toContain('Operations: 1');
+    expect(queryOutput.output()).toContain('POST   /auth/login');
+    expect(queryOutput.output()).toContain('operationId: loginUser');
+    expect(queryOutput.output()).toContain('body: yes (application/json)');
+    expect(queryOutput.output()).not.toContain('createOrder');
+
+    expect(methodTagOutput.output()).toContain('Method: POST');
+    expect(methodTagOutput.output()).toContain('Tag: orders');
+    expect(methodTagOutput.output()).toContain('Operations: 1');
+    expect(methodTagOutput.output()).toContain('POST   /orders');
+    expect(methodTagOutput.output()).toContain('operationId: createOrder');
+    expect(methodTagOutput.output()).toContain('parameters: header Idempotency-Key');
+    expect(methodTagOutput.output()).not.toContain('loginUser');
+
+    expect(moduleOutput.output()).toContain('Module: vendor');
+    expect(moduleOutput.output()).toContain('operationId: searchVendors');
+    expect(moduleOutput.output()).toContain('parameters: query keyword');
+    expect(moduleOutput.output()).not.toContain('createOrder');
+  });
+
+  it('prints filtered catalog operations as JSON', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    await writeCatalog('openapi/app.catalog.json', createCatalogOperations());
+    const stdout = createCapture();
+
+    await runCli(
+      ['catalog', '--json', '--query', 'order'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const output = JSON.parse(stdout.output()) as {
+      operationCount: number;
+      filters: { query?: string };
+      operations: Array<{ operationId?: string }>;
+    };
+
+    expect(output.operationCount).toBe(2);
+    expect(output.filters.query).toBe('order');
+    expect(output.operations.map((operation) => operation.operationId)).toEqual([
+      'getOrder',
+      'createOrder',
     ]);
   });
 
@@ -1995,6 +2125,70 @@ describe('openapi-k6 CLI', () => {
       ),
     ).rejects.toThrow('--module requires --config');
   });
+
+  async function writeCatalog(
+    configRelativePath: string,
+    operations: Array<Record<string, unknown>>,
+  ): Promise<void> {
+    const catalogPath = path.join(workspace, 'load-tests', configRelativePath);
+    await mkdir(path.dirname(catalogPath), { recursive: true });
+    await writeFile(
+      catalogPath,
+      JSON.stringify({
+        generatedAt: '2026-05-08T00:00:00.000Z',
+        source: '<test>',
+        operations,
+      }, null, 2) + '\n',
+      'utf8',
+    );
+  }
+
+  function createCatalogOperations(): Array<Record<string, unknown>> {
+    return [
+      {
+        method: 'GET',
+        path: '/orders/{orderId}',
+        operationId: 'getOrder',
+        tags: ['orders'],
+        summary: 'Get order',
+        parameters: [
+          { name: 'orderId', in: 'path', required: true, schema: { type: 'string' } },
+        ],
+        hasRequestBody: false,
+      },
+      {
+        method: 'POST',
+        path: '/orders',
+        operationId: 'createOrder',
+        tags: ['orders'],
+        summary: 'Create order',
+        parameters: [
+          { name: 'Idempotency-Key', in: 'header', schema: { type: 'string' } },
+        ],
+        hasRequestBody: true,
+        requestBodyContentTypes: ['application/json'],
+      },
+      {
+        method: 'POST',
+        path: '/auth/login',
+        operationId: 'loginUser',
+        tags: ['auth'],
+        summary: 'Login user',
+        parameters: [],
+        hasRequestBody: true,
+        requestBodyContentTypes: ['application/json'],
+      },
+      {
+        method: 'POST',
+        path: '/auth/logout',
+        operationId: 'logoutUser',
+        tags: ['auth'],
+        summary: 'Logout user',
+        parameters: [],
+        hasRequestBody: false,
+      },
+    ];
+  }
 
   async function writeConfig(lines: string[]): Promise<void> {
     await mkdir(path.join(workspace, 'load-tests'), { recursive: true });
