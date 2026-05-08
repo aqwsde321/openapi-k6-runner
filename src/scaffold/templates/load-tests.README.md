@@ -17,7 +17,7 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
 2. 아래 명령은 백엔드 프로젝트 루트에서 실행해.
 3. __CONFIG_PATH__에 TODO가 남아 있으면 이 백엔드 프로젝트에 맞게 채워.
 4. __SYNC_COMMAND__를 실행해서 OpenAPI snapshot과 catalog를 만들어.
-5. __CATALOG_QUERY_COMMAND__로 테스트할 endpoint 후보를 확인해. 필요하면 __CATALOG_PATH__도 열어봐.
+5. __CATALOG_QUERY_COMMAND__ 명령으로 테스트할 endpoint 후보를 확인해. 필요하면 __CATALOG_PATH__도 열어봐.
 6. 내가 원하는 API 흐름을 확인한 뒤 __DIRECTORY__/scenarios/*.yaml을 작성하거나 수정해.
 7. __TEST_NAME_COMMAND__ 형식으로 실제 API 흐름을 먼저 검증해.
 8. scenario test가 통과하기 전에는 k6 script를 생성하거나 실행하지 마.
@@ -61,6 +61,8 @@ __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말�
    ```bash
    __CATALOG_QUERY_COMMAND__
    ```
+
+   `login`은 원하는 검색어로 바꿔 실행합니다.
 
 4. `__SCENARIO_PATH__`를 수정한 뒤 실제 API 흐름을 검증합니다.
 
@@ -167,6 +169,7 @@ __SYNC_COMMAND__
 __CATALOG_QUERY_COMMAND__
 ```
 
+`login`은 원하는 검색어로 바꿔 실행합니다.
 전체 catalog 파일은 `__CATALOG_PATH__`에 있습니다.
 
 기본 smoke 테스트는 `__SCENARIO_PATH__`를 수정합니다. 새 테스트는 `__SCENARIO_TEMPLATE_PATH__` 파일을 만듭니다.

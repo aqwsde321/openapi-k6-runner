@@ -313,7 +313,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('`config.yaml`의 `baseUrl`, `modules.pharma.openapi` 확인 또는 TODO 채우기');
     expect(readme).toContain('`load-tests/openapi/pharma.openapi.json`, `load-tests/openapi/pharma.catalog.json`');
     expect(readme).toContain('catalog에서 endpoint 후보 검색 후 scenario 작성/수정');
-    expect(readme).toContain('`npx --yes openapi-k6 catalog --query <keyword>`');
+    expect(readme).toContain('`npx --yes openapi-k6 catalog --query login`');
     expect(readme).toContain('`load-tests/scenarios/<name>.yaml`');
     expect(readme).toContain('`load-tests/generated/<name>.k6.js`');
     expect(readme).toContain('`./load-tests/run.sh <name> --log`');
@@ -363,7 +363,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Keep human-facing documentation in Korean.');
     expect(readme).toContain('Do not write secrets in YAML. Use `{{env.NAME}}` and store real values only in `load-tests/.env`.');
     expect(readme).toContain('### Scenario Notes');
-    expect(readme).toContain('Use `npx --yes openapi-k6 catalog --query <keyword>` or read `load-tests/openapi/pharma.catalog.json` to pick endpoints; `generate` reads the OpenAPI snapshot, not the catalog.');
+    expect(readme).toContain('Use `npx --yes openapi-k6 catalog --query login` or read `load-tests/openapi/pharma.catalog.json` to pick endpoints; `generate` reads the OpenAPI snapshot, not the catalog.');
     expect(readme).toContain('Do not use `request.body` and `request.multipart` in the same step.');
     expect(readme).toContain('Config-relative paths resolve from the directory containing `config.yaml`.');
     expect(readme).toContain('`load-tests/run.sh`: k6 runner that auto-loads `load-tests/.env` values');
@@ -374,7 +374,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('아래 명령은 백엔드 프로젝트 루트에서 실행해.');
     expect(readme).toContain('load-tests/config.yaml에 TODO가 남아 있으면 이 백엔드 프로젝트에 맞게 채워.');
     expect(readme).toContain('npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 만들어.');
-    expect(readme).toContain('npx --yes openapi-k6 catalog --query <keyword>로 테스트할 endpoint 후보를 확인해.');
+    expect(readme).toContain('npx --yes openapi-k6 catalog --query login 명령으로 테스트할 endpoint 후보를 확인해.');
+    expect(readme).toContain('`login`은 원하는 검색어로 바꿔 실행합니다.');
     expect(readme).toContain('npx --yes openapi-k6 test -s <name> 형식으로 실제 API 흐름을 먼저 검증해.');
     expect(readme).toContain('scenario test가 통과하기 전에는 k6 script를 생성하거나 실행하지 마.');
     expect(readme).toContain('통과한 scenario만 npx --yes openapi-k6 generate -s <name> 형식으로 k6 script를 생성해.');

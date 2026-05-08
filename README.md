@@ -218,7 +218,7 @@ pnpm exec openapi-k6 --help
 | --- | --- |
 | 작업 공간 생성 | `npx --yes openapi-k6 init` |
 | OpenAPI snapshot/catalog 갱신 | `npx --yes openapi-k6 sync` |
-| scenario용 endpoint 검색 | `npx --yes openapi-k6 catalog --query <keyword>` |
+| scenario용 endpoint 검색 | `npx --yes openapi-k6 catalog --query login` |
 | scenario 검증 | `npx --yes openapi-k6 test -s <name>` |
 | k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <name>` |
 | k6 설치 후 실행 | `./load-tests/run.sh <name> --log` |
@@ -239,7 +239,7 @@ AI coding agent에게 아래 프롬프트를 붙여넣으세요. `load-tests/REA
 4. init 후 생성된 load-tests/README.md를 읽고, 그 문서의 작업 순서와 규칙을 기준으로 진행해.
 5. load-tests/config.yaml에 TODO가 남아 있으면 이 백엔드 프로젝트에 맞게 채워.
 6. npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 생성해.
-7. npx --yes openapi-k6 catalog --query <keyword>로 테스트할 endpoint 후보를 확인해. 필요하면 load-tests/openapi/*.catalog.json도 열어봐.
+7. npx --yes openapi-k6 catalog --query login처럼 적절한 검색어로 테스트할 endpoint 후보를 확인해. 필요하면 load-tests/openapi/*.catalog.json도 열어봐.
 8. 내가 원하는 API 흐름을 확인한 뒤 load-tests/scenarios/*.yaml을 작성하거나 수정해.
 9. npx --yes openapi-k6 test -s <name>으로 scenario를 먼저 검증해.
 10. scenario test가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 마.

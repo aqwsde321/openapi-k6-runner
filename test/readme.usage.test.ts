@@ -93,7 +93,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('## 명령 모음');
     expect(readme).toContain('| 작업 공간 생성 | `npx --yes openapi-k6 init` |');
     expect(readme).toContain('| OpenAPI snapshot/catalog 갱신 | `npx --yes openapi-k6 sync` |');
-    expect(readme).toContain('| scenario용 endpoint 검색 | `npx --yes openapi-k6 catalog --query <keyword>` |');
+    expect(readme).toContain('| scenario용 endpoint 검색 | `npx --yes openapi-k6 catalog --query login` |');
     expect(readme).toContain('| scenario 검증 | `npx --yes openapi-k6 test -s <name>` |');
     expect(readme).toContain('| k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <name>` |');
     expect(readme).toContain('| k6 설치 후 실행 | `./load-tests/run.sh <name> --log` |');
@@ -108,7 +108,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('baseUrl 또는 OpenAPI spec URL을 확실히 모르면 나에게 물어봐.');
     expect(readme).toContain('init 후 생성된 load-tests/README.md를 읽고, 그 문서의 작업 순서와 규칙을 기준으로 진행해.');
     expect(readme).toContain('npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 생성해.');
-    expect(readme).toContain('npx --yes openapi-k6 catalog --query <keyword>로 테스트할 endpoint 후보를 확인해.');
+    expect(readme).toContain('npx --yes openapi-k6 catalog --query login처럼 적절한 검색어로 테스트할 endpoint 후보를 확인해.');
     expect(readme).toContain('npx --yes openapi-k6 test -s <name>으로 scenario를 먼저 검증해.');
     expect(readme).toContain('scenario test가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 마.');
     expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore는 scaffold 파일이므로 명시 요청 없이는 수정하지 마.');

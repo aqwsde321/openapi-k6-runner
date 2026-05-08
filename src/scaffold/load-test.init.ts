@@ -523,7 +523,7 @@ function renderReadme(
   const moduleOption = shouldIncludeModuleOption ? ' --module ' + moduleName : '';
 
   const syncCommand = cliCommand + ' sync' + configOption + moduleOption;
-  const catalogQueryCommand = cliCommand + ' catalog' + configOption + moduleOption + ' --query <keyword>';
+  const catalogQueryCommand = cliCommand + ' catalog' + configOption + moduleOption + ' --query login';
   const updateCommand = cliCommand + ' update' + configOption + moduleOption;
   const testNameCommand = usesDefaultDirectory
     ? cliCommand + ' test' + moduleOption + ' -s <name>'
