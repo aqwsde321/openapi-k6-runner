@@ -11,6 +11,10 @@
 - Scenario YAML 작성에 필요한 endpoint 후보를 찾을 수 있도록 `openapi-k6 catalog` 명령을 추가했습니다.
 - PR/push 시 Node.js 20에서 typecheck, test, build, npm pack 검증을 실행하는 CI workflow를 추가했습니다.
 
+### Changed
+
+- `openapi-k6 catalog`가 catalog 파일을 찾지 못하면 먼저 실행할 `sync` 명령과 재시도 명령을 안내하도록 했습니다.
+
 ## [0.2.1] - 2026-05-07
 
 ### Fixed

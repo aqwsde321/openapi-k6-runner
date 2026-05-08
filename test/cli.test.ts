@@ -1313,6 +1313,98 @@ describe('openapi-k6 CLI', () => {
     ]);
   });
 
+  it('explains how to create the catalog when the configured catalog file is missing', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://api.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['catalog', '--query', 'login'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow([
+      `${path.join(workspace, 'load-tests/openapi/app.catalog.json')} was not found.`,
+      '',
+      'Run this first:',
+      '  npx --yes openapi-k6 sync --module app',
+      '',
+      'Then retry:',
+      '  npx --yes openapi-k6 catalog --module app --query login',
+    ].join('\n'));
+  });
+
+  it('includes custom config and module options when explaining a missing catalog file', async () => {
+    await mkdir(path.join(workspace, 'custom-load-tests'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'custom-load-tests/config.yaml'),
+      [
+        'defaultModule: bos',
+        'modules:',
+        '  bos:',
+        '    openapi: https://api.test.local/v3/api-docs',
+        '    snapshot: openapi/bos.openapi.json',
+        '    catalog: openapi/bos.catalog.json',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(
+      runCli(
+        ['catalog', '--config', 'custom-load-tests/config.yaml', '--module', 'bos', '--method', 'POST', '--json'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow([
+      `${path.join(workspace, 'custom-load-tests/openapi/bos.catalog.json')} was not found.`,
+      '',
+      'Run this first:',
+      '  npx --yes openapi-k6 sync --config custom-load-tests/config.yaml --module bos',
+      '',
+      'Then retry:',
+      '  npx --yes openapi-k6 catalog --config custom-load-tests/config.yaml --module bos --method POST --json',
+    ].join('\n'));
+  });
+
+  it('explains that OpenAPI must be configured before creating a missing catalog file', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: TODO',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['catalog', '--query', 'login'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow([
+      `${path.join(workspace, 'load-tests/openapi/app.catalog.json')} was not found.`,
+      '',
+      'Configure OpenAPI source first:',
+      `  ${path.join(workspace, 'load-tests/config.yaml')}`,
+      '',
+      'Set:',
+      '  modules.app.openapi',
+      '',
+      'Then run:',
+      '  npx --yes openapi-k6 sync --module app',
+      '',
+      'Then retry:',
+      '  npx --yes openapi-k6 catalog --module app --query login',
+    ].join('\n'));
+  });
+
   it('fails clearly when sync sees TODO config values from init', async () => {
     await runCli(
       ['init'],

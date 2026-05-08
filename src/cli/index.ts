@@ -170,6 +170,14 @@ interface CatalogFilters {
   all?: boolean;
 }
 
+interface CatalogCommandContext {
+  cwd: string;
+  config: LoadTestConfig | undefined;
+  moduleName: string | undefined;
+  openapi: string | undefined;
+  options: CatalogOptions;
+}
+
 function resolveCwd(context: CliContext): string {
   return context.cwd ? path.resolve(context.cwd) : process.cwd();
 }
@@ -869,7 +877,13 @@ export async function runCatalogCommand(
     `modules.${moduleName}.catalog`,
     'catalog',
   );
-  const catalog = await readCatalogFile(catalogPath);
+  const catalog = await readCatalogFile(catalogPath, {
+    cwd,
+    config,
+    moduleName: moduleConfig?.name,
+    openapi: moduleConfig?.openapi,
+    options,
+  });
   const filters = normalizeCatalogFilters(options);
   const shouldList = shouldListCatalogOperations(filters);
   const operations = shouldList
@@ -1108,8 +1122,21 @@ function writeUpdateSummary(
   writeLine(stdout, '  kept scenarios, snapshots, generated scripts, logs, and .env unchanged');
 }
 
-async function readCatalogFile(catalogPath: string): Promise<ApiCatalog> {
-  const raw = await fs.readFile(catalogPath, 'utf8');
+async function readCatalogFile(
+  catalogPath: string,
+  context: CatalogCommandContext,
+): Promise<ApiCatalog> {
+  let raw: string;
+
+  try {
+    raw = await fs.readFile(catalogPath, 'utf8');
+  } catch (error) {
+    if (isNodeErrorCode(error, 'ENOENT')) {
+      throw new Error(formatMissingCatalogFileError(catalogPath, context));
+    }
+
+    throw error;
+  }
 
   try {
     return parseCatalog(JSON.parse(raw), catalogPath);
@@ -1120,6 +1147,108 @@ async function readCatalogFile(catalogPath: string): Promise<ApiCatalog> {
 
     throw error;
   }
+}
+
+function isNodeErrorCode(error: unknown, code: string): boolean {
+  return error !== null &&
+    typeof error === 'object' &&
+    'code' in error &&
+    error.code === code;
+}
+
+function formatMissingCatalogFileError(
+  catalogPath: string,
+  context: CatalogCommandContext,
+): string {
+  const openApiSetupLines = formatCatalogOpenApiSetupLines(context);
+
+  return [
+    `${catalogPath} was not found.`,
+    '',
+    ...openApiSetupLines,
+    openApiSetupLines.length > 0 ? 'Then run:' : 'Run this first:',
+    `  ${formatCatalogSyncCommand(context)}`,
+    '',
+    'Then retry:',
+    `  ${formatCatalogRetryCommand(context)}`,
+  ].join('\n');
+}
+
+function formatCatalogOpenApiSetupLines(context: CatalogCommandContext): string[] {
+  if (isConfiguredValue(context.openapi)) {
+    return [];
+  }
+
+  const configPath = context.config?.path ?? path.join(context.cwd, DEFAULT_CONFIG_PATH);
+  const moduleName = context.moduleName ?? '<name>';
+
+  return [
+    'Configure OpenAPI source first:',
+    `  ${configPath}`,
+    '',
+    'Set:',
+    `  modules.${moduleName}.openapi`,
+    '',
+  ];
+}
+
+function formatCatalogSyncCommand(context: CatalogCommandContext): string {
+  return formatCatalogCommand('sync', context, {});
+}
+
+function formatCatalogRetryCommand(context: CatalogCommandContext): string {
+  return formatCatalogCommand('catalog', context, {
+    query: context.options.query,
+    method: context.options.method,
+    tag: context.options.tag,
+    all: context.options.all,
+    json: context.options.json,
+  });
+}
+
+function formatCatalogCommand(
+  command: 'sync' | 'catalog',
+  context: CatalogCommandContext,
+  filters: {
+    query?: string;
+    method?: string;
+    tag?: string;
+    all?: boolean;
+    json?: boolean;
+  },
+): string {
+  const defaultConfigPath = path.join(context.cwd, DEFAULT_CONFIG_PATH);
+  const parts = ['npx', '--yes', 'openapi-k6', command];
+
+  if (context.config !== undefined && path.resolve(context.config.path) !== defaultConfigPath) {
+    parts.push('--config', formatDisplayPath(context.cwd, context.config.path));
+  }
+
+  if (context.moduleName !== undefined && (context.options.module !== undefined || context.moduleName !== 'default')) {
+    parts.push('--module', context.moduleName);
+  }
+
+  if (filters.query !== undefined) {
+    parts.push('--query', filters.query);
+  }
+
+  if (filters.method !== undefined) {
+    parts.push('--method', filters.method);
+  }
+
+  if (filters.tag !== undefined) {
+    parts.push('--tag', filters.tag);
+  }
+
+  if (filters.all === true) {
+    parts.push('--all');
+  }
+
+  if (filters.json === true) {
+    parts.push('--json');
+  }
+
+  return parts.map(shellQuote).join(' ');
 }
 
 function parseCatalog(value: unknown, catalogPath: string): ApiCatalog {
