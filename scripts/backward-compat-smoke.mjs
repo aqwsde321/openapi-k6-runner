@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, '..');
 const cliPath = path.join(repoRoot, 'dist/cli/index.js');
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 async function main() {
   await assertBuiltCliExists();
@@ -16,11 +17,13 @@ async function main() {
   let server;
 
   try {
+    const smokeEnv = await createSmokeEnv(path.join(workspace, 'guard-bin'));
+    const packagePath = await packPackage(path.join(workspace, 'package'), smokeEnv);
     server = await startFixtureServer();
     const baseUrl = `http://127.0.0.1:${server.port}`;
 
-    await runInitSmoke(path.join(workspace, 'init-project'));
-    await runExistingProjectSmoke(path.join(workspace, 'existing-project'), baseUrl);
+    await runInitSmoke(path.join(workspace, 'init-project'), packagePath, smokeEnv);
+    await runExistingProjectSmoke(path.join(workspace, 'existing-project'), baseUrl, packagePath, smokeEnv);
 
     console.log('Backward compatibility smoke passed.');
   } finally {
@@ -32,6 +35,59 @@ async function main() {
   }
 }
 
+async function createSmokeEnv(guardBinDir) {
+  await writeAmbientCliGuard(guardBinDir);
+
+  return {
+    ...process.env,
+    PATH: [guardBinDir, process.env.PATH ?? ''].filter((value) => value !== '').join(path.delimiter),
+  };
+}
+
+async function writeAmbientCliGuard(guardBinDir) {
+  await mkdir(guardBinDir, { recursive: true });
+
+  if (process.platform === 'win32') {
+    await writeFile(
+      path.join(guardBinDir, 'openapi-k6.cmd'),
+      [
+        '@echo off',
+        'echo ambient openapi-k6 guard invoked 1>&2',
+        'exit /b 127',
+        '',
+      ].join('\r\n'),
+      'utf8',
+    );
+    return;
+  }
+
+  const guardPath = path.join(guardBinDir, 'openapi-k6');
+  await writeFile(
+    guardPath,
+    [
+      '#!/bin/sh',
+      'echo "ambient openapi-k6 guard invoked" >&2',
+      'exit 127',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  await chmod(guardPath, 0o755);
+}
+
+async function packPackage(packDir, env) {
+  await mkdir(packDir, { recursive: true });
+  await runCommand(npmCommand, ['pack', '--pack-destination', packDir], repoRoot, 'npm pack', env);
+
+  const packageFiles = (await readdir(packDir)).filter((fileName) => fileName.endsWith('.tgz'));
+
+  if (packageFiles.length !== 1) {
+    throw new Error(`expected one packed tarball in ${packDir}, found ${packageFiles.length}`);
+  }
+
+  return path.join(packDir, packageFiles[0]);
+}
+
 async function assertBuiltCliExists() {
   try {
     await access(cliPath);
@@ -40,15 +96,15 @@ async function assertBuiltCliExists() {
   }
 }
 
-async function runInitSmoke(projectDir) {
+async function runInitSmoke(projectDir, packagePath, env) {
   await mkdir(projectDir, { recursive: true });
 
-  await runCli(['init', '--no-input'], projectDir);
+  await runCli(['init', '--no-input'], projectDir, packagePath, env);
   await assertFileContains(path.join(projectDir, 'load-tests/config.yaml'), 'defaultModule: default');
   await assertFileContains(path.join(projectDir, 'load-tests/scenarios/smoke.yaml'), 'name: smoke');
 }
 
-async function runExistingProjectSmoke(projectDir, baseUrl) {
+async function runExistingProjectSmoke(projectDir, baseUrl, packagePath, env) {
   await mkdir(path.join(projectDir, 'load-tests/openapi'), { recursive: true });
   await mkdir(path.join(projectDir, 'load-tests/scenarios'), { recursive: true });
 
@@ -56,33 +112,43 @@ async function runExistingProjectSmoke(projectDir, baseUrl) {
   await writeFile(path.join(projectDir, 'load-tests/openapi/default.openapi.yaml'), createOpenApi(baseUrl), 'utf8');
   await writeFile(path.join(projectDir, 'load-tests/scenarios/smoke.yaml'), createScenario(), 'utf8');
 
-  await runCli(['sync'], projectDir);
+  await runCli(['sync'], projectDir, packagePath, env);
   await assertFileContains(path.join(projectDir, 'load-tests/openapi/default.openapi.json'), '"operationId": "getHealth"');
   await assertFileContains(path.join(projectDir, 'load-tests/openapi/catalog.json'), '"operationId": "getHealth"');
 
-  const catalog = await runCli(['catalog', '--query', 'health'], projectDir);
+  const catalog = await runCli(['catalog', '--query', 'health'], projectDir, packagePath, env);
   assertIncludes(catalog.stdout, 'operationId: getHealth', 'catalog output should include the health operation');
 
-  const test = await runCli(['test', '-s', 'smoke', '--no-color'], projectDir);
+  const test = await runCli(['test', '-s', 'smoke', '--no-color'], projectDir, packagePath, env);
   assertIncludes(test.stdout, 'summary:', 'scenario test should print a summary');
   assertIncludes(test.stdout, 'PASS', 'scenario test should pass');
 
-  await runCli(['generate', '-s', 'smoke'], projectDir);
+  await runCli(['generate', '-s', 'smoke'], projectDir, packagePath, env);
   await assertFileContains(path.join(projectDir, 'load-tests/generated/smoke.k6.js'), '/health');
 
-  await runCli(['update'], projectDir);
+  await runCli(['update'], projectDir, packagePath, env);
   await assertFileContains(path.join(projectDir, 'load-tests/config.yaml'), `baseUrl: ${baseUrl}`);
   await assertFileContains(path.join(projectDir, 'load-tests/scenarios/smoke.yaml'), 'name: smoke');
   await assertFileContains(path.join(projectDir, 'load-tests/openapi/catalog.json'), '"operationId": "getHealth"');
   await assertFileContains(path.join(projectDir, 'load-tests/generated/smoke.k6.js'), '/health');
 }
 
-function runCli(args, cwd) {
+function runCli(args, cwd, packagePath, env) {
+  return runCommand(
+    npmCommand,
+    ['exec', '--yes', '--package', packagePath, '--', 'openapi-k6', ...args],
+    cwd,
+    `openapi-k6 ${args.join(' ')}`,
+    env,
+  );
+}
+
+function runCommand(command, args, cwd, label, env) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [cliPath, ...args], {
+    const child = spawn(command, args, {
       cwd,
       env: {
-        ...process.env,
+        ...env,
         NO_COLOR: '1',
         TERM: 'dumb',
       },
@@ -107,7 +173,7 @@ function runCli(args, cwd) {
       }
 
       reject(new Error([
-        `openapi-k6 ${args.join(' ')} failed with exit code ${code}`,
+        `${label} failed with exit code ${code}`,
         '',
         'stdout:',
         stdout.trimEnd(),
