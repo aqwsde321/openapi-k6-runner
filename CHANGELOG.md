@@ -10,7 +10,7 @@
 
 - Scenario YAML 작성에 필요한 endpoint 후보를 찾을 수 있도록 `openapi-k6 catalog` 명령을 추가했습니다.
 - PR/push 시 Node.js 20에서 typecheck, test, build, npm pack 검증을 실행하는 CI workflow를 추가했습니다.
-- `npm pack`으로 만든 tarball을 `npm exec --package`로 실행해 기존 `init`, `update`, `sync`, `catalog`, `test`, `generate` 흐름을 확인하는 하위 호환성 smoke test를 추가했습니다.
+- `npm pack`으로 만든 tarball을 `npm exec --package`로 실행해 `--version`과 기존 `init`, `update`, `sync`, `catalog`, `test`, `generate` 흐름을 확인하는 하위 호환성 smoke test를 추가했습니다.
 
 ### Changed
 

@@ -22,6 +22,7 @@ async function main() {
     server = await startFixtureServer();
     const baseUrl = `http://127.0.0.1:${server.port}`;
 
+    await runVersionSmoke(workspace, packagePath, smokeEnv);
     await runInitSmoke(path.join(workspace, 'init-project'), packagePath, smokeEnv);
     await runExistingProjectSmoke(path.join(workspace, 'existing-project'), baseUrl, packagePath, smokeEnv);
 
@@ -33,6 +34,27 @@ async function main() {
 
     await rm(workspace, { recursive: true, force: true });
   }
+}
+
+async function runVersionSmoke(workspace, packagePath, env) {
+  const expectedVersion = await readPackageVersion();
+  const version = await runCli(['--version'], workspace, packagePath, env);
+
+  if (version.stdout.trim() !== expectedVersion) {
+    throw new Error(`expected openapi-k6 --version to print ${expectedVersion}, got ${version.stdout.trim()}`);
+  }
+}
+
+async function readPackageVersion() {
+  const packageJson = JSON.parse(
+    await readFile(path.join(repoRoot, 'package.json'), 'utf8'),
+  );
+
+  if (typeof packageJson.version !== 'string') {
+    throw new Error('package.json version must be a string');
+  }
+
+  return packageJson.version;
 }
 
 async function createSmokeEnv(guardBinDir) {
