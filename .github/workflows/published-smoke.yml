@@ -1,0 +1,59 @@
+name: Published Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: npm package spec to smoke test
+        required: false
+        default: openapi-k6@latest
+  workflow_run:
+    workflows:
+      - Publish
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: published-smoke-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Resolve package spec
+        id: package
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PACKAGE_SPEC="${{ inputs.package }}"
+          else
+            REF_NAME="${{ github.event.workflow_run.head_branch }}"
+            VERSION="${REF_NAME#v}"
+
+            if [ "$REF_NAME" = "$VERSION" ]; then
+              echo "Publish workflow did not run from a vX.Y.Z tag: $REF_NAME"
+              exit 1
+            fi
+
+            PACKAGE_SPEC="openapi-k6@$VERSION"
+          fi
+
+          echo "spec=$PACKAGE_SPEC" >> "$GITHUB_OUTPUT"
+
+      - name: Run published package smoke
+        run: node scripts/published-smoke.mjs "${{ steps.package.outputs.spec }}"
