@@ -531,6 +531,9 @@ function renderReadme(
   const testNameCommand = usesDefaultDirectory
     ? cliCommand + ' test' + moduleOption + ' -s <name>'
     : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath);
+  const runNameCommand = usesDefaultDirectory
+    ? cliCommand + ' run' + moduleOption + ' -s <name>'
+    : cliCommand + ' run --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath) + ' --write ' + shellQuote(outputTemplatePath);
   const generateNameCommand = usesDefaultDirectory
     ? cliCommand + ' generate' + moduleOption + ' -s <name>'
     : cliCommand + ' generate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath) + ' --write ' + shellQuote(outputTemplatePath);
@@ -540,6 +543,13 @@ function renderReadme(
   const testSmokeCommand = usesDefaultDirectory
     ? cliCommand + ' test' + moduleOption + ' -s smoke'
     : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + scenarioArg;
+  const runSmokeCommand = usesDefaultDirectory
+    ? cliCommand + ' run' + moduleOption + ' -s smoke'
+    : cliCommand + ' run --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + scenarioArg + ' --write ' + outputArg;
+  const runSmokeIterationsCommand = runSmokeCommand + ' -- --vus 1 --iterations 1';
+  const runSmokeLogCommand = runSmokeCommand + ' --log';
+  const runSmokeReportCommand = runSmokeCommand + ' --log --report -- --duration 10s --vus 1';
+  const runSmokeTraceReportCommand = runSmokeCommand + ' --trace --log --report -- --duration 10s --vus 1';
   const generateSmokeCommand = usesDefaultDirectory
     ? [
         cliCommand + ' generate \\',
@@ -582,8 +592,14 @@ function renderReadme(
     OUTPUT_PATH: outputPath,
     OUTPUT_TEMPLATE_PATH: outputTemplatePath,
     REPORT_PATH: reportPath,
+    RUN_NAME_COMMAND: runNameCommand,
     RUN_SCRIPT_ARG: runScriptArg,
     RUN_SCRIPT_PATH: runScriptPath,
+    RUN_SMOKE_CLI_COMMAND: runSmokeCommand,
+    RUN_SMOKE_CLI_ITERATIONS_COMMAND: runSmokeIterationsCommand,
+    RUN_SMOKE_CLI_LOG_COMMAND: runSmokeLogCommand,
+    RUN_SMOKE_CLI_REPORT_COMMAND: runSmokeReportCommand,
+    RUN_SMOKE_CLI_TRACE_REPORT_COMMAND: runSmokeTraceReportCommand,
     RUN_SMOKE_COMMAND: runScriptArg + ' smoke',
     RUN_SMOKE_ITERATIONS_COMMAND: runScriptArg + ' smoke --vus 1 --iterations 1',
     RUN_SMOKE_LOG_COMMAND: runScriptArg + ' smoke --log',

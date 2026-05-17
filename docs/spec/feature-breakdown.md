@@ -369,10 +369,11 @@ MVP에서 condition은 흐름 분기 조건이 아니라 check/assertion이다. 
 
 - init scaffold에서 generated script를 `k6 run`으로 실행하는 `run.sh`를 제공한다.
 - `.env`를 자동 export하고, 필요 시 k6 출력을 log file로 저장한다.
+- CLI에서 scenario 정적 검증, k6 스크립트 생성, `k6 run` 실행을 한 번에 orchestration하는 `run` 명령을 제공한다.
 
 ### MVP 상태
 
-부분 포함한다. `load-tests/run.sh <scenario>`와 `load-tests/run.sh <scenario> --log`는 제공하지만, CLI가 k6 실행을 직접 orchestration 하지는 않는다.
+포함한다. `load-tests/run.sh <scenario>`와 `load-tests/run.sh <scenario> --log`를 유지하고, `openapi-k6 run -s <scenario>`로 validate/generate/k6 실행을 CLI에서 직접 orchestration한다. k6 옵션은 `--` 뒤에 전달한다.
 
 ## 16. F-14 멀티모듈 OpenAPI 설정
 

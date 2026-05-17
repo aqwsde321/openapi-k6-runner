@@ -12,6 +12,7 @@
 - `validate`가 지원하지 않는 `condition` 표현식과 `extract.from` JSONPath를 API 호출 전에 실패로 처리하도록 보강했습니다.
 - Scenario YAML step의 `api.module`로 여러 OpenAPI module을 하나의 scenario에서 섞어 사용할 수 있게 했습니다.
 - `validate`가 request 안의 context template 참조를 이전 step의 `extract` 기준으로 정적으로 검증하도록 보강했습니다.
+- `openapi-k6 run` 명령을 추가해 scenario 정적 검증, k6 스크립트 생성, `k6 run` 실행을 한 번에 수행할 수 있게 했습니다.
 
 ### Fixed
 

@@ -22,8 +22,9 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
 7. __VALIDATE_NAME_COMMAND__ 형식으로 YAML/OpenAPI 정합성을 먼저 확인해.
 8. __TEST_NAME_COMMAND__ 형식으로 실제 API 흐름을 검증해.
 9. scenario test가 통과하기 전에는 k6 script를 생성하거나 실행하지 마.
-10. 통과한 scenario만 __GENERATE_NAME_COMMAND__ 형식으로 k6 script를 생성해.
-11. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 예상 확인 포인트를 알려줘.
+10. 통과한 scenario만 __RUN_NAME_COMMAND__ --log 형식으로 짧게 실행해.
+11. 스크립트만 필요하면 __GENERATE_NAME_COMMAND__ 형식으로 k6 script를 생성해.
+12. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 예상 확인 포인트를 알려줘.
 
 __DIRECTORY__/README.md, __RUN_SCRIPT_PATH__, __DIRECTORY__/.env.example, __DIRECTORY__/.gitignore는 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.
 __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.
@@ -42,7 +43,7 @@ __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말�
 - 직접 수정하는 파일은 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.
 - 기본 `.gitignore`는 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.
 - 생성물은 직접 고치지 않습니다. OpenAPI snapshot은 `sync`, `generated/*.k6.js`는 `generate`로 다시 만듭니다.
-- `__CLI_COMMAND__ validate`로 YAML/OpenAPI 정합성을 확인하고, `__CLI_COMMAND__ test`가 통과한 scenario만 `generate`하거나 `run.sh`로 실행합니다.
+- `__CLI_COMMAND__ validate`로 YAML/OpenAPI 정합성을 확인하고, `__CLI_COMMAND__ test`가 통과한 scenario만 `run`하거나 `generate`/`run.sh`로 실행합니다.
 - 비밀 값은 YAML에 쓰지 말고 `.env`에 둔 뒤 `{{env.NAME}}`으로 참조합니다.
 
 ### 빠른 시작
@@ -80,8 +81,7 @@ __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말�
 6. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.
 
    ```bash
-   __GENERATE_SMOKE_COMMAND__
-   __RUN_SMOKE_LOG_COMMAND__
+   __RUN_SMOKE_CLI_LOG_COMMAND__
    ```
 
 다음 단계로 넘어가는 기준은 간단합니다. `__CLI_COMMAND__ validate`와 `__CLI_COMMAND__ test`가 통과한 scenario만 generate/run 합니다.
@@ -173,8 +173,8 @@ steps:
 | 3 | catalog에서 endpoint 후보 검색 후 scenario 작성/수정 | `__CATALOG_QUERY_COMMAND__` | `__SCENARIO_TEMPLATE_PATH__` |
 | 4 | `{{env.NAME}}`을 쓰는 경우 `__ENV_PATH__` 작성 | `__VALIDATE_NAME_COMMAND__` | scenario YAML/OpenAPI 정합성 검증 결과 |
 | 5 | scenario validate 통과 확인 | `__TEST_NAME_COMMAND__` | scenario test 결과, step별 API 검증 결과 |
-| 6 | scenario test 통과 확인 | `__GENERATE_NAME_COMMAND__` | `__OUTPUT_TEMPLATE_PATH__` |
-| 7 | 생성된 k6 스크립트 확인 | `__RUN_SCRIPT_ARG__ <name> --log` | k6 부하 테스트 실행, `__DIRECTORY__/logs/<name>.log` |
+| 6 | scenario test 통과 확인 | `__RUN_NAME_COMMAND__ --log` | validate/generate/k6 실행, `__OUTPUT_TEMPLATE_PATH__`, `__DIRECTORY__/logs/<name>.log` |
+| 7 | 스크립트만 따로 생성하거나 runner로 실행 | `__GENERATE_NAME_COMMAND__`, `__RUN_SCRIPT_ARG__ <name> --log` | `__OUTPUT_TEMPLATE_PATH__`, k6 부하 테스트 실행 |
 
 아래 예시는 scaffold가 생성한 `smoke` scenario 기준입니다.
 
@@ -274,7 +274,35 @@ __TEST_SMOKE_COMMAND__
 `__ENV_PATH__`가 있으면 `{{env.NAME}}` template 값과 `BASE_URL`을 읽습니다. 현재 shell 환경변수가 같은 이름으로 있으면 shell 값이 우선합니다.
 `{{env.NAME}}`으로 참조한 값은 scenario test 출력과 생성된 k6 실패 로그에서 masking됩니다.
 
-### 2-5. k6 스크립트 생성
+### 2-5. CLI에서 k6 실행
+
+`__CLI_COMMAND__ run`은 scenario를 정적 검증하고, k6 스크립트를 다시 생성한 뒤 `k6 run`을 실행합니다.
+k6 옵션은 `--` 뒤에 붙입니다.
+
+```bash
+__RUN_SMOKE_CLI_COMMAND__
+__RUN_SMOKE_CLI_ITERATIONS_COMMAND__
+```
+
+콘솔 출력과 실패 응답 로그를 파일로 남기려면 `--log`를 붙입니다.
+
+```bash
+__RUN_SMOKE_CLI_LOG_COMMAND__
+```
+
+`run`이 제공하는 편의 플래그입니다.
+
+- `--log`: 콘솔 출력과 실패 응답 로그를 `logs/<scenario>.log`에 저장
+- `--trace`: 각 scenario step의 시작/종료 로그 출력
+- `--report`: k6 Web Dashboard HTML report를 `logs/<scenario>-report.html`에 저장
+- `--open-dashboard`: 실행 중인 k6 Web Dashboard를 브라우저로 열기
+
+```bash
+__RUN_SMOKE_CLI_REPORT_COMMAND__
+__RUN_SMOKE_CLI_TRACE_REPORT_COMMAND__
+```
+
+### 2-6. k6 스크립트만 생성
 
 ```bash
 __GENERATE_SMOKE_COMMAND__
@@ -282,7 +310,7 @@ __GENERATE_SMOKE_COMMAND__
 
 생성/갱신: `__OUTPUT_PATH__`
 
-### 2-6. k6 실행
+### 2-7. run.sh로 생성된 k6 실행
 
 ```bash
 __RUN_SMOKE_COMMAND__
@@ -347,7 +375,7 @@ __TEST_SMOKE_COMMAND__
 __RUN_SMOKE_COMMAND__
 ```
 
-`__CLI_COMMAND__ test`와 `run.sh`가 `__ENV_PATH__`를 읽습니다. 이 파일은 `run.sh`와 같은 폴더에 있어야 합니다.
+`__CLI_COMMAND__ test`, `__CLI_COMMAND__ run`, `run.sh`가 `__ENV_PATH__`를 읽습니다. 이 파일은 `run.sh`와 같은 폴더에 있어야 합니다.
 백엔드 프로젝트 루트의 `.env`는 자동으로 읽지 않습니다. 루트 `.env` 값을 쓰려면 필요한 키만 이 파일로 복사하거나, 실행 전에 shell에서 직접 export합니다.
 `__DIRECTORY__/.gitignore`는 기본적으로 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다. 실제 비밀 값은 commit하지 않습니다.
 이미 git에 올라간 `__DIRECTORY__/` 파일은 ignore 규칙만으로 빠지지 않으므로 필요하면 `git rm -r --cached __DIRECTORY__`로 추적에서만 제거합니다.
