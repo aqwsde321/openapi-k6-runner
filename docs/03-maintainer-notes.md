@@ -122,6 +122,14 @@ git push origin main --tags
 
 `.github/workflows/publish.yml`은 태그의 `v`를 제외한 값과 `package.json`의 `version`이 같을 때만 `pnpm run typecheck`, `pnpm test`, `pnpm run build`, `npm pack --dry-run`, `npm publish`를 실행합니다.
 
+Publish workflow가 성공하면 `.github/workflows/published-smoke.yml`이 실제 npm registry 배포본을 `npm exec`로 다시 실행합니다. 수동으로 같은 확인을 하려면 아래처럼 실행합니다.
+
+```bash
+pnpm run smoke:published -- "openapi-k6@$VERSION"
+```
+
+인자를 생략하면 `openapi-k6@latest`를 확인합니다. 이 smoke는 registry 반영 지연에 대비해 `npm view`를 짧게 재시도하고, `--version`, `--help`, `init --no-input`, standalone `validate/generate`가 npm 배포본에서 정상 동작하는지 확인합니다.
+
 릴리스 커밋 전에는 `CHANGELOG.md`의 `[Unreleased]` 항목을 새 버전 섹션으로 옮기고, 하단 compare 링크를 새 버전에 맞게 갱신합니다.
 
 ## bootstrap 시나리오
