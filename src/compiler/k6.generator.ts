@@ -1,6 +1,10 @@
 import path from 'node:path';
 
 import type { ASTScenario, ASTStep, StepRequest } from '../core/types.js';
+import {
+  createModuleBaseUrlEnvName,
+  findModuleBaseUrlEnvNameCollisions,
+} from '../core/module-env.js';
 import { compileValueExpression } from '../core/template.js';
 import { compileJsonPathSegments } from '../utils/jsonpath.js';
 
@@ -13,9 +17,11 @@ const HTTP_CALLS: Record<string, string> = {
 };
 
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+const ENV_TEMPLATE_PATTERN = /{{\s*env\.([A-Z_][A-Z0-9_]*)\s*}}/g;
 
 export interface K6GeneratorOptions {
   baseUrl?: string;
+  moduleBaseUrls?: Record<string, string | undefined>;
   fileRootDir?: string;
   outputPath?: string;
 }
@@ -28,18 +34,15 @@ export class K6GenerationError extends Error {
 }
 
 export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions = {}): string {
-  const baseUrl = options.baseUrl?.trim();
-
-  if (!baseUrl) {
-    throw new K6GenerationError('BASE_URL is required to generate a k6 script');
-  }
+  const baseUrlPlan = buildBaseUrlPlan(ast, options);
+  const secretEnvNames = collectEnvReferenceNames(ast);
 
   const lines: string[] = [
     "import http from 'k6/http';",
   ];
 
   const k6Imports = [
-    ...(hasCondition(ast) ? ['check'] : []),
+    ...(hasChecks(ast) ? ['check'] : []),
     ...(hasSteps(ast) ? ['group'] : []),
   ];
 
@@ -49,30 +52,139 @@ export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions =
 
   lines.push(
     '',
-    `const BASE_URL = __ENV.BASE_URL || ${JSON.stringify(baseUrl)};`,
+    ...baseUrlPlan.declarations,
     "const OPENAPI_K6_TRACE = __ENV.OPENAPI_K6_TRACE === '1';",
+    ...(secretEnvNames.length === 0
+      ? []
+      : [`const OPENAPI_K6_SECRET_ENV_NAMES = ${JSON.stringify(secretEnvNames)};`]),
     ...renderMultipartFileDeclarations(ast, options),
     '',
-    ...renderHelpers(ast),
+    ...renderHelpers(ast, secretEnvNames),
     '',
     'export default function () {',
     '  const context = {};',
   );
 
   ast.steps.forEach((step, index) => {
-    lines.push('', ...renderStep(ast.name, step, index));
+    lines.push('', ...renderStep(ast.name, step, index, baseUrlPlan.stepReferences[index] ?? 'BASE_URL'));
   });
 
   lines.push('}', '');
   return lines.join('\n');
 }
 
-function renderHelpers(ast: ASTScenario): string[] {
+interface BaseUrlPlan {
+  declarations: string[];
+  stepReferences: string[];
+}
+
+function buildBaseUrlPlan(ast: ASTScenario, options: K6GeneratorOptions): BaseUrlPlan {
+  const moduleNames = collectStepModuleNames(ast);
+
+  if (moduleNames.length <= 1) {
+    const baseUrl = resolveSingleBaseUrl(moduleNames[0], options);
+
+    return {
+      declarations: [`const BASE_URL = __ENV.BASE_URL || ${JSON.stringify(baseUrl)};`],
+      stepReferences: ast.steps.map(() => 'BASE_URL'),
+    };
+  }
+
+  assertNoModuleBaseUrlEnvNameCollisions(moduleNames);
+
+  const moduleVariables = new Map<string, string>();
+  const declarations = moduleNames.map((moduleName, index) => {
+    const variableName = `BASE_URL_${index}`;
+    const configuredBaseUrl = normalizeOptionalString(options.moduleBaseUrls?.[moduleName]);
+
+    if (configuredBaseUrl === undefined) {
+      throw new K6GenerationError(`BASE_URL is required to generate a k6 script for module "${moduleName}"`);
+    }
+
+    moduleVariables.set(moduleName, variableName);
+    return `const ${variableName} = __ENV.${createModuleBaseUrlEnvName(moduleName)} || __ENV.BASE_URL || ${JSON.stringify(configuredBaseUrl)};`;
+  });
+
+  return {
+    declarations,
+    stepReferences: ast.steps.map((step) => {
+      const moduleName = step.moduleName;
+
+      if (moduleName === undefined) {
+        throw new K6GenerationError(`step "${step.id}": moduleName is required for multi-module k6 generation`);
+      }
+
+      return moduleVariables.get(moduleName) ?? 'BASE_URL';
+    }),
+  };
+}
+
+function assertNoModuleBaseUrlEnvNameCollisions(moduleNames: string[]): void {
+  const [collision] = findModuleBaseUrlEnvNameCollisions(moduleNames);
+
+  if (collision !== undefined) {
+    throw new K6GenerationError(
+      `module base URL env name collision: modules ${collision.moduleNames.map((name) => JSON.stringify(name)).join(', ')} all map to ${collision.envName}`,
+    );
+  }
+}
+
+function resolveSingleBaseUrl(moduleName: string | undefined, options: K6GeneratorOptions): string {
+  const baseUrl = normalizeOptionalString(
+    moduleName === undefined
+      ? options.baseUrl
+      : options.moduleBaseUrls?.[moduleName] ?? options.baseUrl,
+  );
+
+  if (baseUrl === undefined) {
+    throw new K6GenerationError('BASE_URL is required to generate a k6 script');
+  }
+
+  return baseUrl;
+}
+
+function collectStepModuleNames(ast: ASTScenario): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+
+  for (const step of ast.steps) {
+    if (step.moduleName !== undefined && !seen.has(step.moduleName)) {
+      names.push(step.moduleName);
+      seen.add(step.moduleName);
+    }
+  }
+
+  return names;
+}
+
+function renderHelpers(ast: ASTScenario, secretEnvNames: string[]): string[] {
+  const hasSecretEnvReferences = secretEnvNames.length > 0;
   const helpers = [
     'function joinUrl(baseUrl, endpointPath) {',
     "  return `${baseUrl.replace(/\\/+$/, '')}/${endpointPath.replace(/^\\/+/, '')}`;",
     '}',
   ];
+
+  if (hasSecretEnvReferences) {
+    helpers.push(
+      '',
+      'function readSecretValues() {',
+      '  return OPENAPI_K6_SECRET_ENV_NAMES',
+      '    .map((name) => __ENV[name])',
+      '    .filter((value) => value !== undefined && value !== null && String(value) !== \'\');',
+      '}',
+      '',
+      'function maskLogValue(value) {',
+      '  if (value === undefined || value === null) {',
+      '    return value;',
+      '  }',
+      '',
+      '  return readSecretValues()',
+      '    .sort((left, right) => String(right).length - String(left).length)',
+      '    .reduce((text, secret) => text.split(String(secret)).join(\'***\'), String(value));',
+      '}',
+    );
+  }
 
   if (hasSteps(ast)) {
     helpers.push(
@@ -88,7 +200,7 @@ function renderHelpers(ast: ASTScenario): string[] {
       '    step: metadata.step,',
       '    method: metadata.method,',
       '    path: metadata.path,',
-      '    url,',
+      hasSecretEnvReferences ? '    url: maskLogValue(url),' : '    url,',
       '  }));',
       '}',
       '',
@@ -134,7 +246,7 @@ function renderHelpers(ast: ASTScenario): string[] {
     );
   }
 
-  if (hasCondition(ast)) {
+  if (hasChecks(ast)) {
     helpers.push(
       '',
       'function truncateLogValue(value, limit) {',
@@ -155,9 +267,11 @@ function renderHelpers(ast: ASTScenario): string[] {
       '    path: metadata.path,',
       '    condition,',
       '    status: response.status,',
-      '    url,',
+      hasSecretEnvReferences ? '    url: maskLogValue(url),' : '    url,',
       '    durationMs: response.timings.duration,',
-      '    responseBody: truncateLogValue(response.body, 2000),',
+      hasSecretEnvReferences
+        ? '    responseBody: truncateLogValue(maskLogValue(response.body), 2000),'
+        : '    responseBody: truncateLogValue(response.body, 2000),',
       '  }, null, 2));',
       '}',
     );
@@ -166,7 +280,44 @@ function renderHelpers(ast: ASTScenario): string[] {
   return helpers;
 }
 
-function renderStep(scenarioName: string, step: ASTStep, index: number): string[] {
+function collectEnvReferenceNames(ast: ASTScenario): string[] {
+  const names = new Set<string>();
+
+  for (const step of ast.steps) {
+    collectEnvReferenceNamesFromValue(step.request, names);
+  }
+
+  return [...names].sort();
+}
+
+function collectEnvReferenceNamesFromValue(value: unknown, names: Set<string>): void {
+  if (typeof value === 'string') {
+    ENV_TEMPLATE_PATTERN.lastIndex = 0;
+
+    let match: RegExpExecArray | null;
+    while ((match = ENV_TEMPLATE_PATTERN.exec(value)) !== null) {
+      names.add(match[1]);
+    }
+
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectEnvReferenceNamesFromValue(item, names));
+    return;
+  }
+
+  if (isRecord(value)) {
+    Object.values(value).forEach((item) => collectEnvReferenceNamesFromValue(item, names));
+  }
+}
+
+function renderStep(
+  scenarioName: string,
+  step: ASTStep,
+  index: number,
+  baseUrlReference: string,
+): string[] {
   const innerLines: string[] = [];
   const urlVariable = `url${index}`;
   const responseVariable = `res${index}`;
@@ -190,7 +341,7 @@ function renderStep(scenarioName: string, step: ASTStep, index: number): string[
 
   const hasQueryValue = hasRequestEntries(step.request.query);
   innerLines.push(
-    `${hasQueryValue ? 'let' : 'const'} ${urlVariable} = joinUrl(BASE_URL, ${compilePathExpression(step)});`,
+    `${hasQueryValue ? 'let' : 'const'} ${urlVariable} = joinUrl(${baseUrlReference}, ${compilePathExpression(step)});`,
   );
 
   if (hasQueryValue) {
@@ -222,7 +373,7 @@ function renderStep(scenarioName: string, step: ASTStep, index: number): string[
   innerLines.push(`const ${responseVariable} = ${renderHttpCall(httpCall, method, urlVariable, bodyVariable, paramsVariable, hasBodyValue)};`);
   innerLines.push(`logStepEnd(${metadataVariable}, ${responseVariable});`);
   innerLines.push(...renderCondition(step, index, responseVariable, urlVariable, metadataVariable));
-  innerLines.push(...renderExtract(step, index, responseVariable));
+  innerLines.push(...renderExtract(step, index, responseVariable, urlVariable, metadataVariable));
 
   return [
     `  group(${JSON.stringify(`${step.id} ${method} ${step.path}`)}, () => {`,
@@ -278,7 +429,13 @@ function renderHttpCall(
   return `http.${httpCall}(${urlVariable}, ${paramsVariable})`;
 }
 
-function renderExtract(step: ASTStep, index: number, responseVariable: string): string[] {
+function renderExtract(
+  step: ASTStep,
+  index: number,
+  responseVariable: string,
+  urlVariable: string,
+  metadataVariable: string,
+): string[] {
   if (!step.extract || Object.keys(step.extract).length === 0) {
     return [];
   }
@@ -286,11 +443,21 @@ function renderExtract(step: ASTStep, index: number, responseVariable: string): 
   const jsonVariable = `res${index}Json`;
   const lines = [`const ${jsonVariable} = ${responseVariable}.json();`];
 
-  for (const [variableName, rule] of Object.entries(step.extract)) {
+  Object.entries(step.extract).forEach(([variableName, rule], extractIndex) => {
+    const valueVariable = `extract${index}_${extractIndex}`;
+    const checkVariable = `extractCheck${index}_${extractIndex}`;
+
     lines.push(
-      `${compileContextReference(variableName)} = readJsonPath(${jsonVariable}, ${JSON.stringify(compileJsonPathSegments(rule.from))});`,
+      `const ${valueVariable} = readJsonPath(${jsonVariable}, ${JSON.stringify(compileJsonPathSegments(rule.from))});`,
+      `${compileContextReference(variableName)} = ${valueVariable};`,
+      `const ${checkVariable} = check(${responseVariable}, {`,
+      `  ${JSON.stringify(`${step.id} extract ${variableName}`)}: () => ${valueVariable} !== undefined,`,
+      '});',
+      `if (!${checkVariable}) {`,
+      `  logFailedCheck(${metadataVariable}, ${JSON.stringify(`extract ${variableName}`)}, ${urlVariable}, ${responseVariable});`,
+      '}',
     );
-  }
+  });
 
   return lines;
 }
@@ -502,8 +669,25 @@ function hasCondition(ast: ASTScenario): boolean {
   return ast.steps.some((step) => step.condition !== undefined);
 }
 
+function hasChecks(ast: ASTScenario): boolean {
+  return hasCondition(ast) || hasExtract(ast);
+}
+
 function hasSteps(ast: ASTScenario): boolean {
   return ast.steps.length > 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function normalizeOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 function compileContextReference(variableName: string): string {

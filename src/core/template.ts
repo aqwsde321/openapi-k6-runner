@@ -11,6 +11,12 @@ export class TemplateCompileError extends Error {
   }
 }
 
+export interface TemplateReference {
+  raw: string;
+  type: 'context' | 'env';
+  name: string;
+}
+
 export function compileValueExpression(value: unknown): string {
   if (typeof value === 'string') {
     return compileStringExpression(value);
@@ -36,6 +42,37 @@ export function compileValueExpression(value: unknown): string {
   }
 
   throw new TemplateCompileError(`Unsupported template value: ${String(value)}`);
+}
+
+export function collectTemplateReferences(value: string): TemplateReference[] {
+  const fullTemplate = FULL_TEMPLATE_PATTERN.exec(value);
+
+  if (fullTemplate) {
+    return [parseTemplateReference(fullTemplate[1])];
+  }
+
+  if (!value.includes('{{')) {
+    return [];
+  }
+
+  TEMPLATE_PATTERN.lastIndex = 0;
+
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  const references: TemplateReference[] = [];
+
+  while ((match = TEMPLATE_PATTERN.exec(value)) !== null) {
+    validateLiteralTemplatePart(value, value.slice(cursor, match.index));
+    references.push(parseTemplateReference(match[1]));
+    cursor = match.index + match[0].length;
+  }
+
+  if (cursor === 0) {
+    throw new TemplateCompileError(`Invalid template string: ${value}`);
+  }
+
+  validateLiteralTemplatePart(value, value.slice(cursor));
+  return references;
 }
 
 function compileStringExpression(value: string): string {
@@ -79,11 +116,30 @@ function compileTemplateReference(reference: string): string {
 }
 
 function compileLiteralTemplatePart(source: string, value: string): string {
+  validateLiteralTemplatePart(source, value);
+  return escapeTemplateLiteral(value);
+}
+
+function validateLiteralTemplatePart(source: string, value: string): void {
   if (value.includes('{{') || value.includes('}}')) {
     throw new TemplateCompileError(`Invalid template string: ${source}`);
   }
+}
 
-  return escapeTemplateLiteral(value);
+function parseTemplateReference(reference: string): TemplateReference {
+  if (reference.startsWith('env.')) {
+    return {
+      raw: reference,
+      type: 'env',
+      name: reference.slice('env.'.length),
+    };
+  }
+
+  return {
+    raw: reference,
+    type: 'context',
+    name: reference,
+  };
 }
 
 function escapeTemplateLiteral(value: string): string {

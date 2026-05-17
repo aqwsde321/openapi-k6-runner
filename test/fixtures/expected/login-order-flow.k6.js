@@ -3,9 +3,26 @@ import { check, group } from 'k6';
 
 const BASE_URL = __ENV.BASE_URL || "https://api.fixture.local";
 const OPENAPI_K6_TRACE = __ENV.OPENAPI_K6_TRACE === '1';
+const OPENAPI_K6_SECRET_ENV_NAMES = ["LOGIN_ID","LOGIN_PASSWORD"];
 
 function joinUrl(baseUrl, endpointPath) {
   return `${baseUrl.replace(/\/+$/, '')}/${endpointPath.replace(/^\/+/, '')}`;
+}
+
+function readSecretValues() {
+  return OPENAPI_K6_SECRET_ENV_NAMES
+    .map((name) => __ENV[name])
+    .filter((value) => value !== undefined && value !== null && String(value) !== '');
+}
+
+function maskLogValue(value) {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  return readSecretValues()
+    .sort((left, right) => String(right).length - String(left).length)
+    .reduce((text, secret) => text.split(String(secret)).join('***'), String(value));
 }
 
 function logStepStart(metadata, url) {
@@ -19,7 +36,7 @@ function logStepStart(metadata, url) {
     step: metadata.step,
     method: metadata.method,
     path: metadata.path,
-    url,
+    url: maskLogValue(url),
   }));
 }
 
@@ -71,9 +88,9 @@ function logFailedCheck(metadata, condition, url, response) {
     path: metadata.path,
     condition,
     status: response.status,
-    url,
+    url: maskLogValue(url),
     durationMs: response.timings.duration,
-    responseBody: truncateLogValue(response.body, 2000),
+    responseBody: truncateLogValue(maskLogValue(response.body), 2000),
   }, null, 2));
 }
 
@@ -96,7 +113,14 @@ export default function () {
       logFailedCheck(metadata0, "status == 200", url0, res0);
     }
     const res0Json = res0.json();
-    context.token = readJsonPath(res0Json, ["token"]);
+    const extract0_0 = readJsonPath(res0Json, ["token"]);
+    context.token = extract0_0;
+    const extractCheck0_0 = check(res0, {
+      "login extract token": () => extract0_0 !== undefined,
+    });
+    if (!extractCheck0_0) {
+      logFailedCheck(metadata0, "extract token", url0, res0);
+    }
   });
 
   group("create-order POST /orders", () => {
@@ -115,7 +139,14 @@ export default function () {
       logFailedCheck(metadata1, "status == 201", url1, res1);
     }
     const res1Json = res1.json();
-    context.orderId = readJsonPath(res1Json, ["data","id"]);
+    const extract1_0 = readJsonPath(res1Json, ["data","id"]);
+    context.orderId = extract1_0;
+    const extractCheck1_0 = check(res1, {
+      "create-order extract orderId": () => extract1_0 !== undefined,
+    });
+    if (!extractCheck1_0) {
+      logFailedCheck(metadata1, "extract orderId", url1, res1);
+    }
   });
 
   group("get-order GET /orders/{orderId}", () => {

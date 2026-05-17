@@ -58,6 +58,59 @@ describe('AST builder', () => {
     ]);
   });
 
+  it('resolves step api.module against isolated module registries', () => {
+    const registries = new Map([
+      ['auth', buildApiRegistry({
+        openapi: '3.0.3',
+        info: { title: 'Auth API', version: '1.0.0' },
+        paths: {
+          '/auth/health': {
+            get: {
+              operationId: 'getHealth',
+              responses: { 200: { description: 'OK' } },
+            },
+          },
+        },
+      })],
+      ['bos', buildApiRegistry({
+        openapi: '3.0.3',
+        info: { title: 'Bos API', version: '1.0.0' },
+        paths: {
+          '/bos/health': {
+            get: {
+              operationId: 'getHealth',
+              responses: { 200: { description: 'OK' } },
+            },
+          },
+        },
+      })],
+    ]);
+    const scenario: Scenario = {
+      name: 'cross-module',
+      steps: [
+        {
+          id: 'auth-health',
+          api: { module: 'auth', operationId: 'getHealth' },
+        },
+        {
+          id: 'bos-health',
+          api: { module: 'bos', operationId: 'getHealth' },
+        },
+      ],
+    };
+
+    const ast = buildAst(scenario, registries);
+
+    expect(ast.steps.map((step) => ({
+      id: step.id,
+      moduleName: step.moduleName,
+      path: step.path,
+    }))).toEqual([
+      { id: 'auth-health', moduleName: 'auth', path: '/auth/health' },
+      { id: 'bos-health', moduleName: 'bos', path: '/bos/health' },
+    ]);
+  });
+
   it('normalizes a missing request and preserves extract and condition', () => {
     const registry = buildApiRegistry({
       openapi: '3.0.3',

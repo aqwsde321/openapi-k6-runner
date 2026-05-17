@@ -1,8 +1,8 @@
 # __DIRECTORY__
 
-이 폴더는 백엔드 프로젝트 안에서 OpenAPI snapshot, scenario YAML, scenario test, 생성된 k6 스크립트를 관리합니다.
+이 폴더는 백엔드 프로젝트 안에서 OpenAPI snapshot, scenario YAML, scenario validate/test, 생성된 k6 스크립트를 관리합니다.
 
-핵심 흐름은 OpenAPI catalog에서 API를 고르고, scenario test로 실제 API 흐름을 먼저 검증한 뒤, 통과한 scenario만 k6 부하 테스트로 넘기는 것입니다.
+핵심 흐름은 OpenAPI catalog에서 API를 고르고, `validate`로 YAML/OpenAPI 정합성을 먼저 확인한 뒤, scenario test를 통과한 scenario만 k6 부하 테스트로 넘기는 것입니다.
 
 사람은 빠른 시작을 먼저 보면 됩니다. AI coding agent는 아래 프롬프트와 접힌 상세 지침까지 읽고 작업합니다.
 
@@ -19,10 +19,12 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
 4. __SYNC_COMMAND__를 실행해서 OpenAPI snapshot과 catalog를 만들어.
 5. __CATALOG_QUERY_COMMAND__ 명령으로 테스트할 endpoint 후보를 확인해. 필요하면 __CATALOG_PATH__도 열어봐.
 6. 내가 원하는 API 흐름을 확인한 뒤 __DIRECTORY__/scenarios/*.yaml을 작성하거나 수정해.
-7. __TEST_NAME_COMMAND__ 형식으로 실제 API 흐름을 먼저 검증해.
-8. scenario test가 통과하기 전에는 k6 script를 생성하거나 실행하지 마.
-9. 통과한 scenario만 __GENERATE_NAME_COMMAND__ 형식으로 k6 script를 생성해.
-10. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 예상 확인 포인트를 알려줘.
+7. __VALIDATE_NAME_COMMAND__ 형식으로 YAML/OpenAPI 정합성을 먼저 확인해.
+8. __TEST_NAME_COMMAND__ 형식으로 실제 API 흐름을 검증해.
+9. scenario test가 통과하기 전에는 k6 script를 생성하거나 실행하지 마.
+10. 통과한 scenario만 __RUN_NAME_COMMAND__ --log 형식으로 짧게 실행해.
+11. 스크립트만 필요하면 __GENERATE_NAME_COMMAND__ 형식으로 k6 script를 생성해.
+12. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 예상 확인 포인트를 알려줘.
 
 __DIRECTORY__/README.md, __RUN_SCRIPT_PATH__, __DIRECTORY__/.env.example, __DIRECTORY__/.gitignore는 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.
 __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.
@@ -41,7 +43,7 @@ __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말�
 - 직접 수정하는 파일은 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.
 - 기본 `.gitignore`는 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.
 - 생성물은 직접 고치지 않습니다. OpenAPI snapshot은 `sync`, `generated/*.k6.js`는 `generate`로 다시 만듭니다.
-- `__CLI_COMMAND__ test`가 통과한 scenario만 `generate`하거나 `run.sh`로 실행합니다.
+- `__CLI_COMMAND__ validate`로 YAML/OpenAPI 정합성을 확인하고, `__CLI_COMMAND__ test`가 통과한 scenario만 `run`하거나 `generate`/`run.sh`로 실행합니다.
 - 비밀 값은 YAML에 쓰지 말고 `.env`에 둔 뒤 `{{env.NAME}}`으로 참조합니다.
 
 ### 빠른 시작
@@ -64,20 +66,25 @@ __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말�
 
    `login`은 원하는 검색어로 바꿔 실행합니다.
 
-4. `__SCENARIO_PATH__`를 수정한 뒤 실제 API 흐름을 검증합니다.
+4. `__SCENARIO_PATH__`를 수정한 뒤 YAML/OpenAPI 정합성을 확인합니다.
+
+   ```bash
+   __VALIDATE_SMOKE_COMMAND__
+   ```
+
+5. 실제 API 흐름을 검증합니다.
 
    ```bash
    __TEST_SMOKE_COMMAND__
    ```
 
-5. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.
+6. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.
 
    ```bash
-   __GENERATE_SMOKE_COMMAND__
-   __RUN_SMOKE_LOG_COMMAND__
+   __RUN_SMOKE_CLI_LOG_COMMAND__
    ```
 
-다음 단계로 넘어가는 기준은 간단합니다. `__CLI_COMMAND__ test`가 통과한 scenario만 generate/run 합니다.
+다음 단계로 넘어가는 기준은 간단합니다. `__CLI_COMMAND__ validate`와 `__CLI_COMMAND__ test`가 통과한 scenario만 generate/run 합니다.
 
 <details>
 <summary>상세 사용 가이드 보기</summary>
@@ -136,9 +143,26 @@ modules:
 - `snapshot`: `sync`가 저장하고 `generate`가 읽을 OpenAPI snapshot
 - `catalog`: scenario 작성 시 참고할 endpoint 목록
 
+여러 module을 하나의 scenario에서 섞어야 하면 step마다 `api.module`을 지정합니다.
+
+```yaml
+steps:
+  - id: login
+    api:
+      module: auth
+      operationId: loginUser
+
+  - id: create-order
+    api:
+      module: bos
+      operationId: createOrder
+```
+
+`api.module`이 없는 step은 기존처럼 `--module`, `defaultModule`, 단일 module 추론 순서로 module을 선택합니다.
+
 외부 파일이나 URL을 가리키는 `$ref`는 snapshot 내부 참조로 묶어 저장하므로, 이후 `generate`는 원격 원본 없이 snapshot 파일만으로 실행할 수 있습니다.
 
-## 2. OpenAPI -> Scenario Test -> k6 흐름
+## 2. OpenAPI -> Scenario Validate -> Scenario Test -> k6 흐름
 
 빠른 시작의 같은 흐름을 파일 기준으로 풀어쓴 표입니다. 각 단계의 생성/갱신 파일은 오른쪽에 표시했습니다.
 
@@ -147,9 +171,10 @@ modules:
 | 1 | `config.yaml`의 `baseUrl`, `modules.__MODULE_NAME__.openapi` 확인 또는 TODO 채우기 | - | - |
 | 2 | - | `__SYNC_COMMAND__` | `__SNAPSHOT_PATH__`, `__CATALOG_PATH__` |
 | 3 | catalog에서 endpoint 후보 검색 후 scenario 작성/수정 | `__CATALOG_QUERY_COMMAND__` | `__SCENARIO_TEMPLATE_PATH__` |
-| 4 | `{{env.NAME}}`을 쓰는 경우 `__ENV_PATH__` 작성 | `__TEST_NAME_COMMAND__` | scenario test 결과, step별 API 검증 결과 |
-| 5 | scenario test 통과 확인 | `__GENERATE_NAME_COMMAND__` | `__OUTPUT_TEMPLATE_PATH__` |
-| 6 | 생성된 k6 스크립트 확인 | `__RUN_SCRIPT_ARG__ <name> --log` | k6 부하 테스트 실행, `__DIRECTORY__/logs/<name>.log` |
+| 4 | `{{env.NAME}}`을 쓰는 경우 `__ENV_PATH__` 작성 | `__VALIDATE_NAME_COMMAND__` | scenario YAML/OpenAPI 정합성 검증 결과 |
+| 5 | scenario validate 통과 확인 | `__TEST_NAME_COMMAND__` | scenario test 결과, step별 API 검증 결과 |
+| 6 | scenario test 통과 확인 | `__RUN_NAME_COMMAND__ --log` | validate/generate/k6 실행, `__OUTPUT_TEMPLATE_PATH__`, `__DIRECTORY__/logs/<name>.log` |
+| 7 | 스크립트만 따로 생성하거나 runner로 실행 | `__GENERATE_NAME_COMMAND__`, `__RUN_SCRIPT_ARG__ <name> --log` | `__OUTPUT_TEMPLATE_PATH__`, k6 부하 테스트 실행 |
 
 아래 예시는 scaffold가 생성한 `smoke` scenario 기준입니다.
 
@@ -176,7 +201,27 @@ __CATALOG_QUERY_COMMAND__
 
 생성/수정: scenario YAML
 
-### 2-3. Scenario 검증
+### 2-3. Scenario 정적 검증
+
+`__CLI_COMMAND__ validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다.
+AI가 작성한 YAML은 먼저 이 명령으로 `operationId`, `method/path`, 필수 path/query/header/body 누락, `{{token}}` 같은 context template 참조, `condition`, `extract.from` 문법을 확인합니다.
+
+```bash
+__VALIDATE_SMOKE_COMMAND__
+```
+
+`-s`는 `--scenario`의 줄임말입니다. `smoke`처럼 이름만 쓰면 `__DIRECTORY__/scenarios/smoke.yaml`을 찾습니다.
+
+이 명령은 다음을 확인합니다.
+
+- OpenAPI snapshot 기준으로 scenario의 API를 찾을 수 있는지
+- `/orders/{orderId}` 같은 path template에 필요한 `request.pathParams`가 있는지
+- OpenAPI에서 required로 표시한 query/header parameter가 있는지
+- required request body가 있는 endpoint에 `request.body` 또는 `request.multipart`가 있는지
+- `{{token}}` 같은 context template 값이 이전 step의 `extract`에서 나온 값인지
+- `condition` 표현식과 `extract.from` JSONPath가 지원 범위 안에 있는지
+
+### 2-4. Scenario 실행 검증
 
 `__CLI_COMMAND__ test`는 scenario YAML을 Node.js에서 1회 실행해 URL, status, condition, extract를 확인합니다.
 k6 스크립트 생성 전 gate입니다.
@@ -184,8 +229,6 @@ k6 스크립트 생성 전 gate입니다.
 ```bash
 __TEST_SMOKE_COMMAND__
 ```
-
-`-s`는 `--scenario`의 줄임말입니다. `smoke`처럼 이름만 쓰면 `__DIRECTORY__/scenarios/smoke.yaml`을 찾습니다.
 
 이 명령은 다음을 확인합니다.
 
@@ -229,8 +272,37 @@ __TEST_SMOKE_COMMAND__
 색상은 터미널에서만 켜지며 `--no-color` 옵션이나 `NO_COLOR=1` 환경변수로 끌 수 있습니다.
 
 `__ENV_PATH__`가 있으면 `{{env.NAME}}` template 값과 `BASE_URL`을 읽습니다. 현재 shell 환경변수가 같은 이름으로 있으면 shell 값이 우선합니다.
+`{{env.NAME}}`으로 참조한 값은 scenario test 출력과 생성된 k6 실패 로그에서 masking됩니다.
 
-### 2-4. k6 스크립트 생성
+### 2-5. CLI에서 k6 실행
+
+`__CLI_COMMAND__ run`은 scenario를 정적 검증하고, k6 스크립트를 다시 생성한 뒤 `k6 run`을 실행합니다.
+k6 옵션은 `--` 뒤에 붙입니다.
+
+```bash
+__RUN_SMOKE_CLI_COMMAND__
+__RUN_SMOKE_CLI_ITERATIONS_COMMAND__
+```
+
+콘솔 출력과 실패 응답 로그를 파일로 남기려면 `--log`를 붙입니다.
+
+```bash
+__RUN_SMOKE_CLI_LOG_COMMAND__
+```
+
+`run`이 제공하는 편의 플래그입니다.
+
+- `--log`: 콘솔 출력과 실패 응답 로그를 `logs/<scenario>.log`에 저장
+- `--trace`: 각 scenario step의 시작/종료 로그 출력
+- `--report`: k6 Web Dashboard HTML report를 `logs/<scenario>-report.html`에 저장
+- `--open-dashboard`: 실행 중인 k6 Web Dashboard를 브라우저로 열기
+
+```bash
+__RUN_SMOKE_CLI_REPORT_COMMAND__
+__RUN_SMOKE_CLI_TRACE_REPORT_COMMAND__
+```
+
+### 2-6. k6 스크립트만 생성
 
 ```bash
 __GENERATE_SMOKE_COMMAND__
@@ -238,7 +310,7 @@ __GENERATE_SMOKE_COMMAND__
 
 생성/갱신: `__OUTPUT_PATH__`
 
-### 2-5. k6 실행
+### 2-7. run.sh로 생성된 k6 실행
 
 ```bash
 __RUN_SMOKE_COMMAND__
@@ -286,6 +358,7 @@ __RUN_SMOKE_TRACE_REPORT_COMMAND__
 API base URL은 `__CLI_COMMAND__ generate` 실행 시점의 `config.yaml` `baseUrl` 값이 생성된 k6 스크립트에 기본값으로 들어갑니다.
 `config.yaml`을 수정한 뒤에는 스크립트를 다시 생성해야 반영됩니다.
 실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.
+multi-module scenario는 `BASE_URL_<MODULE>` 환경 변수를 먼저 읽습니다. 예를 들어 `auth`는 `BASE_URL_AUTH`, `bos-api`는 `BASE_URL_BOS_API`를 사용하고, 없으면 기존 `BASE_URL`과 config 기본값을 순서대로 사용합니다.
 
 ```bash
 __BASE_URL_RUN_COMMAND__
@@ -297,11 +370,12 @@ __BASE_URL_RUN_COMMAND__
 
 ```bash
 __ENV_COPY_COMMAND__
+__VALIDATE_SMOKE_COMMAND__
 __TEST_SMOKE_COMMAND__
 __RUN_SMOKE_COMMAND__
 ```
 
-`__CLI_COMMAND__ test`와 `run.sh`가 `__ENV_PATH__`를 읽습니다. 이 파일은 `run.sh`와 같은 폴더에 있어야 합니다.
+`__CLI_COMMAND__ test`, `__CLI_COMMAND__ run`, `run.sh`가 `__ENV_PATH__`를 읽습니다. 이 파일은 `run.sh`와 같은 폴더에 있어야 합니다.
 백엔드 프로젝트 루트의 `.env`는 자동으로 읽지 않습니다. 루트 `.env` 값을 쓰려면 필요한 키만 이 파일로 복사하거나, 실행 전에 shell에서 직접 export합니다.
 `__DIRECTORY__/.gitignore`는 기본적으로 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다. 실제 비밀 값은 commit하지 않습니다.
 이미 git에 올라간 `__DIRECTORY__/` 파일은 ignore 규칙만으로 빠지지 않으므로 필요하면 `git rm -r --cached __DIRECTORY__`로 추적에서만 제거합니다.
@@ -377,7 +451,13 @@ steps:
 Spring의 `@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` endpoint는 `request.multipart`로 작성합니다.
 fixture 파일은 반복 테스트에 안전하고 유용할 때만 백엔드 git 정책에 맞게 ignore 예외를 풀어 commit합니다.
 
-새 시나리오 검증:
+새 시나리오 정적 검증:
+
+```bash
+__VALIDATE_WORKFLOW_COMMAND__
+```
+
+새 시나리오 실행 검증:
 
 ```bash
 __TEST_WORKFLOW_COMMAND__
@@ -434,7 +514,7 @@ This section is for AI agents. Use it as a compact checklist after reading the K
 
 - Keep human-facing documentation in Korean.
 - Run commands from the backend project root and follow the quick start order above.
-- Do not skip the test gate: only generate/run scenarios after `__CLI_COMMAND__ test` passes.
+- Do not skip validation gates: only generate/run scenarios after `__CLI_COMMAND__ validate` and `__CLI_COMMAND__ test` pass.
 - During ordinary backend test work, edit only `config.yaml`, `.env`, and `scenarios/*.yaml`.
 - If scaffold docs or helper scripts must change, update the generator template in openapi-k6-runner and rerun `__UPDATE_COMMAND__` intentionally.
 - Regenerate `__SNAPSHOT_PATH__` and `generated/*.k6.js` with `sync`/`generate`; do not edit them directly.
@@ -442,12 +522,15 @@ This section is for AI agents. Use it as a compact checklist after reading the K
 
 ### Scenario Notes
 
-- Use `__CATALOG_QUERY_COMMAND__` or read `__CATALOG_PATH__` to pick endpoints; `generate` reads the OpenAPI snapshot, not the catalog.
+- Use `__CATALOG_QUERY_COMMAND__` or read `__CATALOG_PATH__` to pick endpoints; `validate`, `test`, and `generate` read the OpenAPI snapshot, not the catalog.
 - Prefer `api.operationId`; use `api.method` and `api.path` when operationId is missing or unclear.
+- Use `api.module` only when a scenario crosses multiple configured OpenAPI modules; it requires `config.yaml` module snapshots.
 - Use `extract` for response values and reference them later as `{{variableName}}`; use `{{env.NAME}}` for runtime secrets.
+- `validate` rejects context templates that are not produced by an earlier step `extract`.
 - Put auth tokens under `request.headers`.
 - Do not use `request.body` and `request.multipart` in the same step.
 - `condition` compiles to a k6 `check`; it is not a branch. Later steps still run even if a check fails.
+- `extract` also compiles to a k6 `check` so missing extracted values are visible in k6 output.
 - `pathParams` values are encoded as URL path segments.
 - Config-relative paths resolve from the directory containing `config.yaml`.
 - Multipart file paths are relative to `__DIRECTORY__/`. Put local upload fixtures under `__FIXTURES_PATH__` by default and unignore/commit them only when repeatable tests need them.

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { Command, CommanderError } from 'commander';
 import { parse as parseDotEnv } from 'dotenv';
-import { realpathSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { createWriteStream, realpathSync, type WriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
@@ -16,7 +17,11 @@ import {
   type LoadTestConfig,
   type LoadTestModuleConfig,
 } from '../config/load-test.config.js';
-import type { ApiCatalog, ApiCatalogOperation } from '../core/types.js';
+import {
+  createModuleBaseUrlEnvName,
+  findModuleBaseUrlEnvNameCollisions,
+} from '../core/module-env.js';
+import type { ApiCatalog, ApiCatalogOperation, ApiRegistry, Scenario } from '../core/types.js';
 import {
   executeAstScenario,
   type ScenarioExecutionReporter,
@@ -26,6 +31,7 @@ import { syncOpenApiSnapshot } from '../openapi/openapi.catalog.js';
 import { HTTP_METHOD_ORDER, parseOpenApiFile } from '../openapi/openapi.parser.js';
 import { parseScenarioFile } from '../parser/scenario.parser.js';
 import { initLoadTests, updateLoadTests } from '../scaffold/load-test.init.js';
+import { validateScenarioAgainstOpenApi } from '../validator/scenario.validator.js';
 import { createScenarioConsoleReporter } from './test.reporter.js';
 
 type WritableLike = {
@@ -71,6 +77,13 @@ export interface GenerateOptions {
   module?: string;
 }
 
+export interface ValidateOptions {
+  scenario: string;
+  openapi?: string;
+  config?: string;
+  module?: string;
+}
+
 export interface SyncOptions {
   openapi?: string;
   write?: string;
@@ -84,6 +97,18 @@ export interface TestOptions {
   config?: string;
   module?: string;
   color?: boolean;
+}
+
+export interface RunOptions {
+  scenario: string;
+  write?: string;
+  config?: string;
+  module?: string;
+  log?: boolean;
+  trace?: boolean;
+  report?: boolean;
+  openDashboard?: boolean;
+  k6Args?: string[];
 }
 
 export interface CatalogOptions {
@@ -116,8 +141,21 @@ export interface GenerateResult {
   outputPath: string;
   scenarioPath: string;
   openapiPath: string;
+  openapiPaths?: Record<string, string>;
   baseUrl: string;
   moduleName?: string;
+  moduleNames?: string[];
+}
+
+export interface ValidateResult {
+  scenarioPath: string;
+  openapiPath: string;
+  openapiPaths?: Record<string, string>;
+  scenarioName: string;
+  stepCount: number;
+  warnings: string[];
+  moduleName?: string;
+  moduleNames?: string[];
 }
 
 export interface SyncResult {
@@ -131,7 +169,22 @@ export interface SyncResult {
 export interface TestResult extends ScenarioExecutionResult {
   scenarioPath: string;
   openapiPath: string;
+  openapiPaths?: Record<string, string>;
   moduleName?: string;
+  moduleNames?: string[];
+}
+
+export interface RunResult {
+  outputPath: string;
+  scenarioPath: string;
+  openapiPath: string;
+  openapiPaths?: Record<string, string>;
+  moduleName?: string;
+  moduleNames?: string[];
+  logPath?: string;
+  reportPath?: string;
+  exitCode: number | null;
+  signal: NodeJS.Signals | null;
 }
 
 export interface CatalogResult {
@@ -176,6 +229,30 @@ interface CatalogCommandContext {
   moduleName: string | undefined;
   openapi: string | undefined;
   options: CatalogOptions;
+}
+
+interface ScenarioOpenApiContext {
+  registrySource: ApiRegistry | Map<string, ApiRegistry>;
+  defaultModuleName?: string;
+  openapiPath: string;
+  openapiPaths?: Record<string, string>;
+  baseUrl?: string;
+  moduleBaseUrls?: Record<string, string>;
+  moduleName?: string;
+  moduleNames?: string[];
+}
+
+interface ScenarioModuleUse {
+  moduleName: string;
+  stepId: string;
+  explicit: boolean;
+}
+
+interface K6RunResult {
+  logPath?: string;
+  reportPath?: string;
+  exitCode: number | null;
+  signal: NodeJS.Signals | null;
 }
 
 function resolveCwd(context: CliContext): string {
@@ -739,9 +816,13 @@ function resolveOutputPath(
 
   const scenarioName = isScenarioName(scenario)
     ? scenario
-    : path.basename(scenario, path.extname(scenario));
+    : resolveScenarioName(scenario);
 
   return path.join(resolveLoadTestDir(cwd, config), 'generated', `${scenarioName}.k6.js`);
+}
+
+function resolveScenarioName(scenario: string): string {
+  return path.basename(scenario, path.extname(scenario));
 }
 
 function resolveLoadTestDir(cwd: string, config: LoadTestConfig | undefined): string {
@@ -755,29 +836,271 @@ function isScenarioName(value: string): boolean {
     path.extname(value) === '';
 }
 
-export async function runGenerateCommand(
-  options: GenerateOptions,
-  context: CliContext = {},
-): Promise<GenerateResult> {
-  const cwd = resolveCwd(context);
-  const config = await loadOptionalConfig(cwd, options.config, options.openapi === undefined);
-  const moduleConfig = selectConfigModule(config, options.module);
-  const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
-  const moduleName = moduleConfig?.name ?? '<none>';
-  const openapiPath = resolveConfiguredOpenApiInput(
-    cwd,
-    config,
-    options.openapi,
-    moduleConfig?.snapshot,
-    '--openapi is required unless --config provides modules.<name>.snapshot',
-    `modules.${moduleName}.snapshot`,
-    'generate',
+function assertModuleOptionHasConfig(
+  config: LoadTestConfig | undefined,
+  moduleName: string | undefined,
+): void {
+  if (config === undefined && moduleName !== undefined) {
+    throw new Error('--module requires --config');
+  }
+}
+
+async function loadScenarioOpenApiContext(options: {
+  cwd: string;
+  config: LoadTestConfig | undefined;
+  scenario: Scenario;
+  cliOpenapi?: string;
+  cliModuleName?: string;
+  commandName: 'generate' | 'validate' | 'test' | 'run';
+  requireBaseUrl: boolean;
+  runtimeEnv?: Record<string, string | undefined>;
+}): Promise<ScenarioOpenApiContext> {
+  const explicitModuleUses = collectExplicitModuleUses(options.scenario);
+
+  if (options.cliOpenapi !== undefined && explicitModuleUses.length > 0) {
+    const firstUse = explicitModuleUses[0];
+    throw new Error(
+      `step "${firstUse.stepId}": api.module "${firstUse.moduleName}" cannot be used with --openapi; use --config modules.<name>.snapshot`,
+    );
+  }
+
+  if (options.config === undefined) {
+    if (options.cliModuleName !== undefined) {
+      throw new Error('--module requires --config');
+    }
+
+    if (explicitModuleUses.length > 0) {
+      const firstUse = explicitModuleUses[0];
+      throw new Error(`step "${firstUse.stepId}": api.module "${firstUse.moduleName}" requires --config`);
+    }
+
+    const openapiPath = resolveConfiguredOpenApiInput(
+      options.cwd,
+      undefined,
+      options.cliOpenapi,
+      undefined,
+      '--openapi is required unless --config provides modules.<name>.snapshot',
+      'modules.<name>.snapshot',
+      options.commandName,
+    );
+    const registry = await parseOpenApiFile(openapiPath);
+    const baseUrl = options.requireBaseUrl
+      ? await resolveStandaloneBaseUrl(options.cwd, registry)
+      : undefined;
+
+    return {
+      registrySource: registry,
+      openapiPath,
+      ...(baseUrl === undefined ? {} : { baseUrl }),
+    };
+  }
+
+  if (options.cliOpenapi !== undefined) {
+    const moduleConfig = resolveConfigModule(options.config, options.cliModuleName);
+    const openapiPath = resolveOpenApiInput(options.cwd, options.cliOpenapi);
+    const registry = await parseOpenApiFile(openapiPath);
+    const baseUrl = options.requireBaseUrl
+      ? await resolveScenarioModuleBaseUrl({
+          cwd: options.cwd,
+          config: options.config,
+          moduleConfig,
+          registry,
+          runtimeEnv: options.runtimeEnv,
+        })
+      : undefined;
+
+    return {
+      registrySource: registry,
+      defaultModuleName: moduleConfig.name,
+      openapiPath,
+      ...(baseUrl === undefined ? {} : { baseUrl }),
+      moduleName: moduleConfig.name,
+    };
+  }
+
+  const fallbackModule = resolveFallbackModuleForScenario(
+    options.config,
+    options.cliModuleName,
+    options.scenario,
   );
-  const scenario = await parseScenarioFile(scenarioPath);
-  const registry = await parseOpenApiFile(openapiPath);
+  const moduleUses = collectRequiredModuleUses(options.scenario, fallbackModule?.name);
+  const moduleNames = [...moduleUses.keys()];
+  if (options.requireBaseUrl) {
+    assertNoModuleBaseUrlEnvNameCollisions(moduleNames);
+  }
+  const registries = new Map<string, ApiRegistry>();
+  const openapiPaths: Record<string, string> = {};
+  const moduleBaseUrls: Record<string, string> = {};
+
+  for (const moduleName of moduleNames) {
+    const moduleUse = moduleUses.get(moduleName);
+    const stepId = moduleUse?.stepId ?? '<unknown>';
+    const moduleConfig = resolveScenarioModuleConfig(options.config, moduleName, stepId);
+    const snapshotPath = resolveScenarioModuleSnapshotPath(
+      options.config,
+      moduleConfig,
+      moduleUse,
+      options.commandName,
+    );
+    const registry = await parseOpenApiFile(snapshotPath);
+
+    registries.set(moduleName, registry);
+    openapiPaths[moduleName] = snapshotPath;
+
+    if (options.requireBaseUrl) {
+      moduleBaseUrls[moduleName] = await resolveScenarioModuleBaseUrl({
+        cwd: options.cwd,
+        config: options.config,
+        moduleConfig,
+        registry,
+        runtimeEnv: options.runtimeEnv,
+      });
+    }
+  }
+
+  const firstModuleName = moduleNames[0];
+  const singleModuleName = moduleNames.length === 1 ? firstModuleName : undefined;
+
+  return {
+    registrySource: registries,
+    ...(fallbackModule === undefined ? {} : { defaultModuleName: fallbackModule.name }),
+    openapiPath: openapiPaths[firstModuleName] ?? '',
+    ...(moduleNames.length <= 1 ? {} : { openapiPaths }),
+    ...(options.requireBaseUrl ? { baseUrl: moduleBaseUrls[firstModuleName] } : {}),
+    ...(options.requireBaseUrl && moduleNames.length > 1 ? { moduleBaseUrls } : {}),
+    ...(singleModuleName === undefined ? { moduleNames } : { moduleName: singleModuleName }),
+  };
+}
+
+function collectExplicitModuleUses(scenario: Scenario): ScenarioModuleUse[] {
+  return scenario.steps.flatMap((step) =>
+    step.api.module === undefined
+      ? []
+      : [{ moduleName: step.api.module, stepId: step.id, explicit: true }]);
+}
+
+function resolveFallbackModuleForScenario(
+  config: LoadTestConfig,
+  moduleName: string | undefined,
+  scenario: Scenario,
+): LoadTestModuleConfig | undefined {
+  const hasUnqualifiedStep = scenario.steps.some((step) => step.api.module === undefined);
+
+  if (hasUnqualifiedStep || moduleName !== undefined) {
+    return resolveConfigModule(config, moduleName);
+  }
+
+  return undefined;
+}
+
+function collectRequiredModuleUses(
+  scenario: Scenario,
+  fallbackModuleName: string | undefined,
+): Map<string, ScenarioModuleUse> {
+  const uses = new Map<string, ScenarioModuleUse>();
+
+  for (const step of scenario.steps) {
+    const moduleName = step.api.module ?? fallbackModuleName;
+
+    if (moduleName === undefined) {
+      throw new Error(`step "${step.id}": api.module is required because no fallback module was selected`);
+    }
+
+    if (!uses.has(moduleName)) {
+      uses.set(moduleName, {
+        moduleName,
+        stepId: step.id,
+        explicit: step.api.module !== undefined,
+      });
+    } else if (step.api.module !== undefined) {
+      uses.set(moduleName, {
+        moduleName,
+        stepId: step.id,
+        explicit: true,
+      });
+    }
+  }
+
+  return uses;
+}
+
+function assertNoModuleBaseUrlEnvNameCollisions(moduleNames: string[]): void {
+  const [collision] = findModuleBaseUrlEnvNameCollisions(moduleNames);
+
+  if (collision !== undefined) {
+    throw new Error(
+      `module base URL env name collision: modules ${collision.moduleNames.map((name) => JSON.stringify(name)).join(', ')} all map to ${collision.envName}`,
+    );
+  }
+}
+
+function resolveScenarioModuleConfig(
+  config: LoadTestConfig,
+  moduleName: string,
+  stepId: string,
+): LoadTestModuleConfig {
+  const moduleConfig = config.modules.get(moduleName);
+
+  if (!moduleConfig) {
+    const available = [...config.modules.keys()].join(', ');
+    throw new Error(
+      `${config.path}: step "${stepId}": api.module "${moduleName}" was not found. Available modules: ${available}`,
+    );
+  }
+
+  return moduleConfig;
+}
+
+function resolveScenarioModuleSnapshotPath(
+  config: LoadTestConfig,
+  moduleConfig: LoadTestModuleConfig,
+  moduleUse: ScenarioModuleUse | undefined,
+  commandName: string,
+): string {
+  if (isConfiguredValue(moduleConfig.snapshot)) {
+    return resolveConfigFilePath(config, moduleConfig.snapshot);
+  }
+
+  if (moduleUse?.explicit !== true) {
+    throw new Error(formatMissingConfigValueError(
+      config.path,
+      `modules.${moduleConfig.name}.snapshot`,
+      commandName,
+    ));
+  }
+
+  throw new Error(formatMissingScenarioModuleSnapshotError(
+    config.path,
+    moduleConfig.name,
+    moduleUse.stepId,
+    commandName,
+  ));
+}
+
+function formatMissingScenarioModuleSnapshotError(
+  configPath: string,
+  moduleName: string,
+  stepId: string,
+  commandName: string,
+): string {
+  const configFieldLabel = `modules.${moduleName}.snapshot`;
+
+  return [
+    `${configPath}: step "${stepId}": ${configFieldLabel} is not configured.`,
+    '',
+    'Edit:',
+    `  ${configPath}`,
+    '',
+    'Set:',
+    `  ${configFieldLabel}`,
+    '',
+    'After editing:',
+    `  rerun openapi-k6 ${commandName}`,
+  ].join('\n');
+}
+
+async function resolveStandaloneBaseUrl(cwd: string, registry: ApiRegistry): Promise<string> {
   const baseUrl =
-    normalizeConfiguredValue(moduleConfig?.baseUrl) ??
-    normalizeConfiguredValue(config?.baseUrl) ??
     (await loadBaseUrl(cwd)) ??
     registry.defaultServerUrl;
 
@@ -785,25 +1108,192 @@ export async function runGenerateCommand(
     throw new Error('baseUrl is not configured and OpenAPI servers[0].url is missing.');
   }
 
-  const ast = buildAst(scenario, registry);
+  return baseUrl;
+}
+
+async function resolveScenarioModuleBaseUrl(options: {
+  cwd: string;
+  config: LoadTestConfig;
+  moduleConfig: LoadTestModuleConfig;
+  registry: ApiRegistry;
+  runtimeEnv?: Record<string, string | undefined>;
+}): Promise<string> {
+  const baseUrl = options.runtimeEnv === undefined
+    ? normalizeConfiguredValue(options.moduleConfig.baseUrl) ??
+      normalizeConfiguredValue(options.config.baseUrl) ??
+      (await loadBaseUrl(options.cwd)) ??
+      options.registry.defaultServerUrl
+    : normalizeConfiguredValue(options.runtimeEnv[createModuleBaseUrlEnvName(options.moduleConfig.name)]) ??
+      normalizeConfiguredValue(options.runtimeEnv.BASE_URL) ??
+      normalizeConfiguredValue(options.moduleConfig.baseUrl) ??
+      normalizeConfiguredValue(options.config.baseUrl) ??
+      options.registry.defaultServerUrl;
+
+  if (!baseUrl) {
+    throw new Error(
+      `baseUrl is not configured for module "${options.moduleConfig.name}" and OpenAPI servers[0].url is missing.`,
+    );
+  }
+
+  return baseUrl;
+}
+
+export async function runGenerateCommand(
+  options: GenerateOptions,
+  context: CliContext = {},
+): Promise<GenerateResult> {
+  const cwd = resolveCwd(context);
+  const config = await loadOptionalConfig(cwd, options.config, options.openapi === undefined);
+  assertModuleOptionHasConfig(config, options.module);
+  const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
+  const scenario = await parseScenarioFile(scenarioPath);
+  const openApiContext = await loadScenarioOpenApiContext({
+    cwd,
+    config,
+    scenario,
+    cliOpenapi: options.openapi,
+    cliModuleName: options.module,
+    commandName: 'generate',
+    requireBaseUrl: true,
+  });
+
+  const ast = buildAst(scenario, openApiContext.registrySource, {
+    defaultModuleName: openApiContext.defaultModuleName,
+  });
   const outputPath = resolveOutputPath(cwd, config, options.scenario, options.write);
   const script = generateK6Script(ast, {
-    baseUrl,
+    baseUrl: openApiContext.baseUrl,
+    moduleBaseUrls: openApiContext.moduleBaseUrls,
     fileRootDir: resolveLoadTestDir(cwd, config),
     outputPath,
   });
   const result: GenerateResult = {
     outputPath,
     scenarioPath,
-    openapiPath,
-    baseUrl,
-    ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
+    openapiPath: openApiContext.openapiPath,
+    ...(openApiContext.openapiPaths === undefined ? {} : { openapiPaths: openApiContext.openapiPaths }),
+    baseUrl: openApiContext.baseUrl ?? '',
+    ...(openApiContext.moduleName === undefined ? {} : { moduleName: openApiContext.moduleName }),
+    ...(openApiContext.moduleNames === undefined ? {} : { moduleNames: openApiContext.moduleNames }),
   };
 
   await fs.mkdir(path.dirname(result.outputPath), { recursive: true });
   await fs.writeFile(result.outputPath, script, 'utf8');
 
   return result;
+}
+
+export async function runRunCommand(
+  options: RunOptions,
+  context: CliContext = {},
+): Promise<RunResult> {
+  const cwd = resolveCwd(context);
+  const stdout = context.stdout ?? process.stdout;
+  const stderr = context.stderr ?? process.stderr;
+  const config = await loadOptionalConfig(cwd, options.config, true);
+  assertModuleOptionHasConfig(config, options.module);
+  const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
+  const scenario = await parseScenarioFile(scenarioPath);
+  const loadTestDir = resolveLoadTestDir(cwd, config);
+  const loadTestEnv = await loadLoadTestEnv(loadTestDir);
+  const runtimeEnv = {
+    ...loadTestEnv,
+    ...(context.env ?? process.env),
+  };
+  const openApiContext = await loadScenarioOpenApiContext({
+    cwd,
+    config,
+    scenario,
+    cliModuleName: options.module,
+    commandName: 'run',
+    requireBaseUrl: true,
+    runtimeEnv,
+  });
+  const validation = validateScenarioAgainstOpenApi(
+    scenario,
+    openApiContext.registrySource,
+    { defaultModuleName: openApiContext.defaultModuleName },
+  );
+  const ast = buildAst(scenario, openApiContext.registrySource, {
+    defaultModuleName: openApiContext.defaultModuleName,
+  });
+  const outputPath = resolveOutputPath(cwd, config, options.scenario, options.write);
+  const script = generateK6Script(ast, {
+    baseUrl: openApiContext.baseUrl,
+    moduleBaseUrls: openApiContext.moduleBaseUrls,
+    fileRootDir: loadTestDir,
+    outputPath,
+  });
+
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+  await fs.writeFile(outputPath, script, 'utf8');
+
+  writeRunValidationWarnings(stdout, validation.warnings);
+  writeLine(stdout, `Generated ${outputPath}`);
+
+  const k6Result = await runK6Script({
+    cwd,
+    loadTestDir,
+    scenarioName: isScenarioName(options.scenario) ? options.scenario : resolveScenarioName(options.scenario),
+    scriptPath: outputPath,
+    runtimeEnv,
+    k6Args: options.k6Args ?? [],
+    log: options.log === true,
+    trace: options.trace === true,
+    report: options.report === true,
+    openDashboard: options.openDashboard === true,
+    stdout,
+    stderr,
+  });
+
+  return {
+    outputPath,
+    scenarioPath,
+    openapiPath: openApiContext.openapiPath,
+    ...(openApiContext.openapiPaths === undefined ? {} : { openapiPaths: openApiContext.openapiPaths }),
+    ...(openApiContext.moduleName === undefined ? {} : { moduleName: openApiContext.moduleName }),
+    ...(openApiContext.moduleNames === undefined ? {} : { moduleNames: openApiContext.moduleNames }),
+    ...(k6Result.logPath === undefined ? {} : { logPath: k6Result.logPath }),
+    ...(k6Result.reportPath === undefined ? {} : { reportPath: k6Result.reportPath }),
+    exitCode: k6Result.exitCode,
+    signal: k6Result.signal,
+  };
+}
+
+export async function runValidateCommand(
+  options: ValidateOptions,
+  context: CliContext = {},
+): Promise<ValidateResult> {
+  const cwd = resolveCwd(context);
+  const config = await loadOptionalConfig(cwd, options.config, options.openapi === undefined);
+  assertModuleOptionHasConfig(config, options.module);
+  const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
+  const scenario = await parseScenarioFile(scenarioPath);
+  const openApiContext = await loadScenarioOpenApiContext({
+    cwd,
+    config,
+    scenario,
+    cliOpenapi: options.openapi,
+    cliModuleName: options.module,
+    commandName: 'validate',
+    requireBaseUrl: false,
+  });
+  const validation = validateScenarioAgainstOpenApi(
+    scenario,
+    openApiContext.registrySource,
+    { defaultModuleName: openApiContext.defaultModuleName },
+  );
+
+  return {
+    scenarioPath,
+    openapiPath: openApiContext.openapiPath,
+    ...(openApiContext.openapiPaths === undefined ? {} : { openapiPaths: openApiContext.openapiPaths }),
+    scenarioName: validation.scenarioName,
+    stepCount: validation.stepCount,
+    warnings: validation.warnings,
+    ...(openApiContext.moduleName === undefined ? {} : { moduleName: openApiContext.moduleName }),
+    ...(openApiContext.moduleNames === undefined ? {} : { moduleNames: openApiContext.moduleNames }),
+  };
 }
 
 export async function runSyncCommand(
@@ -909,39 +1399,30 @@ export async function runTestCommand(
 ): Promise<TestResult> {
   const cwd = resolveCwd(context);
   const config = await loadOptionalConfig(cwd, options.config, true);
-  const moduleConfig = selectConfigModule(config, options.module);
   const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
-  const moduleName = moduleConfig?.name ?? '<none>';
-  const openapiPath = resolveConfiguredOpenApiInput(
-    cwd,
-    config,
-    undefined,
-    moduleConfig?.snapshot,
-    'modules.<name>.snapshot is required to run test',
-    `modules.${moduleName}.snapshot`,
-    'test',
-  );
   const scenario = await parseScenarioFile(scenarioPath);
-  const registry = await parseOpenApiFile(openapiPath);
   const loadTestDir = resolveLoadTestDir(cwd, config);
   const loadTestEnv = await loadLoadTestEnv(loadTestDir);
   const runtimeEnv = {
     ...loadTestEnv,
     ...(context.env ?? process.env),
   };
-  const baseUrl =
-    normalizeConfiguredValue(runtimeEnv.BASE_URL) ??
-    normalizeConfiguredValue(moduleConfig?.baseUrl) ??
-    normalizeConfiguredValue(config?.baseUrl) ??
-    registry.defaultServerUrl;
+  const openApiContext = await loadScenarioOpenApiContext({
+    cwd,
+    config,
+    scenario,
+    cliModuleName: options.module,
+    commandName: 'test',
+    requireBaseUrl: true,
+    runtimeEnv,
+  });
 
-  if (!baseUrl) {
-    throw new Error('baseUrl is not configured and OpenAPI servers[0].url is missing.');
-  }
-
-  const ast = buildAst(scenario, registry);
+  const ast = buildAst(scenario, openApiContext.registrySource, {
+    defaultModuleName: openApiContext.defaultModuleName,
+  });
   const result = await executeAstScenario(ast, {
-    baseUrl,
+    baseUrl: openApiContext.baseUrl ?? '',
+    moduleBaseUrls: openApiContext.moduleBaseUrls,
     fileRootDir: loadTestDir,
     env: runtimeEnv,
     fetch: context.fetch,
@@ -951,8 +1432,10 @@ export async function runTestCommand(
   return {
     ...result,
     scenarioPath,
-    openapiPath,
-    ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
+    openapiPath: openApiContext.openapiPath,
+    ...(openApiContext.openapiPaths === undefined ? {} : { openapiPaths: openApiContext.openapiPaths }),
+    ...(openApiContext.moduleName === undefined ? {} : { moduleName: openApiContext.moduleName }),
+    ...(openApiContext.moduleNames === undefined ? {} : { moduleNames: openApiContext.moduleNames }),
   };
 }
 
@@ -994,6 +1477,173 @@ export async function runUpdateCommand(
     snapshot: moduleConfig?.snapshot,
     catalog: moduleConfig?.catalog,
   });
+}
+
+function writeRunValidationWarnings(stdout: WritableLike, warnings: string[]): void {
+  if (warnings.length === 0) {
+    return;
+  }
+
+  writeLine(stdout, 'Warnings:');
+
+  for (const warning of warnings) {
+    writeLine(stdout, `  - ${warning}`);
+  }
+
+  writeLine(stdout, '');
+}
+
+async function runK6Script(options: {
+  cwd: string;
+  loadTestDir: string;
+  scenarioName: string;
+  scriptPath: string;
+  runtimeEnv: Record<string, string | undefined>;
+  k6Args: string[];
+  log: boolean;
+  trace: boolean;
+  report: boolean;
+  openDashboard: boolean;
+  stdout: WritableLike;
+  stderr: WritableLike;
+}): Promise<K6RunResult> {
+  const env = toProcessEnv(options.runtimeEnv);
+  const logsDir = path.join(options.loadTestDir, 'logs');
+  const logPath = options.log ? path.join(logsDir, `${options.scenarioName}.log`) : undefined;
+  let reportPath: string | undefined;
+
+  if (options.trace) {
+    env.OPENAPI_K6_TRACE = '1';
+  }
+
+  if (options.report) {
+    env.K6_WEB_DASHBOARD = 'true';
+    env.K6_WEB_DASHBOARD_PERIOD = env.K6_WEB_DASHBOARD_PERIOD ?? '1s';
+    env.K6_WEB_DASHBOARD_EXPORT = env.K6_WEB_DASHBOARD_EXPORT ??
+      path.join(logsDir, `${options.scenarioName}-report.html`);
+    reportPath = env.K6_WEB_DASHBOARD_EXPORT;
+    await fs.mkdir(resolveChildOutputDir(options.cwd, reportPath), { recursive: true });
+    writeLine(options.stdout, `Writing k6 HTML report to ${reportPath}`);
+  }
+
+  if (options.openDashboard) {
+    env.K6_WEB_DASHBOARD = 'true';
+    env.K6_WEB_DASHBOARD_OPEN = 'true';
+  }
+
+  if (logPath !== undefined) {
+    await fs.mkdir(path.dirname(logPath), { recursive: true });
+    writeLine(options.stdout, `Writing k6 output to ${logPath}`);
+  }
+
+  const result = await spawnK6({
+    cwd: options.cwd,
+    env,
+    args: ['run', ...options.k6Args, options.scriptPath],
+    logPath,
+    stdout: options.stdout,
+    stderr: options.stderr,
+  });
+
+  return {
+    ...(logPath === undefined ? {} : { logPath }),
+    ...(reportPath === undefined ? {} : { reportPath }),
+    exitCode: result.exitCode,
+    signal: result.signal,
+  };
+}
+
+function toProcessEnv(env: Record<string, string | undefined>): NodeJS.ProcessEnv {
+  const result: NodeJS.ProcessEnv = {};
+
+  for (const [key, value] of Object.entries(env)) {
+    if (value !== undefined) {
+      result[key] = value;
+    }
+  }
+
+  return result;
+}
+
+function resolveChildOutputDir(cwd: string, filePath: string): string {
+  const directory = path.dirname(filePath);
+  return path.isAbsolute(directory) ? directory : path.resolve(cwd, directory);
+}
+
+async function spawnK6(options: {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  args: string[];
+  logPath?: string;
+  stdout: WritableLike;
+  stderr: WritableLike;
+}): Promise<{ exitCode: number | null; signal: NodeJS.Signals | null }> {
+  return await new Promise((resolve, reject) => {
+    const logStream = options.logPath === undefined ? undefined : createWriteStream(options.logPath);
+    const child = spawn('k6', options.args, {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let settled = false;
+
+    const rejectOnce = (error: unknown) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      child.kill();
+      void closeLogStream(logStream).finally(() => reject(formatK6SpawnError(error)));
+    };
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      const text = chunk.toString('utf8');
+      options.stdout.write(text);
+      logStream?.write(chunk);
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      const text = chunk.toString('utf8');
+      options.stderr.write(text);
+      logStream?.write(chunk);
+    });
+    child.on('error', rejectOnce);
+    logStream?.on('error', rejectOnce);
+    child.on('close', (exitCode, signal) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      void closeLogStream(logStream)
+        .then(() => resolve({ exitCode, signal }))
+        .catch(reject);
+    });
+  });
+}
+
+async function closeLogStream(stream: WriteStream | undefined): Promise<void> {
+  if (stream === undefined || stream.closed || stream.destroyed) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    stream.once('error', reject);
+    stream.end(() => resolve());
+  });
+}
+
+function formatK6SpawnError(error: unknown): Error {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    error.code === 'ENOENT'
+  ) {
+    return new Error('k6 executable was not found. Install k6 and make sure it is available on PATH.');
+  }
+
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 function writeLine(stream: WritableLike, message: string): void {
@@ -1063,7 +1713,7 @@ function formatRunScriptCommand(cwd: string, runScriptPath: string): string {
 }
 
 function initNextCommand(
-  command: 'sync' | 'test' | 'generate',
+  command: 'sync' | 'validate' | 'test' | 'generate',
   configPath: string,
   moduleName: string | undefined,
   cwd: string,
@@ -1071,7 +1721,7 @@ function initNextCommand(
   const defaultConfigPath = path.join(cwd, DEFAULT_CONFIG_PATH);
   const parts = ['npx', '--yes', 'openapi-k6', command];
 
-  if (command === 'test' || command === 'generate') {
+  if (command === 'validate' || command === 'test' || command === 'generate') {
     parts.push('-s', 'smoke');
   }
 
@@ -1103,6 +1753,7 @@ function writeInitSummary(
   writeLine(stdout, '');
   writeLine(stdout, 'Next');
   writeLine(stdout, `  ${initNextCommand('sync', result.configPath, moduleName, cwd)}`);
+  writeLine(stdout, `  ${initNextCommand('validate', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${initNextCommand('test', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${initNextCommand('generate', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${formatRunScriptCommand(cwd, result.runScriptPath)} smoke --log`);
@@ -1120,6 +1771,38 @@ function writeUpdateSummary(
   writeLine(stdout, `  env example  ${formatDisplayPath(cwd, result.envExamplePath)}`);
   writeLine(stdout, `  gitignore    ${formatDisplayPath(cwd, result.gitignorePath)}`);
   writeLine(stdout, '  kept scenarios, snapshots, generated scripts, logs, and .env unchanged');
+}
+
+function writeValidateSummary(stdout: WritableLike, result: ValidateResult, cwd: string): void {
+  writeLine(stdout, `Validated ${formatDisplayPath(cwd, result.scenarioPath)}`);
+
+  if (result.openapiPaths !== undefined) {
+    writeLine(stdout, '  openapi');
+
+    for (const [moduleName, openapiPath] of Object.entries(result.openapiPaths)) {
+      writeLine(stdout, `    ${moduleName}  ${formatDisplayPath(cwd, openapiPath)}`);
+    }
+  } else {
+    writeLine(stdout, `  openapi  ${formatDisplayPath(cwd, result.openapiPath)}`);
+  }
+
+  if (result.moduleName !== undefined) {
+    writeLine(stdout, `  module   ${result.moduleName}`);
+  } else if (result.moduleNames !== undefined) {
+    writeLine(stdout, `  modules  ${result.moduleNames.join(', ')}`);
+  }
+
+  writeLine(stdout, `  scenario ${result.scenarioName}`);
+  writeLine(stdout, `  steps    ${result.stepCount}`);
+
+  if (result.warnings.length > 0) {
+    writeLine(stdout, '');
+    writeLine(stdout, 'Warnings:');
+
+    for (const warning of result.warnings) {
+      writeLine(stdout, `  - ${warning}`);
+    }
+  }
 }
 
 async function readCatalogFile(
@@ -1627,7 +2310,7 @@ export function createProgram(context: CliContext = {}): Command {
   program
     .name('openapi-k6')
     .description('Generate k6 scripts from OpenAPI specs and Scenario DSL files.')
-    .version('0.3.0')
+    .version('0.4.0')
     .exitOverride()
     .configureOutput({
       writeOut: (value) => stdout.write(value),
@@ -1673,6 +2356,30 @@ export function createProgram(context: CliContext = {}): Command {
     });
 
   program
+    .command('run')
+    .description('Validate, generate, and run a scenario with k6.')
+    .requiredOption('-s, --scenario <path-or-name>', 'Scenario DSL file path or load-tests scenario name')
+    .option('-w, --write <path>', 'Output k6 script path (defaults to load-tests/generated/<scenario>.k6.js)')
+    .option('--config <path>', 'Load test config file path')
+    .option('-m, --module <name>', 'Module name from config')
+    .option('--log', 'Save k6 output to load-tests/logs/<scenario>.log')
+    .option('--trace', 'Print OpenAPI step start/end logs from the generated k6 script')
+    .option('--report', 'Export k6 Web Dashboard HTML to load-tests/logs/<scenario>-report.html')
+    .option('--open-dashboard', 'Open the k6 Web Dashboard while the test is running')
+    .argument('[k6Args...]', 'k6 run options after --')
+    .action(async (k6Args: string[], options: RunOptions) => {
+      const result = await runRunCommand({ ...options, k6Args }, context);
+
+      if (result.exitCode !== 0 || result.signal !== null) {
+        throw new CommanderError(
+          result.exitCode ?? 1,
+          'openapi-k6.k6.failed',
+          result.signal === null ? 'k6 run failed' : `k6 run failed with signal ${result.signal}`,
+        );
+      }
+    });
+
+  program
     .command('sync')
     .description('Write an OpenAPI snapshot and endpoint catalog.')
     .option('-o, --openapi <path-or-url>', 'OpenAPI spec file path or URL')
@@ -1699,6 +2406,18 @@ export function createProgram(context: CliContext = {}): Command {
     .action(async (options: CatalogOptions) => {
       const result = await runCatalogCommand(options, context);
       writeCatalogOutput(stdout, result, resolveCwd(context), options.json);
+    });
+
+  program
+    .command('validate')
+    .description('Validate a scenario YAML against the configured OpenAPI snapshot without calling the API.')
+    .requiredOption('-s, --scenario <path-or-name>', 'Scenario DSL file path or load-tests scenario name')
+    .option('-o, --openapi <path>', 'OpenAPI spec file path')
+    .option('--config <path>', 'Load test config file path')
+    .option('-m, --module <name>', 'Module name from config')
+    .action(async (options: ValidateOptions) => {
+      const result = await runValidateCommand(options, context);
+      writeValidateSummary(stdout, result, resolveCwd(context));
     });
 
   program

@@ -141,6 +141,9 @@ async function runExistingProjectSmoke(projectDir, baseUrl, packagePath, env) {
   const catalog = await runCli(['catalog', '--query', 'health'], projectDir, packagePath, env);
   assertIncludes(catalog.stdout, 'operationId: getHealth', 'catalog output should include the health operation');
 
+  const validate = await runCli(['validate', '-s', 'smoke'], projectDir, packagePath, env);
+  assertIncludes(validate.stdout, 'Validated load-tests/scenarios/smoke.yaml', 'scenario validate should pass');
+
   const test = await runCli(['test', '-s', 'smoke', '--no-color'], projectDir, packagePath, env);
   assertIncludes(test.stdout, 'summary:', 'scenario test should print a summary');
   assertIncludes(test.stdout, 'PASS', 'scenario test should pass');

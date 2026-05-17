@@ -2,12 +2,12 @@
 
 OpenAPI에서 API 흐름을 **Scenario YAML**로 만들고, k6 실행 전에 검증한 뒤, 통과한 시나리오만 부하 테스트로 넘기는 CLI입니다.
 
-`openapi-k6`의 중심은 k6 파일 생성이 아니라 scenario 작성과 검증입니다. 로그인 -> 토큰 추출 -> 인증 API 호출 같은 흐름을 사람이 읽기 쉬운 YAML로 연결하고, 백엔드에 요청해 실패 원인을 확인합니다.
+`openapi-k6`의 중심은 k6 파일 생성이 아니라 scenario 작성과 검증입니다. 로그인 -> 토큰 추출 -> 인증 API 호출 같은 흐름을 사람이 읽기 쉬운 YAML로 연결하고, 먼저 OpenAPI snapshot과 대조한 뒤 백엔드에 요청해 실패 원인을 확인합니다.
 
 ## 한눈에 보기
 
 ```text
-init -> sync -> catalog 검색 -> scenario YAML 수정 -> test -> generate -> run.sh
+init -> sync -> catalog 검색 -> scenario YAML 수정 -> validate -> test -> run
 ```
 
 | 단계 | 명령 | 하는 일 |
@@ -16,18 +16,19 @@ init -> sync -> catalog 검색 -> scenario YAML 수정 -> test -> generate -> ru
 | 2 | `npx --yes openapi-k6 sync` | OpenAPI snapshot과 endpoint catalog 생성 |
 | 3 | `npx --yes openapi-k6 catalog --query login` | scenario에 쓸 endpoint 후보 검색 |
 | 4 | `load-tests/scenarios/smoke.yaml` 수정 | catalog 기준으로 API 흐름 작성 |
-| 5 | `npx --yes openapi-k6 test -s smoke` | Node.js에서 scenario 1회 검증 |
-| 6 | `npx --yes openapi-k6 generate -s smoke` | 통과한 scenario를 k6 스크립트로 생성 |
-| 7 | `./load-tests/run.sh smoke --log` | k6 설치 후 스크립트 실행 |
+| 5 | `npx --yes openapi-k6 validate -s smoke` | OpenAPI snapshot 기준 정적 검증 |
+| 6 | `npx --yes openapi-k6 test -s smoke` | Node.js에서 scenario 1회 실행 검증 |
+| 7 | `npx --yes openapi-k6 run -s smoke --log -- --vus 1` | 정적 검증, k6 스크립트 생성, k6 실행 |
+| 8 | `npx --yes openapi-k6 generate -s smoke`, `./load-tests/run.sh smoke --log` | 스크립트만 생성하거나 runner로 실행 |
 
-`openapi-k6 test`는 보조 명령이 아니라 k6 실행 전 검증 관문입니다. URL, header, query, path, body, 환경변수, condition, extract를 확인하고, 통과한 scenario만 k6로 넘깁니다.
+`openapi-k6 validate`와 `openapi-k6 test`는 보조 명령이 아니라 k6 실행 전 검증 관문입니다. `validate`는 API 호출 없이 operation/path/query/header/body 정합성, context template 참조, condition/extract 문법을 확인하고, `test`는 URL, header, query, path, body, 환경변수, condition, extract를 실제 요청으로 확인합니다.
 
 ## 핵심 기능
 
 | 기능 | 역할 |
 | --- | --- |
 | Scenario YAML | 로그인, 추출, 인증 요청 같은 API 흐름을 YAML로 표현합니다. |
-| 검증 관문 | k6 실행 전에 요청 구성, 추출, 설정 오류를 잡습니다. |
+| 검증 관문 | k6 실행 전에 OpenAPI 정합성, 요청 구성, 추출, 설정 오류를 잡습니다. |
 | OpenAPI catalog | `catalog` 명령으로 scenario에 쓸 `operationId`, `method`, `path`를 찾습니다. |
 | `load-tests/` 작업 공간 | config, scenario, snapshot, 생성된 k6 스크립트, runner를 백엔드 프로젝트 안에서 관리합니다. |
 | AI 작업 프롬프트 | 루트 README에서 시작하고 생성 README로 이어지는 작업 지침을 제공합니다. |
@@ -72,7 +73,15 @@ npx --yes openapi-k6 catalog --tag auth
 
 그 다음 `load-tests/scenarios/smoke.yaml`을 API 흐름에 맞게 수정합니다. 전체 catalog 파일은 `load-tests/openapi/*.catalog.json`에 있습니다.
 
-### 5. Scenario 검증
+### 5. Scenario 정적 검증
+
+```bash
+npx --yes openapi-k6 validate -s smoke
+```
+
+`validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다. AI가 작성한 YAML은 먼저 여기서 `operationId`, `method/path`, 필수 path/query/header/body 누락, `{{token}}` 같은 context template 참조, `condition`, `extract.from` 문법을 확인합니다.
+
+### 6. Scenario 실행 검증
 
 ```bash
 npx --yes openapi-k6 test -s smoke
@@ -80,7 +89,15 @@ npx --yes openapi-k6 test -s smoke
 
 `test`가 통과해야 k6 스크립트를 생성하거나 실행합니다.
 
-### 6. k6 스크립트 생성 및 실행
+### 7. k6 실행
+
+```bash
+npx --yes openapi-k6 run -s smoke --log -- --vus 1 --iterations 1
+```
+
+`run`은 scenario를 정적 검증하고, k6 스크립트를 다시 생성한 뒤 `k6 run`을 실행합니다. k6 옵션은 `--` 뒤에 붙입니다.
+
+스크립트만 생성하거나 scaffold runner를 직접 쓰려면 기존 흐름도 그대로 사용할 수 있습니다.
 
 ```bash
 npx --yes openapi-k6 generate -s smoke
@@ -119,6 +136,26 @@ steps:
     condition: status == 200
 ```
 
+여러 OpenAPI module을 하나의 흐름에서 섞어야 하면 step의 `api.module`을 지정합니다. 지정하지 않은 step은 기존처럼 `--module`, `defaultModule`, 단일 module 추론 순서로 module을 선택합니다.
+
+```yaml
+steps:
+  - id: login
+    api:
+      module: auth
+      operationId: loginUser
+
+  - id: create-order
+    api:
+      module: bos
+      operationId: createOrder
+    request:
+      headers:
+        Authorization: "Bearer {{token}}"
+```
+
+생성된 k6 스크립트에서 multi-module scenario는 `BASE_URL_AUTH`, `BASE_URL_BOS`처럼 module별 환경변수를 먼저 읽고, 없으면 기존 `BASE_URL`과 config 기본값을 순서대로 사용합니다.
+
 `openapi-k6 test`는 이 YAML을 먼저 실행하고, 실패한 step과 검증식을 출력합니다.
 
 ```text
@@ -150,7 +187,7 @@ $ npx --yes openapi-k6 test -s login-and-read-profile
      duration: 59ms
 ```
 
-`test`가 통과한 scenario만 `openapi-k6 generate`로 k6 스크립트를 생성합니다.
+`test`가 통과한 scenario만 `openapi-k6 run`으로 k6까지 실행하거나 `openapi-k6 generate`로 스크립트를 생성합니다.
 
 </details>
 
@@ -190,8 +227,11 @@ npx --yes openapi-k6 update
 
 - OpenAPI 3.x 문서를 대상으로 합니다. Swagger/OpenAPI 2.0 문서는 지원하지 않습니다.
 - `condition`은 분기가 아니라 검증식입니다. k6에서는 `check`로 생성되며 다음 step 실행을 막지 않습니다.
-- `extract`는 응답 JSON에서 값을 읽어 다음 step의 `{{token}}` 같은 template 값으로 연결합니다.
+- `extract`는 응답 JSON에서 값을 읽어 다음 step의 `{{token}}` 같은 template 값으로 연결하며, 생성된 k6에서는 추출 실패를 `check` 실패로 표시합니다.
+- `api.module`은 여러 OpenAPI module을 하나의 scenario에서 섞어 쓸 때 사용합니다. `--openapi` 단독 실행에서는 지원하지 않고 config의 `modules.<name>.snapshot`이 필요합니다.
+- `validate`는 지원하지 않는 `condition` 표현식, `extract.from` JSONPath, 아직 이전 step에서 추출되지 않은 `{{token}}` 같은 context template 참조를 API 호출 전에 실패로 처리합니다.
 - 비밀값은 scenario YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조합니다.
+- `{{env.NAME}}`으로 참조한 값은 scenario test 출력과 생성된 k6 실패 로그에서 masking됩니다.
 - `body`와 `multipart`는 같은 step에서 함께 쓰지 않습니다.
 
 </details>
@@ -219,7 +259,9 @@ pnpm exec openapi-k6 --help
 | 작업 공간 생성 | `npx --yes openapi-k6 init` |
 | OpenAPI snapshot/catalog 갱신 | `npx --yes openapi-k6 sync` |
 | scenario용 endpoint 검색 | `npx --yes openapi-k6 catalog --query login` |
-| scenario 검증 | `npx --yes openapi-k6 test -s <name>` |
+| scenario 정적 검증 | `npx --yes openapi-k6 validate -s <name>` |
+| scenario 실행 검증 | `npx --yes openapi-k6 test -s <name>` |
+| 정적 검증, 생성, k6 실행 | `npx --yes openapi-k6 run -s <name> --log -- --vus 1` |
 | k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <name>` |
 | k6 설치 후 실행 | `./load-tests/run.sh <name> --log` |
 | 기존 scaffold 안전 갱신 | `npx --yes openapi-k6 update` |
@@ -241,10 +283,12 @@ AI coding agent에게 아래 프롬프트를 붙여넣으세요. `load-tests/REA
 6. npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 생성해.
 7. npx --yes openapi-k6 catalog --query login처럼 적절한 검색어로 테스트할 endpoint 후보를 확인해. 필요하면 load-tests/openapi/*.catalog.json도 열어봐.
 8. 내가 원하는 API 흐름을 확인한 뒤 load-tests/scenarios/*.yaml을 작성하거나 수정해.
-9. npx --yes openapi-k6 test -s <name>으로 scenario를 먼저 검증해.
-10. scenario test가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 마.
-11. 통과한 scenario만 npx --yes openapi-k6 generate -s <name>으로 k6 스크립트를 생성해.
-12. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 예상 확인 포인트를 알려줘.
+9. npx --yes openapi-k6 validate -s <name>으로 YAML/OpenAPI 정합성을 먼저 확인해.
+10. npx --yes openapi-k6 test -s <name>으로 실제 API 흐름을 검증해.
+11. scenario test가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 마.
+12. 통과한 scenario만 npx --yes openapi-k6 run -s <name> --log -- --vus 1 --iterations 1로 짧게 실행해.
+13. 스크립트만 필요하면 npx --yes openapi-k6 generate -s <name>으로 생성해.
+14. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 예상 확인 포인트를 알려줘.
 
 load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore는 scaffold 파일이므로 명시 요청 없이는 수정하지 마.
 load-tests/openapi/*.openapi.json과 load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.

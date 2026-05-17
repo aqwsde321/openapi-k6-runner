@@ -38,10 +38,11 @@ load-tests/
 | F-10 | k6 generator | P0 | O |
 | F-11 | Fixture 기반 테스트 | P0 | O |
 | F-12 | UI adapter 설계 | P1 | 문서만 |
-| F-13 | k6 실행 편의 스크립트 | P2 | 부분 |
+| F-13 | k6 실행 편의 스크립트 | P2 | O |
 | F-14 | 멀티모듈 OpenAPI 설정 | P1 | O |
 | F-15 | OpenAPI snapshot / catalog | P0 | O |
 | F-16 | 대상 프로젝트 init scaffold | P0 | O |
+| F-17 | Scenario 정적 검증 | P0 | O |
 
 ## 3. F-01 프로젝트/CLI 골격
 
@@ -271,6 +272,7 @@ k6 런타임은 Node.js npm 패키지를 그대로 사용할 수 없다. 따라�
 
 - 지원 범위 밖의 JSONPath는 컴파일 에러를 낸다.
 - 추출 대상이 없을 때 context 값은 `undefined`가 된다.
+- generated k6 script에서는 추출 값이 `undefined`이면 해당 extract가 `check` 실패로 표시된다.
 
 ## 11. F-09 Condition Compiler
 
@@ -367,10 +369,11 @@ MVP에서 condition은 흐름 분기 조건이 아니라 check/assertion이다. 
 
 - init scaffold에서 generated script를 `k6 run`으로 실행하는 `run.sh`를 제공한다.
 - `.env`를 자동 export하고, 필요 시 k6 출력을 log file로 저장한다.
+- CLI에서 scenario 정적 검증, k6 스크립트 생성, `k6 run` 실행을 한 번에 orchestration하는 `run` 명령을 제공한다.
 
 ### MVP 상태
 
-부분 포함한다. `load-tests/run.sh <scenario>`와 `load-tests/run.sh <scenario> --log`는 제공하지만, CLI가 k6 실행을 직접 orchestration 하지는 않는다.
+포함한다. `load-tests/run.sh <scenario>`와 `load-tests/run.sh <scenario> --log`를 유지하고, `openapi-k6 run -s <scenario>`로 validate/generate/k6 실행을 CLI에서 직접 orchestration한다. k6 옵션은 `--` 뒤에 전달한다.
 
 ## 16. F-14 멀티모듈 OpenAPI 설정
 
@@ -382,7 +385,7 @@ MVP에서 condition은 흐름 분기 조건이 아니라 check/assertion이다. 
 
 ### MVP 상태
 
-P-09에서 구현된 MVP 기능이다. module 선택은 CLI의 `--module`로 수행하며, Scenario DSL 내부 `api.module`은 아직 지원하지 않는다.
+P-09에서 CLI `--module` 기반 선택을 구현했고, 이후 Scenario DSL 내부 `api.module`으로 step별 module 선택을 지원한다. `api.module`이 없는 step은 기존처럼 CLI `--module`, `defaultModule`, 단일 module 추론 순서로 module을 선택한다.
 
 ### 설정
 
@@ -408,14 +411,33 @@ defaultModule: bos
 modules:
   bos:
     openapi: https://api.example.com/bos/v3/api-docs
+    baseUrl: https://bos-api.example.com
     snapshot: openapi/bos.openapi.json
     catalog: openapi/bos.catalog.json
 
   mall:
     openapi: https://api.example.com/mall/v3/api-docs
+    baseUrl: https://mall-api.example.com
     snapshot: openapi/mall.openapi.json
     catalog: openapi/mall.catalog.json
 ```
+
+step별 module 선택:
+
+```yaml
+steps:
+  - id: login
+    api:
+      module: auth
+      operationId: loginUser
+
+  - id: create-order
+    api:
+      module: bos
+      operationId: createOrder
+```
+
+multi-module generated k6/test의 base URL 우선순위는 `BASE_URL_<MODULE>`, `BASE_URL`, `modules.<name>.baseUrl`, root `baseUrl`, OpenAPI `servers[0].url` 순서다. module env 이름은 module 이름을 대문자로 바꾸고 비영숫자를 `_`로 치환한다.
 
 ### CLI 방향
 
@@ -426,7 +448,7 @@ openapi-k6 generate -s smoke
 
 기본 흐름은 `load-tests/config.yaml`과 `defaultModule`을 사용한다. 기본 경로가 아니거나 특정 module을 지정해야 할 때만 `--config`, `--module`을 명시한다.
 
-### DSL 확장 방향
+### DSL 사용
 
 ```yaml
 steps:
@@ -526,3 +548,37 @@ openapi-k6 init
 - 생성된 smoke scenario의 path를 채우거나 선택한 endpoint로 바꾸면 `generate`를 실행할 수 있다.
 - `sync`와 `generate`는 남은 `TODO` 값을 발견하면 명확한 에러를 낸다.
 - `--force` 없이는 기존 파일을 덮어쓰지 않는다.
+
+## 19. F-17 Scenario 정적 검증
+
+### 책임
+
+- `openapi-k6 validate` 명령으로 Scenario YAML을 OpenAPI snapshot과 대조한다.
+- 백엔드 API를 호출하지 않고 scenario 작성 오류를 먼저 찾는다.
+- `test`와 `generate` 전에 실패할 수 있는 정적 오류를 같은 규칙으로 보고한다.
+
+### 입력
+
+```text
+openapi-k6 validate -s smoke
+```
+
+### 검증
+
+- step의 `api.operationId` 또는 `api.method + api.path`가 OpenAPI snapshot에 존재해야 한다.
+- OpenAPI path template의 `{name}`마다 `request.pathParams.<name>` 값이 있어야 한다.
+- OpenAPI에서 required로 표시한 query/header parameter가 request에 있어야 한다.
+- required request body가 있는 endpoint에는 `request.body` 또는 `request.multipart`가 있어야 한다.
+- `request.body`와 `request.multipart`는 OpenAPI requestBody content type과 맞아야 한다.
+- `condition`은 F-09 지원 범위의 status expression이어야 한다.
+- `extract.from`은 F-08 지원 범위의 JSONPath여야 한다.
+- request 안의 `{{name}}` context template은 이전 step의 `extract.name`으로 이미 정의되어 있어야 한다.
+- `{{env.NAME}}` template은 정적 검증에서 문법만 확인하고 허용한다.
+
+### 완료 기준
+
+- API 호출 없이 검증이 끝난다.
+- 검증 실패 메시지는 step id와 잘못된 필드를 포함한다.
+- 여러 step의 오류를 한 번에 모아 보고한다.
+- path template에 없는 `request.pathParams`는 실패가 아니라 warning으로 보고한다.
+- 아직 추출되지 않은 context template 참조는 API 호출 전에 실패한다.

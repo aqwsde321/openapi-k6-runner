@@ -115,6 +115,85 @@ async function writeGenerateFixtures(workspace: string, serverUrl = 'https://ope
   );
 }
 
+async function writeValidationOpenApi(workspace: string): Promise<void> {
+  await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+  await writeFile(
+    path.join(workspace, 'load-tests/openapi/app.openapi.yaml'),
+    [
+      'openapi: 3.0.3',
+      'info:',
+      '  title: App API',
+      '  version: 1.0.0',
+      'paths:',
+      '  /orders/{orderId}:',
+      '    get:',
+      '      operationId: getOrder',
+      '      parameters:',
+      '        - name: orderId',
+      '          in: path',
+      '          required: true',
+      '          schema:',
+      '            type: string',
+      '        - name: includeItems',
+      '          in: query',
+      '          required: true',
+      '          schema:',
+      '            type: boolean',
+      '        - name: X-Tenant',
+      '          in: header',
+      '          required: true',
+      '          schema:',
+      '            type: string',
+      '      responses:',
+      '        "200":',
+      '          description: OK',
+      '    delete:',
+      '      operationId: deleteOrder',
+      '      parameters:',
+      '        - name: orderId',
+      '          in: path',
+      '          required: true',
+      '          schema:',
+      '            type: string',
+      '      requestBody:',
+      '        required: true',
+      '        content:',
+      '          application/json:',
+      '            schema:',
+      '              type: object',
+      '      responses:',
+      '        "204":',
+      '          description: Deleted',
+      '  /orders:',
+      '    post:',
+      '      operationId: createOrder',
+      '      requestBody:',
+      '        required: true',
+      '        content:',
+      '          application/json:',
+      '            schema:',
+      '              type: object',
+      '      responses:',
+      '        "201":',
+      '          description: Created',
+      '  /uploads:',
+      '    post:',
+      '      operationId: uploadFile',
+      '      requestBody:',
+      '        required: true',
+      '        content:',
+      '          multipart/form-data:',
+      '            schema:',
+      '              type: object',
+      '      responses:',
+      '        "201":',
+      '          description: Created',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+}
+
 describe('openapi-k6 CLI', () => {
   let workspace: string;
 
@@ -265,6 +344,7 @@ describe('openapi-k6 CLI', () => {
     expect(runScriptSyntax.status).toBe(0);
     expect(scenario).toContain('path: /__dev/error-codes');
     expect(readme).toContain('npx --yes openapi-k6 sync');
+    expect(readme).toContain('npx --yes openapi-k6 run -s smoke --log');
     expect(readme).toContain('npx --yes openapi-k6 generate \\');
     expect(readme).toContain('  -s smoke');
     expect(readme).toContain('run.sh');
@@ -288,8 +368,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('1. `load-tests/config.yaml`에 TODO가 남아 있으면 먼저 채웁니다.');
     expect(readme).toContain('2. OpenAPI snapshot/catalog를 만듭니다.');
     expect(readme).toContain('3. scenario에 쓸 endpoint 후보를 검색합니다.');
-    expect(readme).toContain('4. `load-tests/scenarios/smoke.yaml`를 수정한 뒤 실제 API 흐름을 검증합니다.');
-    expect(readme).toContain('5. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.');
+    expect(readme).toContain('4. `load-tests/scenarios/smoke.yaml`를 수정한 뒤 YAML/OpenAPI 정합성을 확인합니다.');
+    expect(readme).toContain('5. 실제 API 흐름을 검증합니다.');
+    expect(readme).toContain('6. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.');
     expect(readme).toContain('AI에게 맡기는 경우에는 위 프롬프트를 사용하세요.');
     expect(readme).toContain('직접 수정하는 파일은 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.');
     expect(readme).toContain('명령은 백엔드 프로젝트 루트에서 실행합니다.');
@@ -300,12 +381,12 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 --help');
     expect(readme).toContain('npm install -D openapi-k6');
     expect(readme).toContain('pnpm exec openapi-k6 ...');
-    expect(readme).toContain('이 폴더는 백엔드 프로젝트 안에서 OpenAPI snapshot, scenario YAML, scenario test, 생성된 k6 스크립트를 관리합니다.');
-    expect(readme).toContain('핵심 흐름은 OpenAPI catalog에서 API를 고르고, scenario test로 실제 API 흐름을 먼저 검증한 뒤');
-    expect(readme).toContain('다음 단계로 넘어가는 기준은 간단합니다. `npx --yes openapi-k6 test`가 통과한 scenario만 generate/run 합니다.');
-    expect(readme).toContain('`npx --yes openapi-k6 test`가 통과한 scenario만 `generate`하거나 `run.sh`로 실행합니다.');
+    expect(readme).toContain('이 폴더는 백엔드 프로젝트 안에서 OpenAPI snapshot, scenario YAML, scenario validate/test, 생성된 k6 스크립트를 관리합니다.');
+    expect(readme).toContain('핵심 흐름은 OpenAPI catalog에서 API를 고르고, `validate`로 YAML/OpenAPI 정합성을 먼저 확인한 뒤');
+    expect(readme).toContain('다음 단계로 넘어가는 기준은 간단합니다. `npx --yes openapi-k6 validate`와 `npx --yes openapi-k6 test`가 통과한 scenario만 generate/run 합니다.');
+    expect(readme).toContain('`npx --yes openapi-k6 validate`로 YAML/OpenAPI 정합성을 확인하고, `npx --yes openapi-k6 test`가 통과한 scenario만 `run`하거나 `generate`/`run.sh`로 실행합니다.');
     expect(readme).toContain('## 1. 최소 설정');
-    expect(readme).toContain('## 2. OpenAPI -> Scenario Test -> k6 흐름');
+    expect(readme).toContain('## 2. OpenAPI -> Scenario Validate -> Scenario Test -> k6 흐름');
     expect(readme).toContain('| 순서 | 사용자가 준비하는 것 | 실행 명령 | 생성/갱신되는 것 |');
     expect(readme).toContain('대화형 `init`은 `baseUrl`만 입력받고 `<baseUrl>/v3/api-docs`를 먼저 확인합니다.');
     expect(readme).toContain('실패하면 `/api-docs`, `/openapi.json`, `/swagger.json`, `/swagger/v1/swagger.json` 같은 흔한 OpenAPI 경로를 자동으로 시도합니다.');
@@ -319,14 +400,19 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('`./load-tests/run.sh <name> --log`');
     expect(readme).toContain('### 2-1. OpenAPI snapshot/catalog 생성');
     expect(readme).toContain('### 2-2. Scenario YAML 작성');
-    expect(readme).toContain('### 2-3. Scenario 검증');
-    expect(readme).toContain('### 2-4. k6 스크립트 생성');
-    expect(readme).toContain('### 2-5. k6 실행');
+    expect(readme).toContain('### 2-3. Scenario 정적 검증');
+    expect(readme).toContain('### 2-4. Scenario 실행 검증');
+    expect(readme).toContain('### 2-5. CLI에서 k6 실행');
+    expect(readme).toContain('### 2-6. k6 스크립트만 생성');
+    expect(readme).toContain('### 2-7. run.sh로 생성된 k6 실행');
     expect(readme).toContain('생성/갱신: `load-tests/openapi/pharma.openapi.json`, `load-tests/openapi/pharma.catalog.json`');
     expect(readme).toContain('`catalog` 명령으로 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.');
     expect(readme).toContain('전체 catalog 파일은 `load-tests/openapi/pharma.catalog.json`에 있습니다.');
     expect(readme).toContain('기본 smoke 테스트는 `load-tests/scenarios/smoke.yaml`를 수정합니다.');
+    expect(readme).toContain('npx --yes openapi-k6 validate -s smoke');
     expect(readme).toContain('npx --yes openapi-k6 test -s smoke');
+    expect(readme).toContain('`npx --yes openapi-k6 validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다.');
+    expect(readme).toContain('필수 path/query/header/body 누락, `{{token}}` 같은 context template 참조, `condition`, `extract.from` 문법을 확인합니다.');
     expect(readme).toContain('`npx --yes openapi-k6 test`는 scenario YAML을 Node.js에서 1회 실행해 URL, status, condition, extract를 확인합니다.');
     expect(readme).toContain('k6 스크립트 생성 전 gate입니다.');
     expect(readme).toContain('색상은 터미널에서만 켜지며 `--no-color` 옵션이나 `NO_COLOR=1` 환경변수로 끌 수 있습니다.');
@@ -348,7 +434,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.');
     expect(readme).toContain('시나리오에서 `{{env.NAME}}`을 사용한다면 `load-tests/.env.example`을 `load-tests/.env`로 복사한 뒤 비밀 값을 채웁니다.');
     expect(readme).toContain('cp load-tests/.env.example load-tests/.env');
-    expect(readme).toContain('`npx --yes openapi-k6 test`와 `run.sh`가 `load-tests/.env`를 읽습니다.');
+    expect(readme).toContain('`npx --yes openapi-k6 test`, `npx --yes openapi-k6 run`, `run.sh`가 `load-tests/.env`를 읽습니다.');
     expect(readme).toContain('`load-tests/.gitignore`는 기본적으로 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.');
     expect(readme).toContain('이미 git에 올라간 `load-tests/` 파일은 ignore 규칙만으로 빠지지 않으므로 필요하면 `git rm -r --cached load-tests`로 추적에서만 제거합니다.');
     expect(readme).toContain('rm -rf load-tests');
@@ -363,7 +449,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Keep human-facing documentation in Korean.');
     expect(readme).toContain('Do not write secrets in YAML. Use `{{env.NAME}}` and store real values only in `load-tests/.env`.');
     expect(readme).toContain('### Scenario Notes');
-    expect(readme).toContain('Use `npx --yes openapi-k6 catalog --query login` or read `load-tests/openapi/pharma.catalog.json` to pick endpoints; `generate` reads the OpenAPI snapshot, not the catalog.');
+    expect(readme).toContain('Use `npx --yes openapi-k6 catalog --query login` or read `load-tests/openapi/pharma.catalog.json` to pick endpoints; `validate`, `test`, and `generate` read the OpenAPI snapshot, not the catalog.');
     expect(readme).toContain('Do not use `request.body` and `request.multipart` in the same step.');
     expect(readme).toContain('Config-relative paths resolve from the directory containing `config.yaml`.');
     expect(readme).toContain('`load-tests/run.sh`: k6 runner that auto-loads `load-tests/.env` values');
@@ -376,9 +462,11 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 만들어.');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query login 명령으로 테스트할 endpoint 후보를 확인해.');
     expect(readme).toContain('`login`은 원하는 검색어로 바꿔 실행합니다.');
-    expect(readme).toContain('npx --yes openapi-k6 test -s <name> 형식으로 실제 API 흐름을 먼저 검증해.');
+    expect(readme).toContain('npx --yes openapi-k6 validate -s <name> 형식으로 YAML/OpenAPI 정합성을 먼저 확인해.');
+    expect(readme).toContain('npx --yes openapi-k6 test -s <name> 형식으로 실제 API 흐름을 검증해.');
     expect(readme).toContain('scenario test가 통과하기 전에는 k6 script를 생성하거나 실행하지 마.');
-    expect(readme).toContain('통과한 scenario만 npx --yes openapi-k6 generate -s <name> 형식으로 k6 script를 생성해.');
+    expect(readme).toContain('통과한 scenario만 npx --yes openapi-k6 run -s <name> --log 형식으로 짧게 실행해.');
+    expect(readme).toContain('스크립트만 필요하면 npx --yes openapi-k6 generate -s <name> 형식으로 k6 script를 생성해.');
     expect(readme).toContain('장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고');
     expect(readme).not.toContain('### Prompt Examples');
     expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore는 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.');
@@ -539,6 +627,219 @@ describe('openapi-k6 CLI', () => {
     expect(envLog).toContain('K6_WEB_DASHBOARD_PERIOD=1s');
     expect(envLog).toContain(`K6_WEB_DASHBOARD_EXPORT=${path.join(workspace, 'load-tests/logs/smoke-report.html')}`);
     expect(envLog).toContain('K6_WEB_DASHBOARD_OPEN=true');
+  });
+
+  it('runs a scenario by validating, generating, and executing k6 with passthrough args', async () => {
+    await writeRunFixtures();
+    const binDir = path.join(workspace, 'bin');
+    const argLogPath = path.join(workspace, 'k6-args.txt');
+    await writeFakeK6(binDir, [
+      'printf "%s\\n" "$@" > "$K6_ARG_LOG"',
+      'echo fake-k6-output',
+    ]);
+
+    const stdout = createCapture();
+    await runCli(
+      ['run', '--scenario', 'smoke', '--', '--vus', '1', '--iterations', '1'],
+      {
+        cwd: workspace,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        env: {
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+          K6_ARG_LOG: argLogPath,
+        },
+      },
+    );
+
+    const generated = await readFile(path.join(workspace, 'load-tests/generated/smoke.k6.js'), 'utf8');
+    const args = await readFile(argLogPath, 'utf8');
+
+    expect(stdout.output()).toContain(`Generated ${path.join(workspace, 'load-tests/generated/smoke.k6.js')}`);
+    expect(stdout.output()).toContain('fake-k6-output');
+    expect(generated).toContain('const BASE_URL = __ENV.BASE_URL || "https://app-api.test.local";');
+    expect(generated).toContain('const url0 = joinUrl(BASE_URL, `/app-health`);');
+    expect(args).toBe([
+      'run',
+      '--vus',
+      '1',
+      '--iterations',
+      '1',
+      path.join(workspace, 'load-tests/generated/smoke.k6.js'),
+      '',
+    ].join('\n'));
+  });
+
+  it('runs k6 with CLI log, trace, report, and dashboard flags', async () => {
+    await writeRunFixtures();
+    const binDir = path.join(workspace, 'bin');
+    const envLogPath = path.join(workspace, 'k6-env.txt');
+    await writeFakeK6(binDir, [
+      '{',
+      '  printf "OPENAPI_K6_TRACE=%s\\n" "${OPENAPI_K6_TRACE-}"',
+      '  printf "K6_WEB_DASHBOARD=%s\\n" "${K6_WEB_DASHBOARD-}"',
+      '  printf "K6_WEB_DASHBOARD_PERIOD=%s\\n" "${K6_WEB_DASHBOARD_PERIOD-}"',
+      '  printf "K6_WEB_DASHBOARD_EXPORT=%s\\n" "${K6_WEB_DASHBOARD_EXPORT-}"',
+      '  printf "K6_WEB_DASHBOARD_OPEN=%s\\n" "${K6_WEB_DASHBOARD_OPEN-}"',
+      '} > "$K6_ENV_LOG"',
+      'echo fake-k6-output',
+    ]);
+
+    const stdout = createCapture();
+    await runCli(
+      ['run', '-s', 'smoke', '--log', '--trace', '--report', '--open-dashboard'],
+      {
+        cwd: workspace,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        env: {
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+          K6_ENV_LOG: envLogPath,
+        },
+      },
+    );
+
+    const log = await readFile(path.join(workspace, 'load-tests/logs/smoke.log'), 'utf8');
+    const envLog = await readFile(envLogPath, 'utf8');
+
+    expect(stdout.output()).toContain('Writing k6 HTML report to');
+    expect(stdout.output()).toContain('Writing k6 output to');
+    expect(log).toContain('fake-k6-output');
+    expect(envLog).toContain('OPENAPI_K6_TRACE=1');
+    expect(envLog).toContain('K6_WEB_DASHBOARD=true');
+    expect(envLog).toContain('K6_WEB_DASHBOARD_PERIOD=1s');
+    expect(envLog).toContain(`K6_WEB_DASHBOARD_EXPORT=${path.join(workspace, 'load-tests/logs/smoke-report.html')}`);
+    expect(envLog).toContain('K6_WEB_DASHBOARD_OPEN=true');
+  });
+
+  it('does not execute k6 when run validation fails', async () => {
+    await writeRunFixtures();
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: missingOperation',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    const binDir = path.join(workspace, 'bin');
+    const argLogPath = path.join(workspace, 'k6-args.txt');
+    await writeFakeK6(binDir, [
+      'printf "%s\\n" "$@" > "$K6_ARG_LOG"',
+    ]);
+
+    await expect(
+      runCli(
+        ['run', '-s', 'smoke'],
+        {
+          cwd: workspace,
+          stdout: createSink(),
+          stderr: createSink(),
+          env: {
+            PATH: `${binDir}:${process.env.PATH ?? ''}`,
+            K6_ARG_LOG: argLogPath,
+          },
+        },
+      ),
+    ).rejects.toThrow('Scenario validation failed:');
+
+    await expect(readFile(argLogPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('fails clearly when CLI run cannot find k6', async () => {
+    await writeRunFixtures();
+    const binDir = path.join(workspace, 'empty-bin');
+    await mkdir(binDir, { recursive: true });
+
+    await expect(
+      runCli(
+        ['run', '-s', 'smoke'],
+        {
+          cwd: workspace,
+          stdout: createSink(),
+          stderr: createSink(),
+          env: { PATH: binDir },
+        },
+      ),
+    ).rejects.toThrow('k6 executable was not found. Install k6 and make sure it is available on PATH.');
+  });
+
+  it('returns a failed command result when k6 exits non-zero', async () => {
+    await writeRunFixtures();
+    const binDir = path.join(workspace, 'bin');
+    await writeFakeK6(binDir, [
+      'echo k6 failed >&2',
+      'exit 7',
+    ]);
+
+    await expect(
+      runCli(
+        ['run', '-s', 'smoke'],
+        {
+          cwd: workspace,
+          stdout: createSink(),
+          stderr: createSink(),
+          env: { PATH: `${binDir}:${process.env.PATH ?? ''}` },
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'openapi-k6.k6.failed',
+      exitCode: 7,
+    });
+  });
+
+  it('runs with the selected config module', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('bos.openapi.yaml', '/bos-health', 'https://bos-openapi.test.local');
+    await writeModuleOpenApi('vendor.openapi.yaml', '/vendor-health', 'https://vendor-openapi.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'defaultModule: bos',
+      'modules:',
+      '  bos:',
+      '    baseUrl: https://bos-api.test.local',
+      '    snapshot: openapi/bos.openapi.yaml',
+      '    catalog: openapi/bos.catalog.json',
+      '  vendor:',
+      '    baseUrl: https://vendor-api.test.local',
+      '    snapshot: openapi/vendor.openapi.yaml',
+      '    catalog: openapi/vendor.catalog.json',
+      '',
+    ]);
+    const binDir = path.join(workspace, 'bin');
+    await writeFakeK6(binDir, ['true']);
+
+    await runCli(
+      ['run', '--module', 'vendor', '--scenario', 'smoke', '--write', 'generated/vendor-script.js'],
+      {
+        cwd: workspace,
+        stdout: createSink(),
+        stderr: createSink(),
+        env: { PATH: `${binDir}:${process.env.PATH ?? ''}` },
+      },
+    );
+
+    const output = await readFile(path.join(workspace, 'generated/vendor-script.js'), 'utf8');
+
+    expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://vendor-api.test.local";');
+    expect(output).toContain('const url0 = joinUrl(BASE_URL, `/vendor-health`);');
+    expect(output).not.toContain('/bos-health');
   });
 
   it('initializes a placeholder scaffold with no required options', async () => {
@@ -1154,6 +1455,52 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://server-fallback.test.local";');
   });
 
+  it('keeps --openapi precedence over config snapshots for generate and validate', async () => {
+    await writeGenerateFixtures(workspace, 'https://override-openapi.test.local');
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: TODO',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await runCli(
+      [
+        'validate',
+        '--config',
+        'load-tests/config.yaml',
+        '--openapi',
+        'openapi.yaml',
+        '--scenario',
+        'scenario.yaml',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    await runCli(
+      [
+        'generate',
+        '--config',
+        'load-tests/config.yaml',
+        '--openapi',
+        'openapi.yaml',
+        '--scenario',
+        'scenario.yaml',
+        '--write',
+        'generated/script.js',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const output = await readFile(path.join(workspace, 'generated/script.js'), 'utf8');
+
+    expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://config-base.test.local";');
+    expect(output).toContain('const url0 = joinUrl(BASE_URL, `/health`);');
+  });
+
   it('creates OpenAPI snapshot and catalog files with sync command', async () => {
     await writeGenerateFixtures(workspace);
 
@@ -1576,6 +1923,337 @@ describe('openapi-k6 CLI', () => {
 
     expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://config-base.test.local";');
     expect(output).toContain('const url0 = joinUrl(BASE_URL, `/app-health`);');
+  });
+
+  it('validates a scenario by name using the configured OpenAPI snapshot', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: get-order',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: order-1',
+        '      query:',
+        '        includeItems: true',
+        '      headers:',
+        '        x-tenant: main',
+        '    condition: status < 300',
+        '    extract:',
+        '      itemId:',
+        '        from: $.items[0].id',
+        '  - id: create-order',
+        '    api:',
+        '      method: POST',
+        '      path: /orders',
+      '    request:',
+      '      body:',
+      '        id: "{{itemId}}"',
+      '        items:',
+      '          - id: "{{itemId}}"',
+      '  - id: upload-file',
+      '    api:',
+      '      operationId: uploadFile',
+      '    request:',
+      '      multipart:',
+      '        fields:',
+      '          title: "{{itemId}}"',
+      '        files:',
+      '          attachment:',
+      '            path: fixtures/order.txt',
+      '',
+    ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const stdout = createCapture();
+    await runCli(
+      ['validate', '-s', 'smoke'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    expect(stdout.output()).toContain('Validated load-tests/scenarios/smoke.yaml');
+    expect(stdout.output()).toContain('  openapi  load-tests/openapi/app.openapi.yaml');
+    expect(stdout.output()).toContain('  module   app');
+    expect(stdout.output()).toContain('  scenario smoke');
+    expect(stdout.output()).toContain('  steps    3');
+  });
+
+  it('reports scenario validation issues before running API requests', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: get-order',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: []',
+        '      query:',
+        '        includeItems: []',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '  - id: create-order-multipart',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      multipart:',
+        '        files:',
+        '          attachment:',
+        '            path: fixtures/order.txt',
+        '  - id: upload-json',
+        '    api:',
+        '      operationId: uploadFile',
+        '    request:',
+        '      body:',
+        '        filename: order.txt',
+        '  - id: delete-order',
+        '    api:',
+        '      operationId: deleteOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: order-1',
+        '      body:',
+        '        reason: cleanup',
+        '  - id: upload-on-delete',
+        '    api:',
+        '      operationId: deleteOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: order-2',
+        '      multipart:',
+        '        files:',
+        '          attachment:',
+        '            path: fixtures/delete.txt',
+        '  - id: invalid-condition',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: order-3',
+        '      query:',
+        '        includeItems: true',
+        '      headers:',
+        '        X-Tenant: main',
+        '    condition: status <= 299',
+        '  - id: invalid-extract',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: order-4',
+        '      query:',
+        '        includeItems: true',
+        '      headers:',
+        '        X-Tenant: main',
+        '    extract:',
+        '      firstItem:',
+        '        from: $.items[*].id',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['validate', '-s', 'smoke'],
+        {
+          cwd: workspace,
+          stdout: createSink(),
+          stderr: createSink(),
+          fetch: async () => {
+            throw new Error('validate must not call fetch');
+          },
+        },
+      ),
+    ).rejects.toThrow([
+      'Scenario validation failed:',
+      '  - step "get-order": missing request.pathParams.orderId for path /orders/{orderId}',
+      '  - step "get-order": missing request.query.includeItems required by GET /orders/{orderId}',
+      '  - step "get-order": missing request.headers.X-Tenant required by GET /orders/{orderId}',
+      '  - step "create-order": request.body or request.multipart is required by POST /orders',
+      '  - step "create-order-multipart": request.multipart requires OpenAPI requestBody content type multipart/form-data by POST /orders',
+      '  - step "upload-json": request.body requires OpenAPI requestBody content type application/json or +json by POST /uploads',
+      '  - step "delete-order": request.body is only supported for POST, PUT, or PATCH by DELETE /orders/{orderId}',
+      '  - step "upload-on-delete": request.multipart is only supported for POST, PUT, or PATCH by DELETE /orders/{orderId}',
+      '  - step "invalid-condition": unsupported condition "status <= 299"',
+      '  - step "invalid-extract": extract.firstItem.from is invalid: Unsupported JSONPath "$.items[*].id"',
+    ].join('\n'));
+  });
+
+  it('reports invalid or unavailable context template references during validation', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: get-order',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: order-1',
+        '      query:',
+        '        includeItems: true',
+        '      headers:',
+        '        X-Tenant: main',
+        '    extract:',
+        '      itemId:',
+        '        from: $.items[0].id',
+        '  - id: typo-reference',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        id: "{{itmeId}}"',
+        '        token: "{{env.API_TOKEN}}"',
+        '  - id: same-step-reference',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: "{{selfId}}"',
+        '      query:',
+        '        includeItems: true',
+        '      headers:',
+        '        X-Tenant: main',
+        '    extract:',
+        '      selfId:',
+        '        from: $.id',
+        '  - id: future-reference',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        id: "{{futureId}}"',
+        '        items:',
+        '          - id: "{{missingItemId}}"',
+        '  - id: upload-metadata',
+        '    api:',
+        '      operationId: uploadFile',
+        '    request:',
+        '      multipart:',
+        '        files:',
+        '          attachment:',
+        '            path: fixtures/order.txt',
+        '            filename: "{{missingFilename}}"',
+        '            contentType: "{{env.CONTENT_TYPE}}"',
+        '  - id: invalid-template',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        id: "Bearer {{bad-name}}"',
+        '  - id: future-source',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: order-2',
+        '      query:',
+        '        includeItems: true',
+        '      headers:',
+        '        X-Tenant: main',
+        '    extract:',
+        '      futureId:',
+        '        from: $.id',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['validate', '-s', 'smoke'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow([
+      'Scenario validation failed:',
+      '  - step "typo-reference": request.body.id references unknown context.itmeId',
+      '  - step "same-step-reference": request.pathParams.orderId references unknown context.selfId',
+      '  - step "future-reference": request.body.id references unknown context.futureId',
+      '  - step "future-reference": request.body.items[0].id references unknown context.missingItemId',
+      '  - step "upload-metadata": request.multipart.files.attachment.filename references unknown context.missingFilename',
+      '  - step "invalid-template": request.body.id has invalid template: Invalid template string: Bearer {{bad-name}}',
+    ].join('\n'));
+  });
+
+  it('warns about unused scenario path parameters during validation', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: get-order',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+      '      pathParams:',
+      '        orderId: order-1',
+      '        id: "{{unusedId}}"',
+        '      query:',
+        '        includeItems: true',
+        '      headers:',
+        '        X-Tenant: main',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const stdout = createCapture();
+    await runCli(
+      ['validate', '-s', 'smoke'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    expect(stdout.output()).toContain('Warnings:');
+    expect(stdout.output()).toContain('  - step "get-order": request.pathParams.id is not used by path /orders/{orderId}');
   });
 
   it('tests a scenario by name using default config and output paths', async () => {
@@ -2169,6 +2847,254 @@ describe('openapi-k6 CLI', () => {
     expect(output).not.toContain('/bos-health');
   });
 
+  it('validates and generates step-level api.module scenarios with isolated registries', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('auth.openapi.yaml', '/auth-health', 'https://auth-openapi.test.local');
+    await writeModuleOpenApi('bos-api.openapi.yaml', '/bos-health', 'https://bos-openapi.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/cross.yaml'),
+      [
+        'name: cross',
+        'steps:',
+        '  - id: auth-health',
+        '    api:',
+        '      module: auth',
+        '      operationId: getHealth',
+        '  - id: bos-health',
+        '    api:',
+        '      module: bos-api',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'modules:',
+      '  auth:',
+      '    baseUrl: https://auth-api.test.local',
+      '    snapshot: openapi/auth.openapi.yaml',
+      '    catalog: openapi/auth.catalog.json',
+      '  bos-api:',
+      '    baseUrl: https://bos-api.test.local',
+      '    snapshot: openapi/bos-api.openapi.yaml',
+      '    catalog: openapi/bos-api.catalog.json',
+      '',
+    ]);
+
+    const stdout = createCapture();
+    await runCli(
+      ['validate', '--config', 'load-tests/config.yaml', '--scenario', 'cross'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    expect(stdout.output()).toContain('  modules  auth, bos-api');
+    expect(stdout.output()).toContain('    auth  load-tests/openapi/auth.openapi.yaml');
+    expect(stdout.output()).toContain('    bos-api  load-tests/openapi/bos-api.openapi.yaml');
+
+    await runCli(
+      [
+        'generate',
+        '--config',
+        'load-tests/config.yaml',
+        '--scenario',
+        'cross',
+        '--write',
+        'generated/cross.js',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const output = await readFile(path.join(workspace, 'generated/cross.js'), 'utf8');
+
+    expect(output).toContain('const BASE_URL_0 = __ENV.BASE_URL_AUTH || __ENV.BASE_URL || "https://auth-api.test.local";');
+    expect(output).toContain('const BASE_URL_1 = __ENV.BASE_URL_BOS_API || __ENV.BASE_URL || "https://bos-api.test.local";');
+    expect(output).toContain('const url0 = joinUrl(BASE_URL_0, `/auth-health`);');
+    expect(output).toContain('const url1 = joinUrl(BASE_URL_1, `/bos-health`);');
+  });
+
+  it('tests step-level api.module scenarios with module-specific BASE_URL env overrides', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('auth.openapi.yaml', '/auth-health', 'https://auth-openapi.test.local');
+    await writeModuleOpenApi('bos.openapi.yaml', '/bos-health', 'https://bos-openapi.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/cross.yaml'),
+      [
+        'name: cross',
+        'steps:',
+        '  - id: auth-health',
+        '    api:',
+        '      module: auth',
+        '      operationId: getHealth',
+        '  - id: bos-health',
+        '    api:',
+        '      module: bos',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'modules:',
+      '  auth:',
+      '    baseUrl: https://auth-api.test.local',
+      '    snapshot: openapi/auth.openapi.yaml',
+      '    catalog: openapi/auth.catalog.json',
+      '  bos:',
+      '    baseUrl: https://bos-api.test.local',
+      '    snapshot: openapi/bos.openapi.yaml',
+      '    catalog: openapi/bos.catalog.json',
+      '',
+    ]);
+    const urls: string[] = [];
+
+    await runCli(
+      ['test', '--config', 'load-tests/config.yaml', '--scenario', 'cross', '--no-color'],
+      {
+        cwd: workspace,
+        stdout: createSink(),
+        stderr: createSink(),
+        env: {
+          BASE_URL_BOS: 'https://bos-env.test.local',
+        },
+        fetch: async (input) => {
+          urls.push(String(input));
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        },
+      },
+    );
+
+    expect(urls).toEqual([
+      'https://auth-api.test.local/auth-health',
+      'https://bos-env.test.local/bos-health',
+    ]);
+  });
+
+  it('fails clearly when step-level module base URL env names collide', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('bos-api.openapi.yaml', '/dash-health', 'https://dash-openapi.test.local');
+    await writeModuleOpenApi('bos_api.openapi.yaml', '/underscore-health', 'https://underscore-openapi.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/cross.yaml'),
+      [
+        'name: cross',
+        'steps:',
+        '  - id: dash-health',
+        '    api:',
+        '      module: bos-api',
+        '      operationId: getHealth',
+        '  - id: underscore-health',
+        '    api:',
+        '      module: bos_api',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'modules:',
+      '  bos-api:',
+      '    baseUrl: https://dash-api.test.local',
+      '    snapshot: openapi/bos-api.openapi.yaml',
+      '    catalog: openapi/bos-api.catalog.json',
+      '  bos_api:',
+      '    baseUrl: https://underscore-api.test.local',
+      '    snapshot: openapi/bos_api.openapi.yaml',
+      '    catalog: openapi/bos_api.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['test', '--config', 'load-tests/config.yaml', '--scenario', 'cross', '--no-color'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink(), env: {} },
+      ),
+    ).rejects.toThrow('module base URL env name collision: modules "bos-api", "bos_api" all map to BASE_URL_BOS_API');
+  });
+
+  it('fails clearly when api.module is used without config', async () => {
+    await writeGenerateFixtures(workspace);
+    await writeFile(
+      path.join(workspace, 'scenario.yaml'),
+      [
+        'name: module-without-config',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      module: auth',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(
+      runCli(
+        [
+          'generate',
+          '--openapi',
+          'openapi.yaml',
+          '--scenario',
+          'scenario.yaml',
+          '--write',
+          'generated/script.js',
+        ],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('step "health": api.module "auth" cannot be used with --openapi; use --config modules.<name>.snapshot');
+  });
+
+  it('fails clearly when step-level api.module is unknown or has no snapshot', async () => {
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/cross.yaml'),
+      [
+        'name: cross',
+        'steps:',
+        '  - id: auth-health',
+        '    api:',
+        '      module: auth',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'modules:',
+      '  bos:',
+      '    snapshot: openapi/bos.openapi.yaml',
+      '    catalog: openapi/bos.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['validate', '--config', 'load-tests/config.yaml', '--scenario', 'cross'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('step "auth-health": api.module "auth" was not found. Available modules: bos');
+
+    await writeConfig([
+      'modules:',
+      '  auth:',
+      '    snapshot: TODO',
+      '    catalog: openapi/auth.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['validate', '--config', 'load-tests/config.yaml', '--scenario', 'cross'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('step "auth-health": modules.auth.snapshot is not configured.');
+  });
+
   it('fails clearly when config module is unknown', async () => {
     await writeGenerateFixtures(workspace);
     await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
@@ -2281,6 +3207,48 @@ describe('openapi-k6 CLI', () => {
         hasRequestBody: false,
       },
     ];
+  }
+
+  async function writeRunFixtures(): Promise<void> {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://app-openapi.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://app-api.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+  }
+
+  async function writeFakeK6(binDir: string, bodyLines: string[]): Promise<void> {
+    await mkdir(binDir, { recursive: true });
+    await writeFile(
+      path.join(binDir, 'k6'),
+      [
+        '#!/usr/bin/env bash',
+        ...bodyLines,
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await chmod(path.join(binDir, 'k6'), 0o755);
   }
 
   async function writeConfig(lines: string[]): Promise<void> {

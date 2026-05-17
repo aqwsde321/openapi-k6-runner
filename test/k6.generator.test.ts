@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { generateK6Script, K6GenerationError } from '../src/compiler/k6.generator.js';
 import type { ASTScenario } from '../src/core/types.js';
-import { compileValueExpression, TemplateCompileError } from '../src/core/template.js';
+import {
+  collectTemplateReferences,
+  compileValueExpression,
+  TemplateCompileError,
+} from '../src/core/template.js';
 import { compileJsonPathSegments, JsonPathCompileError } from '../src/utils/jsonpath.js';
 
 describe('k6 generator', () => {
@@ -150,6 +154,75 @@ describe('k6 generator', () => {
     await expectValidJavaScript(workspace, script);
   });
 
+  it('generates module-specific base URL env fallbacks for multi-module scenarios', async () => {
+    const script = generateK6Script({
+      name: 'cross-module',
+      steps: [
+        {
+          id: 'login',
+          moduleName: 'auth',
+          method: 'POST',
+          path: '/login',
+          pathParameters: [],
+          request: {},
+        },
+        {
+          id: 'create-order',
+          moduleName: 'bos-api',
+          method: 'POST',
+          path: '/orders',
+          pathParameters: [],
+          request: {},
+        },
+      ],
+    }, {
+      baseUrl: 'https://fallback.test.local',
+      moduleBaseUrls: {
+        auth: 'https://auth.test.local',
+        'bos-api': 'https://bos.test.local',
+      },
+    });
+
+    expect(script).toContain('const BASE_URL_0 = __ENV.BASE_URL_AUTH || __ENV.BASE_URL || "https://auth.test.local";');
+    expect(script).toContain('const BASE_URL_1 = __ENV.BASE_URL_BOS_API || __ENV.BASE_URL || "https://bos.test.local";');
+    expect(script).toContain('const url0 = joinUrl(BASE_URL_0, `/login`);');
+    expect(script).toContain('const url1 = joinUrl(BASE_URL_1, `/orders`);');
+    await expectValidJavaScript(workspace, script);
+  });
+
+  it('rejects multi-module base URL env name collisions', () => {
+    expect(() =>
+      generateK6Script({
+        name: 'colliding-modules',
+        steps: [
+          {
+            id: 'dash',
+            moduleName: 'bos-api',
+            method: 'GET',
+            path: '/dash',
+            pathParameters: [],
+            request: {},
+          },
+          {
+            id: 'underscore',
+            moduleName: 'bos_api',
+            method: 'GET',
+            path: '/underscore',
+            pathParameters: [],
+            request: {},
+          },
+        ],
+      }, {
+        moduleBaseUrls: {
+          'bos-api': 'https://dash.test.local',
+          bos_api: 'https://underscore.test.local',
+        },
+      }),
+    ).toThrowError(
+      new K6GenerationError('module base URL env name collision: modules "bos-api", "bos_api" all map to BASE_URL_BOS_API'),
+    );
+  });
+
   it('compiles template values recursively without replacing missing values with empty strings', () => {
     expect(compileValueExpression('{{token}}')).toBe('context.token');
     expect(compileValueExpression('{{env.API_TOKEN}}')).toBe('__ENV.API_TOKEN');
@@ -161,6 +234,17 @@ describe('k6 generator', () => {
     })).toBe('{ "headers": [`X-Trace-${context.traceId}`], "body": { "userId": context.userId, "password": __ENV.USER_PASSWORD } }');
     expect(() => compileValueExpression('Bearer {{bad-name}}')).toThrowError(TemplateCompileError);
     expect(() => compileValueExpression('{{env.bad-name}}')).toThrowError(TemplateCompileError);
+  });
+
+  it('collects template references with the same syntax as template compilation', () => {
+    expect(collectTemplateReferences('Bearer {{token}} / {{ env.API_TOKEN }}')).toEqual([
+      { raw: 'token', type: 'context', name: 'token' },
+      { raw: 'env.API_TOKEN', type: 'env', name: 'API_TOKEN' },
+    ]);
+    expect(collectTemplateReferences('plain text')).toEqual([]);
+    expect(() => collectTemplateReferences('Bearer {{bad-name}}')).toThrowError(TemplateCompileError);
+    expect(() => collectTemplateReferences('{{env.bad-name}}')).toThrowError(TemplateCompileError);
+    expect(() => collectTemplateReferences('{{token')).toThrowError(TemplateCompileError);
   });
 
   it('generates k6 runtime environment references from env templates', async () => {
@@ -296,12 +380,48 @@ describe('k6 generator', () => {
     );
 
     expect(script).toContain('const res0Json = res0.json();');
-    expect(script).toContain('context.token = readJsonPath(res0Json, ["token"]);');
-    expect(script).toContain('context.firstItemId = readJsonPath(res0Json, ["items",0,"id"]);');
-    expect(script).toContain('context["order-id"] = readJsonPath(res0Json, ["data","id"]);');
+    expect(script).toContain('const extract0_0 = readJsonPath(res0Json, ["token"]);');
+    expect(script).toContain('context.token = extract0_0;');
+    expect(script).toContain('"login extract token": () => extract0_0 !== undefined,');
+    expect(script).toContain('logFailedCheck(metadata0, "extract token", url0, res0);');
+    expect(script).toContain('const extract0_1 = readJsonPath(res0Json, ["items",0,"id"]);');
+    expect(script).toContain('context.firstItemId = extract0_1;');
+    expect(script).toContain('"login extract firstItemId": () => extract0_1 !== undefined,');
+    expect(script).toContain('const extract0_2 = readJsonPath(res0Json, ["data","id"]);');
+    expect(script).toContain('context["order-id"] = extract0_2;');
+    expect(script).toContain('"login extract order-id": () => extract0_2 !== undefined,');
     expect(script).toContain('"login status < 300": (res) => res.status < 300,');
     expect(script).toContain('logFailedCheck(metadata0, "status < 300", url0, res0);');
     expect(script.indexOf('const check0 = check(res0')).toBeLessThan(script.indexOf('const res0Json = res0.json();'));
+  });
+
+  it('generates extract checks when a step has no condition', async () => {
+    const script = generateK6Script(
+      {
+        name: 'extract-only',
+        steps: [
+          {
+            id: 'read-session',
+            method: 'GET',
+            path: '/session',
+            pathParameters: [],
+            request: {},
+            extract: {
+              sessionId: { from: '$.session.id' },
+            },
+          },
+        ],
+      },
+      { baseUrl: 'https://api.test.local' },
+    );
+
+    expect(script).toContain("import { check, group } from 'k6';");
+    expect(script).toContain("type: 'openapi-k6-check-failed'");
+    expect(script).toContain('const extract0_0 = readJsonPath(res0Json, ["session","id"]);');
+    expect(script).toContain('context.sessionId = extract0_0;');
+    expect(script).toContain('"read-session extract sessionId": () => extract0_0 !== undefined,');
+    expect(script).toContain('logFailedCheck(metadata0, "extract sessionId", url0, res0);');
+    await expectValidJavaScript(workspace, script);
   });
 
   it('logs failed condition details without request headers or body', async () => {
@@ -330,7 +450,9 @@ describe('k6 generator', () => {
     expect(script).toContain('method: metadata.method,');
     expect(script).toContain('path: metadata.path,');
     expect(script).toContain('durationMs: response.timings.duration,');
-    expect(script).toContain('responseBody: truncateLogValue(response.body, 2000),');
+    expect(script).toContain('const OPENAPI_K6_SECRET_ENV_NAMES = ["PASSWORD"];');
+    expect(script).toContain("url: maskLogValue(url),");
+    expect(script).toContain('responseBody: truncateLogValue(maskLogValue(response.body), 2000),');
     expect(script).toContain('logFailedCheck(metadata0, "status == 200", url0, res0);');
     expect(script).not.toContain('requestBody');
     expect(script).not.toContain('requestHeaders');

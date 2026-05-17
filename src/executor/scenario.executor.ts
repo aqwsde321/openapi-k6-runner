@@ -18,6 +18,7 @@ type MaybePromise<T> = T | Promise<T>;
 
 export interface ScenarioExecutorOptions {
   baseUrl: string;
+  moduleBaseUrls?: Record<string, string | undefined>;
   fileRootDir?: string;
   env?: Record<string, string | undefined>;
   fetch?: FetchLike;
@@ -132,6 +133,7 @@ export async function executeAstScenario(
   options: ScenarioExecutorOptions,
 ): Promise<ScenarioExecutionResult> {
   const baseUrl = options.baseUrl.trim();
+  const moduleBaseUrls = normalizeModuleBaseUrls(options.moduleBaseUrls);
 
   if (!baseUrl) {
     throw new ScenarioExecutionError('baseUrl is required to test a scenario');
@@ -158,6 +160,7 @@ export async function executeAstScenario(
   for (const [index, step] of ast.steps.entries()) {
     steps.push(await executeStep(step, index, {
       baseUrl,
+      moduleBaseUrls,
       fetchImpl,
       fileRootDir,
       state,
@@ -243,6 +246,7 @@ async function executeStep(
   index: number,
   options: {
     baseUrl: string;
+    moduleBaseUrls: Map<string, string>;
     fetchImpl: FetchLike;
     fileRootDir: string;
     state: RuntimeState;
@@ -272,7 +276,13 @@ async function executeStep(
     const parsedCondition = step.condition === undefined
       ? undefined
       : parseCondition(step.condition, step.id);
-    const request = await buildRuntimeRequest(step, method, options.baseUrl, options.fileRootDir, options.state);
+    const request = await buildRuntimeRequest(
+      step,
+      method,
+      resolveStepBaseUrl(step, options.baseUrl, options.moduleBaseUrls),
+      options.fileRootDir,
+      options.state,
+    );
     url = request.url;
     await options.reporter?.onStepRequest?.({
       ...startEvent,
@@ -331,6 +341,32 @@ async function executeStep(
   });
 
   return result;
+}
+
+function normalizeModuleBaseUrls(value: Record<string, string | undefined> | undefined): Map<string, string> {
+  const urls = new Map<string, string>();
+
+  for (const [moduleName, rawBaseUrl] of Object.entries(value ?? {})) {
+    const baseUrl = rawBaseUrl?.trim();
+
+    if (baseUrl) {
+      urls.set(moduleName, baseUrl);
+    }
+  }
+
+  return urls;
+}
+
+function resolveStepBaseUrl(
+  step: ASTStep,
+  fallbackBaseUrl: string,
+  moduleBaseUrls: Map<string, string>,
+): string {
+  if (step.moduleName === undefined) {
+    return fallbackBaseUrl;
+  }
+
+  return moduleBaseUrls.get(step.moduleName) ?? fallbackBaseUrl;
 }
 
 async function buildRuntimeRequest(

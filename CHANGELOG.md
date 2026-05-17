@@ -6,6 +6,21 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-18
+
+### Added
+
+- API 호출 없이 Scenario YAML을 OpenAPI snapshot과 대조하는 `openapi-k6 validate` 명령을 추가했습니다.
+- `validate`가 지원하지 않는 `condition` 표현식과 `extract.from` JSONPath를 API 호출 전에 실패로 처리하도록 보강했습니다.
+- Scenario YAML step의 `api.module`로 여러 OpenAPI module을 하나의 scenario에서 섞어 사용할 수 있게 했습니다.
+- `validate`가 request 안의 context template 참조를 이전 step의 `extract` 기준으로 정적으로 검증하도록 보강했습니다.
+- `openapi-k6 run` 명령을 추가해 scenario 정적 검증, k6 스크립트 생성, `k6 run` 실행을 한 번에 수행할 수 있게 했습니다.
+
+### Fixed
+
+- 생성된 k6 스크립트의 trace/check 실패 로그에서 `{{env.NAME}}`으로 참조한 비밀 값이 URL과 response body에 노출되지 않도록 masking했습니다.
+- 생성된 k6 스크립트에서도 `extract` 결과가 `undefined`이면 k6 `check` 실패로 표시되도록 했습니다.
+
 ## [0.3.0] - 2026-05-10
 
 ### Added
@@ -97,7 +112,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.1.3...v0.2.0

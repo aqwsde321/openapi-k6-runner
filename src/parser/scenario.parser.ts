@@ -87,6 +87,7 @@ function parseStep(value: unknown, stepPath: string): Step {
 
 function parseApiReference(value: unknown, path: string): ApiReference {
   const api = expectRecord(value, `${path}: api must be an object`);
+  const moduleName = parseOptionalApiModule(api.module, `${path}.module`);
   const operationId = optionalNonEmptyString(api.operationId, `${path}.operationId must be a string`);
   const method = optionalNonEmptyString(api.method, `${path}.method must be a string`);
   const endpointPath = optionalNonEmptyString(api.path, `${path}.path must be a string`);
@@ -101,10 +102,29 @@ function parseApiReference(value: unknown, path: string): ApiReference {
   }
 
   return {
+    ...(moduleName === undefined ? {} : { module: moduleName }),
     ...(operationId === undefined ? {} : { operationId }),
     ...(method === undefined ? {} : { method }),
     ...(endpointPath === undefined ? {} : { path: endpointPath }),
   };
+}
+
+function parseOptionalApiModule(value: unknown, path: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw new ScenarioParseError(`${path} must be a string`);
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    throw new ScenarioParseError(`${path} must not be empty`);
+  }
+
+  return trimmed;
 }
 
 function parseStepRequest(value: unknown, path: string): StepRequest {

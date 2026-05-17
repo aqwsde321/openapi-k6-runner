@@ -32,6 +32,7 @@
 | P-11 | Env Secret Template | `{{env.NAME}}` -> `__ENV.NAME` | 완료 |
 | P-12 | Scenario Test Runner | Scenario DSL 직접 실행 검증 | 완료 |
 | P-13 | AI Scenario Workflow | AI 작성/검증 루프 문서 보강 | 완료 |
+| P-16 | Scenario Static Validation | API 호출 전 scenario/OpenAPI 정합성 검증 | 완료 |
 | P-14 | UI Adapter 설계 | UI flow -> Scenario DSL 변환 문서 | 후순위 |
 | P-15 | Studio UI | 로컬 UI 워크벤치 | 후순위 |
 
