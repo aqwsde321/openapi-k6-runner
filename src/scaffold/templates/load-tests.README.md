@@ -481,6 +481,7 @@ This section is for AI agents. Use it as a compact checklist after reading the K
 - Put auth tokens under `request.headers`.
 - Do not use `request.body` and `request.multipart` in the same step.
 - `condition` compiles to a k6 `check`; it is not a branch. Later steps still run even if a check fails.
+- `extract` also compiles to a k6 `check` so missing extracted values are visible in k6 output.
 - `pathParams` values are encoded as URL path segments.
 - Config-relative paths resolve from the directory containing `config.yaml`.
 - Multipart file paths are relative to `__DIRECTORY__/`. Put local upload fixtures under `__FIXTURES_PATH__` by default and unignore/commit them only when repeatable tests need them.

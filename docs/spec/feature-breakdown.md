@@ -272,6 +272,7 @@ k6 런타임은 Node.js npm 패키지를 그대로 사용할 수 없다. 따라�
 
 - 지원 범위 밖의 JSONPath는 컴파일 에러를 낸다.
 - 추출 대상이 없을 때 context 값은 `undefined`가 된다.
+- generated k6 script에서는 추출 값이 `undefined`이면 해당 extract가 `check` 실패로 표시된다.
 
 ## 11. F-09 Condition Compiler
 

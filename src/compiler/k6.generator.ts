@@ -41,7 +41,7 @@ export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions =
   ];
 
   const k6Imports = [
-    ...(hasCondition(ast) ? ['check'] : []),
+    ...(hasChecks(ast) ? ['check'] : []),
     ...(hasSteps(ast) ? ['group'] : []),
   ];
 
@@ -161,7 +161,7 @@ function renderHelpers(ast: ASTScenario, secretEnvNames: string[]): string[] {
     );
   }
 
-  if (hasCondition(ast)) {
+  if (hasChecks(ast)) {
     helpers.push(
       '',
       'function truncateLogValue(value, limit) {',
@@ -283,7 +283,7 @@ function renderStep(scenarioName: string, step: ASTStep, index: number): string[
   innerLines.push(`const ${responseVariable} = ${renderHttpCall(httpCall, method, urlVariable, bodyVariable, paramsVariable, hasBodyValue)};`);
   innerLines.push(`logStepEnd(${metadataVariable}, ${responseVariable});`);
   innerLines.push(...renderCondition(step, index, responseVariable, urlVariable, metadataVariable));
-  innerLines.push(...renderExtract(step, index, responseVariable));
+  innerLines.push(...renderExtract(step, index, responseVariable, urlVariable, metadataVariable));
 
   return [
     `  group(${JSON.stringify(`${step.id} ${method} ${step.path}`)}, () => {`,
@@ -339,7 +339,13 @@ function renderHttpCall(
   return `http.${httpCall}(${urlVariable}, ${paramsVariable})`;
 }
 
-function renderExtract(step: ASTStep, index: number, responseVariable: string): string[] {
+function renderExtract(
+  step: ASTStep,
+  index: number,
+  responseVariable: string,
+  urlVariable: string,
+  metadataVariable: string,
+): string[] {
   if (!step.extract || Object.keys(step.extract).length === 0) {
     return [];
   }
@@ -347,11 +353,21 @@ function renderExtract(step: ASTStep, index: number, responseVariable: string): 
   const jsonVariable = `res${index}Json`;
   const lines = [`const ${jsonVariable} = ${responseVariable}.json();`];
 
-  for (const [variableName, rule] of Object.entries(step.extract)) {
+  Object.entries(step.extract).forEach(([variableName, rule], extractIndex) => {
+    const valueVariable = `extract${index}_${extractIndex}`;
+    const checkVariable = `extractCheck${index}_${extractIndex}`;
+
     lines.push(
-      `${compileContextReference(variableName)} = readJsonPath(${jsonVariable}, ${JSON.stringify(compileJsonPathSegments(rule.from))});`,
+      `const ${valueVariable} = readJsonPath(${jsonVariable}, ${JSON.stringify(compileJsonPathSegments(rule.from))});`,
+      `${compileContextReference(variableName)} = ${valueVariable};`,
+      `const ${checkVariable} = check(${responseVariable}, {`,
+      `  ${JSON.stringify(`${step.id} extract ${variableName}`)}: () => ${valueVariable} !== undefined,`,
+      '});',
+      `if (!${checkVariable}) {`,
+      `  logFailedCheck(${metadataVariable}, ${JSON.stringify(`extract ${variableName}`)}, ${urlVariable}, ${responseVariable});`,
+      '}',
     );
-  }
+  });
 
   return lines;
 }
@@ -561,6 +577,10 @@ function hasExtract(ast: ASTScenario): boolean {
 
 function hasCondition(ast: ASTScenario): boolean {
   return ast.steps.some((step) => step.condition !== undefined);
+}
+
+function hasChecks(ast: ASTScenario): boolean {
+  return hasCondition(ast) || hasExtract(ast);
 }
 
 function hasSteps(ast: ASTScenario): boolean {

@@ -296,12 +296,48 @@ describe('k6 generator', () => {
     );
 
     expect(script).toContain('const res0Json = res0.json();');
-    expect(script).toContain('context.token = readJsonPath(res0Json, ["token"]);');
-    expect(script).toContain('context.firstItemId = readJsonPath(res0Json, ["items",0,"id"]);');
-    expect(script).toContain('context["order-id"] = readJsonPath(res0Json, ["data","id"]);');
+    expect(script).toContain('const extract0_0 = readJsonPath(res0Json, ["token"]);');
+    expect(script).toContain('context.token = extract0_0;');
+    expect(script).toContain('"login extract token": () => extract0_0 !== undefined,');
+    expect(script).toContain('logFailedCheck(metadata0, "extract token", url0, res0);');
+    expect(script).toContain('const extract0_1 = readJsonPath(res0Json, ["items",0,"id"]);');
+    expect(script).toContain('context.firstItemId = extract0_1;');
+    expect(script).toContain('"login extract firstItemId": () => extract0_1 !== undefined,');
+    expect(script).toContain('const extract0_2 = readJsonPath(res0Json, ["data","id"]);');
+    expect(script).toContain('context["order-id"] = extract0_2;');
+    expect(script).toContain('"login extract order-id": () => extract0_2 !== undefined,');
     expect(script).toContain('"login status < 300": (res) => res.status < 300,');
     expect(script).toContain('logFailedCheck(metadata0, "status < 300", url0, res0);');
     expect(script.indexOf('const check0 = check(res0')).toBeLessThan(script.indexOf('const res0Json = res0.json();'));
+  });
+
+  it('generates extract checks when a step has no condition', async () => {
+    const script = generateK6Script(
+      {
+        name: 'extract-only',
+        steps: [
+          {
+            id: 'read-session',
+            method: 'GET',
+            path: '/session',
+            pathParameters: [],
+            request: {},
+            extract: {
+              sessionId: { from: '$.session.id' },
+            },
+          },
+        ],
+      },
+      { baseUrl: 'https://api.test.local' },
+    );
+
+    expect(script).toContain("import { check, group } from 'k6';");
+    expect(script).toContain("type: 'openapi-k6-check-failed'");
+    expect(script).toContain('const extract0_0 = readJsonPath(res0Json, ["session","id"]);');
+    expect(script).toContain('context.sessionId = extract0_0;');
+    expect(script).toContain('"read-session extract sessionId": () => extract0_0 !== undefined,');
+    expect(script).toContain('logFailedCheck(metadata0, "extract sessionId", url0, res0);');
+    await expectValidJavaScript(workspace, script);
   });
 
   it('logs failed condition details without request headers or body', async () => {

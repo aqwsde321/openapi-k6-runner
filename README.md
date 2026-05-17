@@ -199,7 +199,7 @@ npx --yes openapi-k6 update
 
 - OpenAPI 3.x 문서를 대상으로 합니다. Swagger/OpenAPI 2.0 문서는 지원하지 않습니다.
 - `condition`은 분기가 아니라 검증식입니다. k6에서는 `check`로 생성되며 다음 step 실행을 막지 않습니다.
-- `extract`는 응답 JSON에서 값을 읽어 다음 step의 `{{token}}` 같은 template 값으로 연결합니다.
+- `extract`는 응답 JSON에서 값을 읽어 다음 step의 `{{token}}` 같은 template 값으로 연결하며, 생성된 k6에서는 추출 실패를 `check` 실패로 표시합니다.
 - `validate`는 지원하지 않는 `condition` 표현식과 `extract.from` JSONPath를 API 호출 전에 실패로 처리합니다.
 - 비밀값은 scenario YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조합니다.
 - `{{env.NAME}}`으로 참조한 값은 scenario test 출력과 생성된 k6 실패 로그에서 masking됩니다.

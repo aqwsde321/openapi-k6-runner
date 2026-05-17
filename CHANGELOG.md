@@ -14,6 +14,7 @@
 ### Fixed
 
 - 생성된 k6 스크립트의 trace/check 실패 로그에서 `{{env.NAME}}`으로 참조한 비밀 값이 URL과 response body에 노출되지 않도록 masking했습니다.
+- 생성된 k6 스크립트에서도 `extract` 결과가 `undefined`이면 k6 `check` 실패로 표시되도록 했습니다.
 
 ## [0.3.0] - 2026-05-10
 

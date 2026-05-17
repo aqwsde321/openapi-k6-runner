@@ -113,7 +113,14 @@ export default function () {
       logFailedCheck(metadata0, "status == 200", url0, res0);
     }
     const res0Json = res0.json();
-    context.token = readJsonPath(res0Json, ["token"]);
+    const extract0_0 = readJsonPath(res0Json, ["token"]);
+    context.token = extract0_0;
+    const extractCheck0_0 = check(res0, {
+      "login extract token": () => extract0_0 !== undefined,
+    });
+    if (!extractCheck0_0) {
+      logFailedCheck(metadata0, "extract token", url0, res0);
+    }
   });
 
   group("create-order POST /orders", () => {
@@ -132,7 +139,14 @@ export default function () {
       logFailedCheck(metadata1, "status == 201", url1, res1);
     }
     const res1Json = res1.json();
-    context.orderId = readJsonPath(res1Json, ["data","id"]);
+    const extract1_0 = readJsonPath(res1Json, ["data","id"]);
+    context.orderId = extract1_0;
+    const extractCheck1_0 = check(res1, {
+      "create-order extract orderId": () => extract1_0 !== undefined,
+    });
+    if (!extractCheck1_0) {
+      logFailedCheck(metadata1, "extract orderId", url1, res1);
+    }
   });
 
   group("get-order GET /orders/{orderId}", () => {
