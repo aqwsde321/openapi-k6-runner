@@ -38,7 +38,7 @@ load-tests/
 | F-10 | k6 generator | P0 | O |
 | F-11 | Fixture 기반 테스트 | P0 | O |
 | F-12 | UI adapter 설계 | P1 | 문서만 |
-| F-13 | k6 실행 편의 스크립트 | P2 | 부분 |
+| F-13 | k6 실행 편의 스크립트 | P2 | O |
 | F-14 | 멀티모듈 OpenAPI 설정 | P1 | O |
 | F-15 | OpenAPI snapshot / catalog | P0 | O |
 | F-16 | 대상 프로젝트 init scaffold | P0 | O |
