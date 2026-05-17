@@ -571,6 +571,8 @@ openapi-k6 validate -s smoke
 - `request.body`와 `request.multipart`는 OpenAPI requestBody content type과 맞아야 한다.
 - `condition`은 F-09 지원 범위의 status expression이어야 한다.
 - `extract.from`은 F-08 지원 범위의 JSONPath여야 한다.
+- request 안의 `{{name}}` context template은 이전 step의 `extract.name`으로 이미 정의되어 있어야 한다.
+- `{{env.NAME}}` template은 정적 검증에서 문법만 확인하고 허용한다.
 
 ### 완료 기준
 
@@ -578,3 +580,4 @@ openapi-k6 validate -s smoke
 - 검증 실패 메시지는 step id와 잘못된 필드를 포함한다.
 - 여러 step의 오류를 한 번에 모아 보고한다.
 - path template에 없는 `request.pathParams`는 실패가 아니라 warning으로 보고한다.
+- 아직 추출되지 않은 context template 참조는 API 호출 전에 실패한다.

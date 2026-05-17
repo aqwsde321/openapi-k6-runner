@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { generateK6Script, K6GenerationError } from '../src/compiler/k6.generator.js';
 import type { ASTScenario } from '../src/core/types.js';
-import { compileValueExpression, TemplateCompileError } from '../src/core/template.js';
+import {
+  collectTemplateReferences,
+  compileValueExpression,
+  TemplateCompileError,
+} from '../src/core/template.js';
 import { compileJsonPathSegments, JsonPathCompileError } from '../src/utils/jsonpath.js';
 
 describe('k6 generator', () => {
@@ -230,6 +234,17 @@ describe('k6 generator', () => {
     })).toBe('{ "headers": [`X-Trace-${context.traceId}`], "body": { "userId": context.userId, "password": __ENV.USER_PASSWORD } }');
     expect(() => compileValueExpression('Bearer {{bad-name}}')).toThrowError(TemplateCompileError);
     expect(() => compileValueExpression('{{env.bad-name}}')).toThrowError(TemplateCompileError);
+  });
+
+  it('collects template references with the same syntax as template compilation', () => {
+    expect(collectTemplateReferences('Bearer {{token}} / {{ env.API_TOKEN }}')).toEqual([
+      { raw: 'token', type: 'context', name: 'token' },
+      { raw: 'env.API_TOKEN', type: 'env', name: 'API_TOKEN' },
+    ]);
+    expect(collectTemplateReferences('plain text')).toEqual([]);
+    expect(() => collectTemplateReferences('Bearer {{bad-name}}')).toThrowError(TemplateCompileError);
+    expect(() => collectTemplateReferences('{{env.bad-name}}')).toThrowError(TemplateCompileError);
+    expect(() => collectTemplateReferences('{{token')).toThrowError(TemplateCompileError);
   });
 
   it('generates k6 runtime environment references from env templates', async () => {

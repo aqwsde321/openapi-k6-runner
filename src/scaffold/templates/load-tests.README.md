@@ -204,7 +204,7 @@ __CATALOG_QUERY_COMMAND__
 ### 2-3. Scenario 정적 검증
 
 `__CLI_COMMAND__ validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다.
-AI가 작성한 YAML은 먼저 이 명령으로 `operationId`, `method/path`, 필수 path/query/header/body 누락, `condition`, `extract.from` 문법을 확인합니다.
+AI가 작성한 YAML은 먼저 이 명령으로 `operationId`, `method/path`, 필수 path/query/header/body 누락, `{{token}}` 같은 context template 참조, `condition`, `extract.from` 문법을 확인합니다.
 
 ```bash
 __VALIDATE_SMOKE_COMMAND__
@@ -218,6 +218,7 @@ __VALIDATE_SMOKE_COMMAND__
 - `/orders/{orderId}` 같은 path template에 필요한 `request.pathParams`가 있는지
 - OpenAPI에서 required로 표시한 query/header parameter가 있는지
 - required request body가 있는 endpoint에 `request.body` 또는 `request.multipart`가 있는지
+- `{{token}}` 같은 context template 값이 이전 step의 `extract`에서 나온 값인지
 - `condition` 표현식과 `extract.from` JSONPath가 지원 범위 안에 있는지
 
 ### 2-4. Scenario 실행 검증
@@ -497,6 +498,7 @@ This section is for AI agents. Use it as a compact checklist after reading the K
 - Prefer `api.operationId`; use `api.method` and `api.path` when operationId is missing or unclear.
 - Use `api.module` only when a scenario crosses multiple configured OpenAPI modules; it requires `config.yaml` module snapshots.
 - Use `extract` for response values and reference them later as `{{variableName}}`; use `{{env.NAME}}` for runtime secrets.
+- `validate` rejects context templates that are not produced by an earlier step `extract`.
 - Put auth tokens under `request.headers`.
 - Do not use `request.body` and `request.multipart` in the same step.
 - `condition` compiles to a k6 `check`; it is not a branch. Later steps still run even if a check fails.

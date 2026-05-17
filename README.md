@@ -21,7 +21,7 @@ init -> sync -> catalog 검색 -> scenario YAML 수정 -> validate -> test -> ge
 | 7 | `npx --yes openapi-k6 generate -s smoke` | 통과한 scenario를 k6 스크립트로 생성 |
 | 8 | `./load-tests/run.sh smoke --log` | k6 설치 후 스크립트 실행 |
 
-`openapi-k6 validate`와 `openapi-k6 test`는 보조 명령이 아니라 k6 실행 전 검증 관문입니다. `validate`는 API 호출 없이 operation/path/query/header/body 정합성과 condition/extract 문법을 확인하고, `test`는 URL, header, query, path, body, 환경변수, condition, extract를 실제 요청으로 확인합니다.
+`openapi-k6 validate`와 `openapi-k6 test`는 보조 명령이 아니라 k6 실행 전 검증 관문입니다. `validate`는 API 호출 없이 operation/path/query/header/body 정합성, context template 참조, condition/extract 문법을 확인하고, `test`는 URL, header, query, path, body, 환경변수, condition, extract를 실제 요청으로 확인합니다.
 
 ## 핵심 기능
 
@@ -79,7 +79,7 @@ npx --yes openapi-k6 catalog --tag auth
 npx --yes openapi-k6 validate -s smoke
 ```
 
-`validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다. AI가 작성한 YAML은 먼저 여기서 `operationId`, `method/path`, 필수 path/query/header/body 누락, `condition`, `extract.from` 문법을 확인합니다.
+`validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다. AI가 작성한 YAML은 먼저 여기서 `operationId`, `method/path`, 필수 path/query/header/body 누락, `{{token}}` 같은 context template 참조, `condition`, `extract.from` 문법을 확인합니다.
 
 ### 6. Scenario 실행 검증
 
@@ -221,7 +221,7 @@ npx --yes openapi-k6 update
 - `condition`은 분기가 아니라 검증식입니다. k6에서는 `check`로 생성되며 다음 step 실행을 막지 않습니다.
 - `extract`는 응답 JSON에서 값을 읽어 다음 step의 `{{token}}` 같은 template 값으로 연결하며, 생성된 k6에서는 추출 실패를 `check` 실패로 표시합니다.
 - `api.module`은 여러 OpenAPI module을 하나의 scenario에서 섞어 쓸 때 사용합니다. `--openapi` 단독 실행에서는 지원하지 않고 config의 `modules.<name>.snapshot`이 필요합니다.
-- `validate`는 지원하지 않는 `condition` 표현식과 `extract.from` JSONPath를 API 호출 전에 실패로 처리합니다.
+- `validate`는 지원하지 않는 `condition` 표현식, `extract.from` JSONPath, 아직 이전 step에서 추출되지 않은 `{{token}}` 같은 context template 참조를 API 호출 전에 실패로 처리합니다.
 - 비밀값은 scenario YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조합니다.
 - `{{env.NAME}}`으로 참조한 값은 scenario test 출력과 생성된 k6 실패 로그에서 masking됩니다.
 - `body`와 `multipart`는 같은 step에서 함께 쓰지 않습니다.

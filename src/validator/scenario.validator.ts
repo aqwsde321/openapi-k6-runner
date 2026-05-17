@@ -1,4 +1,5 @@
 import type { ApiOperation, ApiRegistry, Scenario, Step } from '../core/types.js';
+import { collectTemplateReferences } from '../core/template.js';
 import { resolveApiOperation } from '../openapi/openapi.resolver.js';
 import { compileJsonPathSegments } from '../utils/jsonpath.js';
 
@@ -37,21 +38,26 @@ export function validateScenarioAgainstOpenApi(
 ): ScenarioValidationResult {
   const issues: string[] = [];
   const warnings: string[] = [];
+  const availableContextNames = new Set<string>();
 
   for (const step of scenario.steps) {
     let operation: ApiOperation;
 
     validateCondition(step, issues);
     validateExtracts(step, issues);
+    validateRequestTemplates(step, availableContextNames, issues);
 
     try {
       const { registry } = resolveStepRegistry(step, registrySource, options);
       operation = resolveApiOperation(registry, step.api, step.id);
     } catch (error) {
       issues.push(error instanceof Error ? error.message : String(error));
+      registerExtractNames(step, availableContextNames);
       continue;
     }
 
+    validatePathParamTemplates(step, operation, availableContextNames, issues);
+    registerExtractNames(step, availableContextNames);
     validatePathParams(step, operation, issues, warnings);
     validateRequiredParameters(step, operation, 'query', issues);
     validateRequiredParameters(step, operation, 'header', issues);
@@ -97,6 +103,123 @@ function resolveStepRegistry(
   }
 
   return { registry, moduleName };
+}
+
+function validateRequestTemplates(
+  step: Step,
+  availableContextNames: Set<string>,
+  issues: string[],
+): void {
+  const request = step.request;
+
+  if (request === undefined) {
+    return;
+  }
+
+  validateTemplateValue(step, 'request.headers', request.headers, availableContextNames, issues);
+  validateTemplateValue(step, 'request.query', request.query, availableContextNames, issues);
+  validateTemplateValue(step, 'request.body', request.body, availableContextNames, issues);
+  validateTemplateValue(step, 'request.multipart.fields', request.multipart?.fields, availableContextNames, issues);
+  validateMultipartFileMetadataTemplates(step, availableContextNames, issues);
+}
+
+function validatePathParamTemplates(
+  step: Step,
+  operation: ApiOperation,
+  availableContextNames: Set<string>,
+  issues: string[],
+): void {
+  const pathParams = step.request?.pathParams;
+
+  if (pathParams === undefined) {
+    return;
+  }
+
+  for (const name of readPathTemplateParameterNames(operation.path)) {
+    validateTemplateValue(
+      step,
+      `request.pathParams.${name}`,
+      pathParams[name],
+      availableContextNames,
+      issues,
+    );
+  }
+}
+
+function validateMultipartFileMetadataTemplates(
+  step: Step,
+  availableContextNames: Set<string>,
+  issues: string[],
+): void {
+  for (const [fieldName, file] of Object.entries(step.request?.multipart?.files ?? {})) {
+    const filePathLabel = appendTemplatePath('request.multipart.files', fieldName);
+
+    validateTemplateValue(
+      step,
+      appendTemplatePath(filePathLabel, 'filename'),
+      file.filename,
+      availableContextNames,
+      issues,
+    );
+    validateTemplateValue(
+      step,
+      appendTemplatePath(filePathLabel, 'contentType'),
+      file.contentType,
+      availableContextNames,
+      issues,
+    );
+  }
+}
+
+function validateTemplateValue(
+  step: Step,
+  pathLabel: string,
+  value: unknown,
+  availableContextNames: Set<string>,
+  issues: string[],
+): void {
+  if (value === undefined || value === null || typeof value === 'number' || typeof value === 'boolean') {
+    return;
+  }
+
+  if (typeof value === 'string') {
+    try {
+      for (const reference of collectTemplateReferences(value)) {
+        if (reference.type === 'context' && !availableContextNames.has(reference.name)) {
+          issues.push(`step "${step.id}": ${pathLabel} references unknown context.${reference.name}`);
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      issues.push(`step "${step.id}": ${pathLabel} has invalid template: ${message}`);
+    }
+
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) =>
+      validateTemplateValue(step, `${pathLabel}[${index}]`, item, availableContextNames, issues));
+    return;
+  }
+
+  if (isRecord(value)) {
+    for (const [key, item] of Object.entries(value)) {
+      validateTemplateValue(step, appendTemplatePath(pathLabel, key), item, availableContextNames, issues);
+    }
+  }
+}
+
+function appendTemplatePath(pathLabel: string, key: string): string {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key)
+    ? `${pathLabel}.${key}`
+    : `${pathLabel}[${JSON.stringify(key)}]`;
+}
+
+function registerExtractNames(step: Step, availableContextNames: Set<string>): void {
+  for (const name of Object.keys(step.extract ?? {})) {
+    availableContextNames.add(name);
+  }
 }
 
 function validateCondition(step: Step, issues: string[]): void {

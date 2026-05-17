@@ -410,7 +410,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 validate -s smoke');
     expect(readme).toContain('npx --yes openapi-k6 test -s smoke');
     expect(readme).toContain('`npx --yes openapi-k6 validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다.');
-    expect(readme).toContain('필수 path/query/header/body 누락, `condition`, `extract.from` 문법을 확인합니다.');
+    expect(readme).toContain('필수 path/query/header/body 누락, `{{token}}` 같은 context template 참조, `condition`, `extract.from` 문법을 확인합니다.');
     expect(readme).toContain('`npx --yes openapi-k6 test`는 scenario YAML을 Node.js에서 1회 실행해 URL, status, condition, extract를 확인합니다.');
     expect(readme).toContain('k6 스크립트 생성 전 gate입니다.');
     expect(readme).toContain('색상은 터미널에서만 켜지며 `--no-color` 옵션이나 `NO_COLOR=1` 환경변수로 끌 수 있습니다.');
@@ -1735,11 +1735,23 @@ describe('openapi-k6 CLI', () => {
         '    api:',
         '      method: POST',
         '      path: /orders',
-        '    request:',
-        '      body:',
-        '        id: order-1',
-        '',
-      ].join('\n'),
+      '    request:',
+      '      body:',
+      '        id: "{{itemId}}"',
+      '        items:',
+      '          - id: "{{itemId}}"',
+      '  - id: upload-file',
+      '    api:',
+      '      operationId: uploadFile',
+      '    request:',
+      '      multipart:',
+      '        fields:',
+      '          title: "{{itemId}}"',
+      '        files:',
+      '          attachment:',
+      '            path: fixtures/order.txt',
+      '',
+    ].join('\n'),
       'utf8',
     );
     await writeConfig([
@@ -1761,7 +1773,7 @@ describe('openapi-k6 CLI', () => {
     expect(stdout.output()).toContain('  openapi  load-tests/openapi/app.openapi.yaml');
     expect(stdout.output()).toContain('  module   app');
     expect(stdout.output()).toContain('  scenario smoke');
-    expect(stdout.output()).toContain('  steps    2');
+    expect(stdout.output()).toContain('  steps    3');
   });
 
   it('reports scenario validation issues before running API requests', async () => {
@@ -1879,7 +1891,7 @@ describe('openapi-k6 CLI', () => {
     ].join('\n'));
   });
 
-  it('warns about unused scenario path parameters during validation', async () => {
+  it('reports invalid or unavailable context template references during validation', async () => {
     await writeValidationOpenApi(workspace);
     await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
     await writeFile(
@@ -1893,7 +1905,114 @@ describe('openapi-k6 CLI', () => {
         '    request:',
         '      pathParams:',
         '        orderId: order-1',
-        '        id: ignored',
+        '      query:',
+        '        includeItems: true',
+        '      headers:',
+        '        X-Tenant: main',
+        '    extract:',
+        '      itemId:',
+        '        from: $.items[0].id',
+        '  - id: typo-reference',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        id: "{{itmeId}}"',
+        '        token: "{{env.API_TOKEN}}"',
+        '  - id: same-step-reference',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: "{{selfId}}"',
+        '      query:',
+        '        includeItems: true',
+        '      headers:',
+        '        X-Tenant: main',
+        '    extract:',
+        '      selfId:',
+        '        from: $.id',
+        '  - id: future-reference',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        id: "{{futureId}}"',
+        '        items:',
+        '          - id: "{{missingItemId}}"',
+        '  - id: upload-metadata',
+        '    api:',
+        '      operationId: uploadFile',
+        '    request:',
+        '      multipart:',
+        '        files:',
+        '          attachment:',
+        '            path: fixtures/order.txt',
+        '            filename: "{{missingFilename}}"',
+        '            contentType: "{{env.CONTENT_TYPE}}"',
+        '  - id: invalid-template',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        id: "Bearer {{bad-name}}"',
+        '  - id: future-source',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: order-2',
+        '      query:',
+        '        includeItems: true',
+        '      headers:',
+        '        X-Tenant: main',
+        '    extract:',
+        '      futureId:',
+        '        from: $.id',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['validate', '-s', 'smoke'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow([
+      'Scenario validation failed:',
+      '  - step "typo-reference": request.body.id references unknown context.itmeId',
+      '  - step "same-step-reference": request.pathParams.orderId references unknown context.selfId',
+      '  - step "future-reference": request.body.id references unknown context.futureId',
+      '  - step "future-reference": request.body.items[0].id references unknown context.missingItemId',
+      '  - step "upload-metadata": request.multipart.files.attachment.filename references unknown context.missingFilename',
+      '  - step "invalid-template": request.body.id has invalid template: Invalid template string: Bearer {{bad-name}}',
+    ].join('\n'));
+  });
+
+  it('warns about unused scenario path parameters during validation', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: get-order',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+      '      pathParams:',
+      '        orderId: order-1',
+      '        id: "{{unusedId}}"',
         '      query:',
         '        includeItems: true',
         '      headers:',

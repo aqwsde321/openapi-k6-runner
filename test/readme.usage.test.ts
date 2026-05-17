@@ -20,7 +20,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('| 6 | `npx --yes openapi-k6 test -s smoke` | Node.js에서 scenario 1회 실행 검증 |');
     expect(readme).toContain('| 8 | `./load-tests/run.sh smoke --log` | k6 설치 후 스크립트 실행 |');
     expect(readme).toContain('`openapi-k6 validate`와 `openapi-k6 test`는 보조 명령이 아니라 k6 실행 전 검증 관문입니다.');
-    expect(readme).toContain('`validate`는 API 호출 없이 operation/path/query/header/body 정합성과 condition/extract 문법을 확인하고');
+    expect(readme).toContain('`validate`는 API 호출 없이 operation/path/query/header/body 정합성, context template 참조, condition/extract 문법을 확인하고');
 
     expect(readme).toContain('## 핵심 기능');
     expect(readme).toContain('| Scenario YAML | 로그인, 추출, 인증 요청 같은 API 흐름을 YAML로 표현합니다. |');
@@ -69,7 +69,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('### 5. Scenario 정적 검증');
     expect(readme).toContain('npx --yes openapi-k6 validate -s smoke');
     expect(readme).toContain('`validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다.');
-    expect(readme).toContain('필수 path/query/header/body 누락, `condition`, `extract.from` 문법을 확인합니다.');
+    expect(readme).toContain('필수 path/query/header/body 누락, `{{token}}` 같은 context template 참조, `condition`, `extract.from` 문법을 확인합니다.');
     expect(readme).toContain('### 6. Scenario 실행 검증');
     expect(readme).toContain('npx --yes openapi-k6 test -s smoke');
     expect(readme).toContain('`test`가 통과해야 k6 스크립트를 생성하거나 실행합니다.');
@@ -93,7 +93,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('OpenAPI 3.x 문서를 대상으로 합니다. Swagger/OpenAPI 2.0 문서는 지원하지 않습니다.');
     expect(readme).toContain('`condition`은 분기가 아니라 검증식입니다.');
     expect(readme).toContain('비밀값은 scenario YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조합니다.');
-    expect(readme).toContain('`validate`는 지원하지 않는 `condition` 표현식과 `extract.from` JSONPath를 API 호출 전에 실패로 처리합니다.');
+    expect(readme).toContain('`validate`는 지원하지 않는 `condition` 표현식, `extract.from` JSONPath, 아직 이전 step에서 추출되지 않은 `{{token}}` 같은 context template 참조를 API 호출 전에 실패로 처리합니다.');
     expect(readme).toContain('`body`와 `multipart`는 같은 step에서 함께 쓰지 않습니다.');
 
     expect(readme).toContain('## 명령 모음');
