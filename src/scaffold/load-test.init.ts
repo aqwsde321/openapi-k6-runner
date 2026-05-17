@@ -525,12 +525,18 @@ function renderReadme(
   const syncCommand = cliCommand + ' sync' + configOption + moduleOption;
   const catalogQueryCommand = cliCommand + ' catalog' + configOption + moduleOption + ' --query login';
   const updateCommand = cliCommand + ' update' + configOption + moduleOption;
+  const validateNameCommand = usesDefaultDirectory
+    ? cliCommand + ' validate' + moduleOption + ' -s <name>'
+    : cliCommand + ' validate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath);
   const testNameCommand = usesDefaultDirectory
     ? cliCommand + ' test' + moduleOption + ' -s <name>'
     : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath);
   const generateNameCommand = usesDefaultDirectory
     ? cliCommand + ' generate' + moduleOption + ' -s <name>'
     : cliCommand + ' generate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath) + ' --write ' + shellQuote(outputTemplatePath);
+  const validateSmokeCommand = usesDefaultDirectory
+    ? cliCommand + ' validate' + moduleOption + ' -s smoke'
+    : cliCommand + ' validate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + scenarioArg;
   const testSmokeCommand = usesDefaultDirectory
     ? cliCommand + ' test' + moduleOption + ' -s smoke'
     : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + scenarioArg;
@@ -550,6 +556,9 @@ function renderReadme(
   const testWorkflowCommand = usesDefaultDirectory
     ? cliCommand + ' test' + moduleOption + ' -s login-flow'
     : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + workflowScenarioArg;
+  const validateWorkflowCommand = usesDefaultDirectory
+    ? cliCommand + ' validate' + moduleOption + ' -s login-flow'
+    : cliCommand + ' validate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + workflowScenarioArg;
   const generateWorkflowCommand = usesDefaultDirectory
     ? cliCommand + ' generate' + moduleOption + ' -s login-flow'
     : cliCommand + ' generate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + workflowScenarioArg + ' --write ' + workflowOutputArg;
@@ -590,6 +599,9 @@ function renderReadme(
     TEST_SMOKE_COMMAND: testSmokeCommand,
     TEST_WORKFLOW_COMMAND: testWorkflowCommand,
     UPDATE_COMMAND: updateCommand,
+    VALIDATE_NAME_COMMAND: validateNameCommand,
+    VALIDATE_SMOKE_COMMAND: validateSmokeCommand,
+    VALIDATE_WORKFLOW_COMMAND: validateWorkflowCommand,
     WORKFLOW_OUTPUT_PATH: workflowOutputPath,
     WORKFLOW_SCENARIO_PATH: workflowScenarioPath,
   });

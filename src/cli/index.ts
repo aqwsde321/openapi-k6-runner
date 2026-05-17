@@ -26,6 +26,7 @@ import { syncOpenApiSnapshot } from '../openapi/openapi.catalog.js';
 import { HTTP_METHOD_ORDER, parseOpenApiFile } from '../openapi/openapi.parser.js';
 import { parseScenarioFile } from '../parser/scenario.parser.js';
 import { initLoadTests, updateLoadTests } from '../scaffold/load-test.init.js';
+import { validateScenarioAgainstOpenApi } from '../validator/scenario.validator.js';
 import { createScenarioConsoleReporter } from './test.reporter.js';
 
 type WritableLike = {
@@ -67,6 +68,13 @@ export interface GenerateOptions {
   scenario: string;
   openapi?: string;
   write?: string;
+  config?: string;
+  module?: string;
+}
+
+export interface ValidateOptions {
+  scenario: string;
+  openapi?: string;
   config?: string;
   module?: string;
 }
@@ -117,6 +125,15 @@ export interface GenerateResult {
   scenarioPath: string;
   openapiPath: string;
   baseUrl: string;
+  moduleName?: string;
+}
+
+export interface ValidateResult {
+  scenarioPath: string;
+  openapiPath: string;
+  scenarioName: string;
+  stepCount: number;
+  warnings: string[];
   moduleName?: string;
 }
 
@@ -806,6 +823,38 @@ export async function runGenerateCommand(
   return result;
 }
 
+export async function runValidateCommand(
+  options: ValidateOptions,
+  context: CliContext = {},
+): Promise<ValidateResult> {
+  const cwd = resolveCwd(context);
+  const config = await loadOptionalConfig(cwd, options.config, options.openapi === undefined);
+  const moduleConfig = selectConfigModule(config, options.module);
+  const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
+  const moduleName = moduleConfig?.name ?? '<none>';
+  const openapiPath = resolveConfiguredOpenApiInput(
+    cwd,
+    config,
+    options.openapi,
+    moduleConfig?.snapshot,
+    '--openapi is required unless --config provides modules.<name>.snapshot',
+    `modules.${moduleName}.snapshot`,
+    'validate',
+  );
+  const scenario = await parseScenarioFile(scenarioPath);
+  const registry = await parseOpenApiFile(openapiPath);
+  const validation = validateScenarioAgainstOpenApi(scenario, registry);
+
+  return {
+    scenarioPath,
+    openapiPath,
+    scenarioName: validation.scenarioName,
+    stepCount: validation.stepCount,
+    warnings: validation.warnings,
+    ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
+  };
+}
+
 export async function runSyncCommand(
   options: SyncOptions,
   context: CliContext = {},
@@ -1063,7 +1112,7 @@ function formatRunScriptCommand(cwd: string, runScriptPath: string): string {
 }
 
 function initNextCommand(
-  command: 'sync' | 'test' | 'generate',
+  command: 'sync' | 'validate' | 'test' | 'generate',
   configPath: string,
   moduleName: string | undefined,
   cwd: string,
@@ -1071,7 +1120,7 @@ function initNextCommand(
   const defaultConfigPath = path.join(cwd, DEFAULT_CONFIG_PATH);
   const parts = ['npx', '--yes', 'openapi-k6', command];
 
-  if (command === 'test' || command === 'generate') {
+  if (command === 'validate' || command === 'test' || command === 'generate') {
     parts.push('-s', 'smoke');
   }
 
@@ -1103,6 +1152,7 @@ function writeInitSummary(
   writeLine(stdout, '');
   writeLine(stdout, 'Next');
   writeLine(stdout, `  ${initNextCommand('sync', result.configPath, moduleName, cwd)}`);
+  writeLine(stdout, `  ${initNextCommand('validate', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${initNextCommand('test', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${initNextCommand('generate', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${formatRunScriptCommand(cwd, result.runScriptPath)} smoke --log`);
@@ -1120,6 +1170,27 @@ function writeUpdateSummary(
   writeLine(stdout, `  env example  ${formatDisplayPath(cwd, result.envExamplePath)}`);
   writeLine(stdout, `  gitignore    ${formatDisplayPath(cwd, result.gitignorePath)}`);
   writeLine(stdout, '  kept scenarios, snapshots, generated scripts, logs, and .env unchanged');
+}
+
+function writeValidateSummary(stdout: WritableLike, result: ValidateResult, cwd: string): void {
+  writeLine(stdout, `Validated ${formatDisplayPath(cwd, result.scenarioPath)}`);
+  writeLine(stdout, `  openapi  ${formatDisplayPath(cwd, result.openapiPath)}`);
+
+  if (result.moduleName !== undefined) {
+    writeLine(stdout, `  module   ${result.moduleName}`);
+  }
+
+  writeLine(stdout, `  scenario ${result.scenarioName}`);
+  writeLine(stdout, `  steps    ${result.stepCount}`);
+
+  if (result.warnings.length > 0) {
+    writeLine(stdout, '');
+    writeLine(stdout, 'Warnings:');
+
+    for (const warning of result.warnings) {
+      writeLine(stdout, `  - ${warning}`);
+    }
+  }
 }
 
 async function readCatalogFile(
@@ -1699,6 +1770,18 @@ export function createProgram(context: CliContext = {}): Command {
     .action(async (options: CatalogOptions) => {
       const result = await runCatalogCommand(options, context);
       writeCatalogOutput(stdout, result, resolveCwd(context), options.json);
+    });
+
+  program
+    .command('validate')
+    .description('Validate a scenario YAML against the configured OpenAPI snapshot without calling the API.')
+    .requiredOption('-s, --scenario <path-or-name>', 'Scenario DSL file path or load-tests scenario name')
+    .option('-o, --openapi <path>', 'OpenAPI spec file path')
+    .option('--config <path>', 'Load test config file path')
+    .option('-m, --module <name>', 'Module name from config')
+    .action(async (options: ValidateOptions) => {
+      const result = await runValidateCommand(options, context);
+      writeValidateSummary(stdout, result, resolveCwd(context));
     });
 
   program

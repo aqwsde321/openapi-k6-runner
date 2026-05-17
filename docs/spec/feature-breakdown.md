@@ -42,6 +42,7 @@ load-tests/
 | F-14 | 멀티모듈 OpenAPI 설정 | P1 | O |
 | F-15 | OpenAPI snapshot / catalog | P0 | O |
 | F-16 | 대상 프로젝트 init scaffold | P0 | O |
+| F-17 | Scenario 정적 검증 | P0 | O |
 
 ## 3. F-01 프로젝트/CLI 골격
 
@@ -526,3 +527,34 @@ openapi-k6 init
 - 생성된 smoke scenario의 path를 채우거나 선택한 endpoint로 바꾸면 `generate`를 실행할 수 있다.
 - `sync`와 `generate`는 남은 `TODO` 값을 발견하면 명확한 에러를 낸다.
 - `--force` 없이는 기존 파일을 덮어쓰지 않는다.
+
+## 19. F-17 Scenario 정적 검증
+
+### 책임
+
+- `openapi-k6 validate` 명령으로 Scenario YAML을 OpenAPI snapshot과 대조한다.
+- 백엔드 API를 호출하지 않고 scenario 작성 오류를 먼저 찾는다.
+- `test`와 `generate` 전에 실패할 수 있는 정적 오류를 같은 규칙으로 보고한다.
+
+### 입력
+
+```text
+openapi-k6 validate -s smoke
+```
+
+### 검증
+
+- step의 `api.operationId` 또는 `api.method + api.path`가 OpenAPI snapshot에 존재해야 한다.
+- OpenAPI path template의 `{name}`마다 `request.pathParams.<name>` 값이 있어야 한다.
+- OpenAPI에서 required로 표시한 query/header parameter가 request에 있어야 한다.
+- required request body가 있는 endpoint에는 `request.body` 또는 `request.multipart`가 있어야 한다.
+- `request.body`와 `request.multipart`는 OpenAPI requestBody content type과 맞아야 한다.
+- `condition`은 F-09 지원 범위의 status expression이어야 한다.
+- `extract.from`은 F-08 지원 범위의 JSONPath여야 한다.
+
+### 완료 기준
+
+- API 호출 없이 검증이 끝난다.
+- 검증 실패 메시지는 step id와 잘못된 필드를 포함한다.
+- 여러 step의 오류를 한 번에 모아 보고한다.
+- path template에 없는 `request.pathParams`는 실패가 아니라 warning으로 보고한다.
