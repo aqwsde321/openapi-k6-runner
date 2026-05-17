@@ -3,10 +3,27 @@ import { check, group } from 'k6';
 
 const BASE_URL = __ENV.BASE_URL || "https://api.fixture.local";
 const OPENAPI_K6_TRACE = __ENV.OPENAPI_K6_TRACE === '1';
+const OPENAPI_K6_SECRET_ENV_NAMES = ["API_TOKEN"];
 const multipartFile0_0 = open("../fixtures/product.png", 'b');
 
 function joinUrl(baseUrl, endpointPath) {
   return `${baseUrl.replace(/\/+$/, '')}/${endpointPath.replace(/^\/+/, '')}`;
+}
+
+function readSecretValues() {
+  return OPENAPI_K6_SECRET_ENV_NAMES
+    .map((name) => __ENV[name])
+    .filter((value) => value !== undefined && value !== null && String(value) !== '');
+}
+
+function maskLogValue(value) {
+  if (value === undefined || value === null) {
+    return value;
+  }
+
+  return readSecretValues()
+    .sort((left, right) => String(right).length - String(left).length)
+    .reduce((text, secret) => text.split(String(secret)).join('***'), String(value));
 }
 
 function logStepStart(metadata, url) {
@@ -20,7 +37,7 @@ function logStepStart(metadata, url) {
     step: metadata.step,
     method: metadata.method,
     path: metadata.path,
-    url,
+    url: maskLogValue(url),
   }));
 }
 
@@ -58,9 +75,9 @@ function logFailedCheck(metadata, condition, url, response) {
     path: metadata.path,
     condition,
     status: response.status,
-    url,
+    url: maskLogValue(url),
     durationMs: response.timings.duration,
-    responseBody: truncateLogValue(response.body, 2000),
+    responseBody: truncateLogValue(maskLogValue(response.body), 2000),
   }, null, 2));
 }
 

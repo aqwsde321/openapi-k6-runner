@@ -13,6 +13,7 @@ const HTTP_CALLS: Record<string, string> = {
 };
 
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+const ENV_TEMPLATE_PATTERN = /{{\s*env\.([A-Z_][A-Z0-9_]*)\s*}}/g;
 
 export interface K6GeneratorOptions {
   baseUrl?: string;
@@ -29,6 +30,7 @@ export class K6GenerationError extends Error {
 
 export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions = {}): string {
   const baseUrl = options.baseUrl?.trim();
+  const secretEnvNames = collectEnvReferenceNames(ast);
 
   if (!baseUrl) {
     throw new K6GenerationError('BASE_URL is required to generate a k6 script');
@@ -51,9 +53,12 @@ export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions =
     '',
     `const BASE_URL = __ENV.BASE_URL || ${JSON.stringify(baseUrl)};`,
     "const OPENAPI_K6_TRACE = __ENV.OPENAPI_K6_TRACE === '1';",
+    ...(secretEnvNames.length === 0
+      ? []
+      : [`const OPENAPI_K6_SECRET_ENV_NAMES = ${JSON.stringify(secretEnvNames)};`]),
     ...renderMultipartFileDeclarations(ast, options),
     '',
-    ...renderHelpers(ast),
+    ...renderHelpers(ast, secretEnvNames),
     '',
     'export default function () {',
     '  const context = {};',
@@ -67,12 +72,34 @@ export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions =
   return lines.join('\n');
 }
 
-function renderHelpers(ast: ASTScenario): string[] {
+function renderHelpers(ast: ASTScenario, secretEnvNames: string[]): string[] {
+  const hasSecretEnvReferences = secretEnvNames.length > 0;
   const helpers = [
     'function joinUrl(baseUrl, endpointPath) {',
     "  return `${baseUrl.replace(/\\/+$/, '')}/${endpointPath.replace(/^\\/+/, '')}`;",
     '}',
   ];
+
+  if (hasSecretEnvReferences) {
+    helpers.push(
+      '',
+      'function readSecretValues() {',
+      '  return OPENAPI_K6_SECRET_ENV_NAMES',
+      '    .map((name) => __ENV[name])',
+      '    .filter((value) => value !== undefined && value !== null && String(value) !== \'\');',
+      '}',
+      '',
+      'function maskLogValue(value) {',
+      '  if (value === undefined || value === null) {',
+      '    return value;',
+      '  }',
+      '',
+      '  return readSecretValues()',
+      '    .sort((left, right) => String(right).length - String(left).length)',
+      '    .reduce((text, secret) => text.split(String(secret)).join(\'***\'), String(value));',
+      '}',
+    );
+  }
 
   if (hasSteps(ast)) {
     helpers.push(
@@ -88,7 +115,7 @@ function renderHelpers(ast: ASTScenario): string[] {
       '    step: metadata.step,',
       '    method: metadata.method,',
       '    path: metadata.path,',
-      '    url,',
+      hasSecretEnvReferences ? '    url: maskLogValue(url),' : '    url,',
       '  }));',
       '}',
       '',
@@ -155,15 +182,49 @@ function renderHelpers(ast: ASTScenario): string[] {
       '    path: metadata.path,',
       '    condition,',
       '    status: response.status,',
-      '    url,',
+      hasSecretEnvReferences ? '    url: maskLogValue(url),' : '    url,',
       '    durationMs: response.timings.duration,',
-      '    responseBody: truncateLogValue(response.body, 2000),',
+      hasSecretEnvReferences
+        ? '    responseBody: truncateLogValue(maskLogValue(response.body), 2000),'
+        : '    responseBody: truncateLogValue(response.body, 2000),',
       '  }, null, 2));',
       '}',
     );
   }
 
   return helpers;
+}
+
+function collectEnvReferenceNames(ast: ASTScenario): string[] {
+  const names = new Set<string>();
+
+  for (const step of ast.steps) {
+    collectEnvReferenceNamesFromValue(step.request, names);
+  }
+
+  return [...names].sort();
+}
+
+function collectEnvReferenceNamesFromValue(value: unknown, names: Set<string>): void {
+  if (typeof value === 'string') {
+    ENV_TEMPLATE_PATTERN.lastIndex = 0;
+
+    let match: RegExpExecArray | null;
+    while ((match = ENV_TEMPLATE_PATTERN.exec(value)) !== null) {
+      names.add(match[1]);
+    }
+
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectEnvReferenceNamesFromValue(item, names));
+    return;
+  }
+
+  if (isRecord(value)) {
+    Object.values(value).forEach((item) => collectEnvReferenceNamesFromValue(item, names));
+  }
 }
 
 function renderStep(scenarioName: string, step: ASTStep, index: number): string[] {
@@ -504,6 +565,10 @@ function hasCondition(ast: ASTScenario): boolean {
 
 function hasSteps(ast: ASTScenario): boolean {
   return ast.steps.length > 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 function compileContextReference(variableName: string): string {

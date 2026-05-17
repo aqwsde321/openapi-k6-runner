@@ -330,7 +330,9 @@ describe('k6 generator', () => {
     expect(script).toContain('method: metadata.method,');
     expect(script).toContain('path: metadata.path,');
     expect(script).toContain('durationMs: response.timings.duration,');
-    expect(script).toContain('responseBody: truncateLogValue(response.body, 2000),');
+    expect(script).toContain('const OPENAPI_K6_SECRET_ENV_NAMES = ["PASSWORD"];');
+    expect(script).toContain("url: maskLogValue(url),");
+    expect(script).toContain('responseBody: truncateLogValue(maskLogValue(response.body), 2000),');
     expect(script).toContain('logFailedCheck(metadata0, "status == 200", url0, res0);');
     expect(script).not.toContain('requestBody');
     expect(script).not.toContain('requestHeaders');

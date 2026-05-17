@@ -202,6 +202,7 @@ npx --yes openapi-k6 update
 - `extract`는 응답 JSON에서 값을 읽어 다음 step의 `{{token}}` 같은 template 값으로 연결합니다.
 - `validate`는 지원하지 않는 `condition` 표현식과 `extract.from` JSONPath를 API 호출 전에 실패로 처리합니다.
 - 비밀값은 scenario YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조합니다.
+- `{{env.NAME}}`으로 참조한 값은 scenario test 출력과 생성된 k6 실패 로그에서 masking됩니다.
 - `body`와 `multipart`는 같은 step에서 함께 쓰지 않습니다.
 
 </details>
