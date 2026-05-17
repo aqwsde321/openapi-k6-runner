@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-05-17
+
 ### Added
 
 - API 호출 없이 Scenario YAML을 OpenAPI snapshot과 대조하는 `openapi-k6 validate` 명령을 추가했습니다.
@@ -110,7 +112,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.1.3...v0.2.0
