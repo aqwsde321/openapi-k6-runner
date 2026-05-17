@@ -10,6 +10,7 @@
 
 - API 호출 없이 Scenario YAML을 OpenAPI snapshot과 대조하는 `openapi-k6 validate` 명령을 추가했습니다.
 - `validate`가 지원하지 않는 `condition` 표현식과 `extract.from` JSONPath를 API 호출 전에 실패로 처리하도록 보강했습니다.
+- Scenario YAML step의 `api.module`로 여러 OpenAPI module을 하나의 scenario에서 섞어 사용할 수 있게 했습니다.
 
 ### Fixed
 

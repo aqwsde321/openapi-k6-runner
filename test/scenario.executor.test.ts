@@ -197,6 +197,47 @@ describe('scenario executor', () => {
     expect(result.steps[0].condition).toEqual({ expression: 'status == 404', passed: true });
   });
 
+  it('uses module-specific base URLs when AST steps include module names', async () => {
+    const urls: string[] = [];
+    const result = await executeAstScenario({
+      name: 'cross-module',
+      steps: [
+        {
+          id: 'login',
+          moduleName: 'auth',
+          method: 'POST',
+          path: '/login',
+          pathParameters: [],
+          request: {},
+        },
+        {
+          id: 'health',
+          moduleName: 'bos',
+          method: 'GET',
+          path: '/health',
+          pathParameters: [],
+          request: {},
+        },
+      ],
+    }, {
+      baseUrl: 'https://fallback.test.local',
+      moduleBaseUrls: {
+        auth: 'https://auth.test.local',
+        bos: 'https://bos.test.local',
+      },
+      fetch: async (input) => {
+        urls.push(String(input));
+        return jsonResponse({ ok: true }, 200, 'OK');
+      },
+    });
+
+    expect(result.passed).toBe(true);
+    expect(urls).toEqual([
+      'https://auth.test.local/login',
+      'https://bos.test.local/health',
+    ]);
+  });
+
   it('records missing context template values as step failures', async () => {
     const result = await executeAstScenario({
       name: 'missing-context',

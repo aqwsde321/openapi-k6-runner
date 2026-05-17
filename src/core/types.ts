@@ -12,6 +12,7 @@ export interface Step {
 }
 
 export interface ApiReference {
+  module?: string;
   operationId?: string;
   method?: string;
   path?: string;
@@ -81,6 +82,7 @@ export interface ASTScenario {
 
 export interface ASTStep {
   id: string;
+  moduleName?: string;
   method: string;
   path: string;
   pathParameters: unknown[];

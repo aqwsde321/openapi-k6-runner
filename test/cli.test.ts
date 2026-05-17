@@ -1239,6 +1239,52 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://server-fallback.test.local";');
   });
 
+  it('keeps --openapi precedence over config snapshots for generate and validate', async () => {
+    await writeGenerateFixtures(workspace, 'https://override-openapi.test.local');
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: TODO',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await runCli(
+      [
+        'validate',
+        '--config',
+        'load-tests/config.yaml',
+        '--openapi',
+        'openapi.yaml',
+        '--scenario',
+        'scenario.yaml',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    await runCli(
+      [
+        'generate',
+        '--config',
+        'load-tests/config.yaml',
+        '--openapi',
+        'openapi.yaml',
+        '--scenario',
+        'scenario.yaml',
+        '--write',
+        'generated/script.js',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const output = await readFile(path.join(workspace, 'generated/script.js'), 'utf8');
+
+    expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://config-base.test.local";');
+    expect(output).toContain('const url0 = joinUrl(BASE_URL, `/health`);');
+  });
+
   it('creates OpenAPI snapshot and catalog files with sync command', async () => {
     await writeGenerateFixtures(workspace);
 
@@ -2464,6 +2510,254 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://vendor-api.test.local";');
     expect(output).toContain('const url0 = joinUrl(BASE_URL, `/vendor-health`);');
     expect(output).not.toContain('/bos-health');
+  });
+
+  it('validates and generates step-level api.module scenarios with isolated registries', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('auth.openapi.yaml', '/auth-health', 'https://auth-openapi.test.local');
+    await writeModuleOpenApi('bos-api.openapi.yaml', '/bos-health', 'https://bos-openapi.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/cross.yaml'),
+      [
+        'name: cross',
+        'steps:',
+        '  - id: auth-health',
+        '    api:',
+        '      module: auth',
+        '      operationId: getHealth',
+        '  - id: bos-health',
+        '    api:',
+        '      module: bos-api',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'modules:',
+      '  auth:',
+      '    baseUrl: https://auth-api.test.local',
+      '    snapshot: openapi/auth.openapi.yaml',
+      '    catalog: openapi/auth.catalog.json',
+      '  bos-api:',
+      '    baseUrl: https://bos-api.test.local',
+      '    snapshot: openapi/bos-api.openapi.yaml',
+      '    catalog: openapi/bos-api.catalog.json',
+      '',
+    ]);
+
+    const stdout = createCapture();
+    await runCli(
+      ['validate', '--config', 'load-tests/config.yaml', '--scenario', 'cross'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    expect(stdout.output()).toContain('  modules  auth, bos-api');
+    expect(stdout.output()).toContain('    auth  load-tests/openapi/auth.openapi.yaml');
+    expect(stdout.output()).toContain('    bos-api  load-tests/openapi/bos-api.openapi.yaml');
+
+    await runCli(
+      [
+        'generate',
+        '--config',
+        'load-tests/config.yaml',
+        '--scenario',
+        'cross',
+        '--write',
+        'generated/cross.js',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const output = await readFile(path.join(workspace, 'generated/cross.js'), 'utf8');
+
+    expect(output).toContain('const BASE_URL_0 = __ENV.BASE_URL_AUTH || __ENV.BASE_URL || "https://auth-api.test.local";');
+    expect(output).toContain('const BASE_URL_1 = __ENV.BASE_URL_BOS_API || __ENV.BASE_URL || "https://bos-api.test.local";');
+    expect(output).toContain('const url0 = joinUrl(BASE_URL_0, `/auth-health`);');
+    expect(output).toContain('const url1 = joinUrl(BASE_URL_1, `/bos-health`);');
+  });
+
+  it('tests step-level api.module scenarios with module-specific BASE_URL env overrides', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('auth.openapi.yaml', '/auth-health', 'https://auth-openapi.test.local');
+    await writeModuleOpenApi('bos.openapi.yaml', '/bos-health', 'https://bos-openapi.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/cross.yaml'),
+      [
+        'name: cross',
+        'steps:',
+        '  - id: auth-health',
+        '    api:',
+        '      module: auth',
+        '      operationId: getHealth',
+        '  - id: bos-health',
+        '    api:',
+        '      module: bos',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'modules:',
+      '  auth:',
+      '    baseUrl: https://auth-api.test.local',
+      '    snapshot: openapi/auth.openapi.yaml',
+      '    catalog: openapi/auth.catalog.json',
+      '  bos:',
+      '    baseUrl: https://bos-api.test.local',
+      '    snapshot: openapi/bos.openapi.yaml',
+      '    catalog: openapi/bos.catalog.json',
+      '',
+    ]);
+    const urls: string[] = [];
+
+    await runCli(
+      ['test', '--config', 'load-tests/config.yaml', '--scenario', 'cross', '--no-color'],
+      {
+        cwd: workspace,
+        stdout: createSink(),
+        stderr: createSink(),
+        env: {
+          BASE_URL_BOS: 'https://bos-env.test.local',
+        },
+        fetch: async (input) => {
+          urls.push(String(input));
+          return new Response(JSON.stringify({ ok: true }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          });
+        },
+      },
+    );
+
+    expect(urls).toEqual([
+      'https://auth-api.test.local/auth-health',
+      'https://bos-env.test.local/bos-health',
+    ]);
+  });
+
+  it('fails clearly when step-level module base URL env names collide', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeModuleOpenApi('bos-api.openapi.yaml', '/dash-health', 'https://dash-openapi.test.local');
+    await writeModuleOpenApi('bos_api.openapi.yaml', '/underscore-health', 'https://underscore-openapi.test.local');
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/cross.yaml'),
+      [
+        'name: cross',
+        'steps:',
+        '  - id: dash-health',
+        '    api:',
+        '      module: bos-api',
+        '      operationId: getHealth',
+        '  - id: underscore-health',
+        '    api:',
+        '      module: bos_api',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'modules:',
+      '  bos-api:',
+      '    baseUrl: https://dash-api.test.local',
+      '    snapshot: openapi/bos-api.openapi.yaml',
+      '    catalog: openapi/bos-api.catalog.json',
+      '  bos_api:',
+      '    baseUrl: https://underscore-api.test.local',
+      '    snapshot: openapi/bos_api.openapi.yaml',
+      '    catalog: openapi/bos_api.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['test', '--config', 'load-tests/config.yaml', '--scenario', 'cross', '--no-color'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink(), env: {} },
+      ),
+    ).rejects.toThrow('module base URL env name collision: modules "bos-api", "bos_api" all map to BASE_URL_BOS_API');
+  });
+
+  it('fails clearly when api.module is used without config', async () => {
+    await writeGenerateFixtures(workspace);
+    await writeFile(
+      path.join(workspace, 'scenario.yaml'),
+      [
+        'name: module-without-config',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      module: auth',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(
+      runCli(
+        [
+          'generate',
+          '--openapi',
+          'openapi.yaml',
+          '--scenario',
+          'scenario.yaml',
+          '--write',
+          'generated/script.js',
+        ],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('step "health": api.module "auth" cannot be used with --openapi; use --config modules.<name>.snapshot');
+  });
+
+  it('fails clearly when step-level api.module is unknown or has no snapshot', async () => {
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/cross.yaml'),
+      [
+        'name: cross',
+        'steps:',
+        '  - id: auth-health',
+        '    api:',
+        '      module: auth',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'modules:',
+      '  bos:',
+      '    snapshot: openapi/bos.openapi.yaml',
+      '    catalog: openapi/bos.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['validate', '--config', 'load-tests/config.yaml', '--scenario', 'cross'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('step "auth-health": api.module "auth" was not found. Available modules: bos');
+
+    await writeConfig([
+      'modules:',
+      '  auth:',
+      '    snapshot: TODO',
+      '    catalog: openapi/auth.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['validate', '--config', 'load-tests/config.yaml', '--scenario', 'cross'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('step "auth-health": modules.auth.snapshot is not configured.');
   });
 
   it('fails clearly when config module is unknown', async () => {

@@ -5,10 +5,16 @@ import { compileJsonPathSegments } from '../utils/jsonpath.js';
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 const CONDITION_PATTERN = /^status\s*(==|!=|>=|<)\s*\d{3}$/;
 
+type ApiRegistrySource = ApiRegistry | Map<string, ApiRegistry>;
+
 export interface ScenarioValidationResult {
   scenarioName: string;
   stepCount: number;
   warnings: string[];
+}
+
+export interface ScenarioValidationOptions {
+  defaultModuleName?: string;
 }
 
 export class ScenarioValidationError extends Error {
@@ -26,7 +32,8 @@ export class ScenarioValidationError extends Error {
 
 export function validateScenarioAgainstOpenApi(
   scenario: Scenario,
-  registry: ApiRegistry,
+  registrySource: ApiRegistrySource,
+  options: ScenarioValidationOptions = {},
 ): ScenarioValidationResult {
   const issues: string[] = [];
   const warnings: string[] = [];
@@ -38,6 +45,7 @@ export function validateScenarioAgainstOpenApi(
     validateExtracts(step, issues);
 
     try {
+      const { registry } = resolveStepRegistry(step, registrySource, options);
       operation = resolveApiOperation(registry, step.api, step.id);
     } catch (error) {
       issues.push(error instanceof Error ? error.message : String(error));
@@ -61,6 +69,34 @@ export function validateScenarioAgainstOpenApi(
     stepCount: scenario.steps.length,
     warnings,
   };
+}
+
+function resolveStepRegistry(
+  step: Step,
+  registrySource: ApiRegistrySource,
+  options: ScenarioValidationOptions,
+): { registry: ApiRegistry; moduleName?: string } {
+  if (!(registrySource instanceof Map)) {
+    if (step.api.module !== undefined) {
+      throw new Error(`step "${step.id}": api.module requires a module registry`);
+    }
+
+    return { registry: registrySource };
+  }
+
+  const moduleName = step.api.module ?? options.defaultModuleName;
+
+  if (moduleName === undefined) {
+    throw new Error(`step "${step.id}": api.module is required because no fallback module was selected`);
+  }
+
+  const registry = registrySource.get(moduleName);
+
+  if (!registry) {
+    throw new Error(`step "${step.id}": api.module "${moduleName}" was not found`);
+  }
+
+  return { registry, moduleName };
 }
 
 function validateCondition(step: Step, issues: string[]): void {

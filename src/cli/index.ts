@@ -16,7 +16,11 @@ import {
   type LoadTestConfig,
   type LoadTestModuleConfig,
 } from '../config/load-test.config.js';
-import type { ApiCatalog, ApiCatalogOperation } from '../core/types.js';
+import {
+  createModuleBaseUrlEnvName,
+  findModuleBaseUrlEnvNameCollisions,
+} from '../core/module-env.js';
+import type { ApiCatalog, ApiCatalogOperation, ApiRegistry, Scenario } from '../core/types.js';
 import {
   executeAstScenario,
   type ScenarioExecutionReporter,
@@ -124,17 +128,21 @@ export interface GenerateResult {
   outputPath: string;
   scenarioPath: string;
   openapiPath: string;
+  openapiPaths?: Record<string, string>;
   baseUrl: string;
   moduleName?: string;
+  moduleNames?: string[];
 }
 
 export interface ValidateResult {
   scenarioPath: string;
   openapiPath: string;
+  openapiPaths?: Record<string, string>;
   scenarioName: string;
   stepCount: number;
   warnings: string[];
   moduleName?: string;
+  moduleNames?: string[];
 }
 
 export interface SyncResult {
@@ -148,7 +156,9 @@ export interface SyncResult {
 export interface TestResult extends ScenarioExecutionResult {
   scenarioPath: string;
   openapiPath: string;
+  openapiPaths?: Record<string, string>;
   moduleName?: string;
+  moduleNames?: string[];
 }
 
 export interface CatalogResult {
@@ -193,6 +203,23 @@ interface CatalogCommandContext {
   moduleName: string | undefined;
   openapi: string | undefined;
   options: CatalogOptions;
+}
+
+interface ScenarioOpenApiContext {
+  registrySource: ApiRegistry | Map<string, ApiRegistry>;
+  defaultModuleName?: string;
+  openapiPath: string;
+  openapiPaths?: Record<string, string>;
+  baseUrl?: string;
+  moduleBaseUrls?: Record<string, string>;
+  moduleName?: string;
+  moduleNames?: string[];
+}
+
+interface ScenarioModuleUse {
+  moduleName: string;
+  stepId: string;
+  explicit: boolean;
 }
 
 function resolveCwd(context: CliContext): string {
@@ -772,29 +799,271 @@ function isScenarioName(value: string): boolean {
     path.extname(value) === '';
 }
 
-export async function runGenerateCommand(
-  options: GenerateOptions,
-  context: CliContext = {},
-): Promise<GenerateResult> {
-  const cwd = resolveCwd(context);
-  const config = await loadOptionalConfig(cwd, options.config, options.openapi === undefined);
-  const moduleConfig = selectConfigModule(config, options.module);
-  const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
-  const moduleName = moduleConfig?.name ?? '<none>';
-  const openapiPath = resolveConfiguredOpenApiInput(
-    cwd,
-    config,
-    options.openapi,
-    moduleConfig?.snapshot,
-    '--openapi is required unless --config provides modules.<name>.snapshot',
-    `modules.${moduleName}.snapshot`,
-    'generate',
+function assertModuleOptionHasConfig(
+  config: LoadTestConfig | undefined,
+  moduleName: string | undefined,
+): void {
+  if (config === undefined && moduleName !== undefined) {
+    throw new Error('--module requires --config');
+  }
+}
+
+async function loadScenarioOpenApiContext(options: {
+  cwd: string;
+  config: LoadTestConfig | undefined;
+  scenario: Scenario;
+  cliOpenapi?: string;
+  cliModuleName?: string;
+  commandName: 'generate' | 'validate' | 'test';
+  requireBaseUrl: boolean;
+  runtimeEnv?: Record<string, string | undefined>;
+}): Promise<ScenarioOpenApiContext> {
+  const explicitModuleUses = collectExplicitModuleUses(options.scenario);
+
+  if (options.cliOpenapi !== undefined && explicitModuleUses.length > 0) {
+    const firstUse = explicitModuleUses[0];
+    throw new Error(
+      `step "${firstUse.stepId}": api.module "${firstUse.moduleName}" cannot be used with --openapi; use --config modules.<name>.snapshot`,
+    );
+  }
+
+  if (options.config === undefined) {
+    if (options.cliModuleName !== undefined) {
+      throw new Error('--module requires --config');
+    }
+
+    if (explicitModuleUses.length > 0) {
+      const firstUse = explicitModuleUses[0];
+      throw new Error(`step "${firstUse.stepId}": api.module "${firstUse.moduleName}" requires --config`);
+    }
+
+    const openapiPath = resolveConfiguredOpenApiInput(
+      options.cwd,
+      undefined,
+      options.cliOpenapi,
+      undefined,
+      '--openapi is required unless --config provides modules.<name>.snapshot',
+      'modules.<name>.snapshot',
+      options.commandName,
+    );
+    const registry = await parseOpenApiFile(openapiPath);
+    const baseUrl = options.requireBaseUrl
+      ? await resolveStandaloneBaseUrl(options.cwd, registry)
+      : undefined;
+
+    return {
+      registrySource: registry,
+      openapiPath,
+      ...(baseUrl === undefined ? {} : { baseUrl }),
+    };
+  }
+
+  if (options.cliOpenapi !== undefined) {
+    const moduleConfig = resolveConfigModule(options.config, options.cliModuleName);
+    const openapiPath = resolveOpenApiInput(options.cwd, options.cliOpenapi);
+    const registry = await parseOpenApiFile(openapiPath);
+    const baseUrl = options.requireBaseUrl
+      ? await resolveScenarioModuleBaseUrl({
+          cwd: options.cwd,
+          config: options.config,
+          moduleConfig,
+          registry,
+          runtimeEnv: options.runtimeEnv,
+        })
+      : undefined;
+
+    return {
+      registrySource: registry,
+      defaultModuleName: moduleConfig.name,
+      openapiPath,
+      ...(baseUrl === undefined ? {} : { baseUrl }),
+      moduleName: moduleConfig.name,
+    };
+  }
+
+  const fallbackModule = resolveFallbackModuleForScenario(
+    options.config,
+    options.cliModuleName,
+    options.scenario,
   );
-  const scenario = await parseScenarioFile(scenarioPath);
-  const registry = await parseOpenApiFile(openapiPath);
+  const moduleUses = collectRequiredModuleUses(options.scenario, fallbackModule?.name);
+  const moduleNames = [...moduleUses.keys()];
+  if (options.requireBaseUrl) {
+    assertNoModuleBaseUrlEnvNameCollisions(moduleNames);
+  }
+  const registries = new Map<string, ApiRegistry>();
+  const openapiPaths: Record<string, string> = {};
+  const moduleBaseUrls: Record<string, string> = {};
+
+  for (const moduleName of moduleNames) {
+    const moduleUse = moduleUses.get(moduleName);
+    const stepId = moduleUse?.stepId ?? '<unknown>';
+    const moduleConfig = resolveScenarioModuleConfig(options.config, moduleName, stepId);
+    const snapshotPath = resolveScenarioModuleSnapshotPath(
+      options.config,
+      moduleConfig,
+      moduleUse,
+      options.commandName,
+    );
+    const registry = await parseOpenApiFile(snapshotPath);
+
+    registries.set(moduleName, registry);
+    openapiPaths[moduleName] = snapshotPath;
+
+    if (options.requireBaseUrl) {
+      moduleBaseUrls[moduleName] = await resolveScenarioModuleBaseUrl({
+        cwd: options.cwd,
+        config: options.config,
+        moduleConfig,
+        registry,
+        runtimeEnv: options.runtimeEnv,
+      });
+    }
+  }
+
+  const firstModuleName = moduleNames[0];
+  const singleModuleName = moduleNames.length === 1 ? firstModuleName : undefined;
+
+  return {
+    registrySource: registries,
+    ...(fallbackModule === undefined ? {} : { defaultModuleName: fallbackModule.name }),
+    openapiPath: openapiPaths[firstModuleName] ?? '',
+    ...(moduleNames.length <= 1 ? {} : { openapiPaths }),
+    ...(options.requireBaseUrl ? { baseUrl: moduleBaseUrls[firstModuleName] } : {}),
+    ...(options.requireBaseUrl && moduleNames.length > 1 ? { moduleBaseUrls } : {}),
+    ...(singleModuleName === undefined ? { moduleNames } : { moduleName: singleModuleName }),
+  };
+}
+
+function collectExplicitModuleUses(scenario: Scenario): ScenarioModuleUse[] {
+  return scenario.steps.flatMap((step) =>
+    step.api.module === undefined
+      ? []
+      : [{ moduleName: step.api.module, stepId: step.id, explicit: true }]);
+}
+
+function resolveFallbackModuleForScenario(
+  config: LoadTestConfig,
+  moduleName: string | undefined,
+  scenario: Scenario,
+): LoadTestModuleConfig | undefined {
+  const hasUnqualifiedStep = scenario.steps.some((step) => step.api.module === undefined);
+
+  if (hasUnqualifiedStep || moduleName !== undefined) {
+    return resolveConfigModule(config, moduleName);
+  }
+
+  return undefined;
+}
+
+function collectRequiredModuleUses(
+  scenario: Scenario,
+  fallbackModuleName: string | undefined,
+): Map<string, ScenarioModuleUse> {
+  const uses = new Map<string, ScenarioModuleUse>();
+
+  for (const step of scenario.steps) {
+    const moduleName = step.api.module ?? fallbackModuleName;
+
+    if (moduleName === undefined) {
+      throw new Error(`step "${step.id}": api.module is required because no fallback module was selected`);
+    }
+
+    if (!uses.has(moduleName)) {
+      uses.set(moduleName, {
+        moduleName,
+        stepId: step.id,
+        explicit: step.api.module !== undefined,
+      });
+    } else if (step.api.module !== undefined) {
+      uses.set(moduleName, {
+        moduleName,
+        stepId: step.id,
+        explicit: true,
+      });
+    }
+  }
+
+  return uses;
+}
+
+function assertNoModuleBaseUrlEnvNameCollisions(moduleNames: string[]): void {
+  const [collision] = findModuleBaseUrlEnvNameCollisions(moduleNames);
+
+  if (collision !== undefined) {
+    throw new Error(
+      `module base URL env name collision: modules ${collision.moduleNames.map((name) => JSON.stringify(name)).join(', ')} all map to ${collision.envName}`,
+    );
+  }
+}
+
+function resolveScenarioModuleConfig(
+  config: LoadTestConfig,
+  moduleName: string,
+  stepId: string,
+): LoadTestModuleConfig {
+  const moduleConfig = config.modules.get(moduleName);
+
+  if (!moduleConfig) {
+    const available = [...config.modules.keys()].join(', ');
+    throw new Error(
+      `${config.path}: step "${stepId}": api.module "${moduleName}" was not found. Available modules: ${available}`,
+    );
+  }
+
+  return moduleConfig;
+}
+
+function resolveScenarioModuleSnapshotPath(
+  config: LoadTestConfig,
+  moduleConfig: LoadTestModuleConfig,
+  moduleUse: ScenarioModuleUse | undefined,
+  commandName: string,
+): string {
+  if (isConfiguredValue(moduleConfig.snapshot)) {
+    return resolveConfigFilePath(config, moduleConfig.snapshot);
+  }
+
+  if (moduleUse?.explicit !== true) {
+    throw new Error(formatMissingConfigValueError(
+      config.path,
+      `modules.${moduleConfig.name}.snapshot`,
+      commandName,
+    ));
+  }
+
+  throw new Error(formatMissingScenarioModuleSnapshotError(
+    config.path,
+    moduleConfig.name,
+    moduleUse.stepId,
+    commandName,
+  ));
+}
+
+function formatMissingScenarioModuleSnapshotError(
+  configPath: string,
+  moduleName: string,
+  stepId: string,
+  commandName: string,
+): string {
+  const configFieldLabel = `modules.${moduleName}.snapshot`;
+
+  return [
+    `${configPath}: step "${stepId}": ${configFieldLabel} is not configured.`,
+    '',
+    'Edit:',
+    `  ${configPath}`,
+    '',
+    'Set:',
+    `  ${configFieldLabel}`,
+    '',
+    'After editing:',
+    `  rerun openapi-k6 ${commandName}`,
+  ].join('\n');
+}
+
+async function resolveStandaloneBaseUrl(cwd: string, registry: ApiRegistry): Promise<string> {
   const baseUrl =
-    normalizeConfiguredValue(moduleConfig?.baseUrl) ??
-    normalizeConfiguredValue(config?.baseUrl) ??
     (await loadBaseUrl(cwd)) ??
     registry.defaultServerUrl;
 
@@ -802,19 +1071,73 @@ export async function runGenerateCommand(
     throw new Error('baseUrl is not configured and OpenAPI servers[0].url is missing.');
   }
 
-  const ast = buildAst(scenario, registry);
+  return baseUrl;
+}
+
+async function resolveScenarioModuleBaseUrl(options: {
+  cwd: string;
+  config: LoadTestConfig;
+  moduleConfig: LoadTestModuleConfig;
+  registry: ApiRegistry;
+  runtimeEnv?: Record<string, string | undefined>;
+}): Promise<string> {
+  const baseUrl = options.runtimeEnv === undefined
+    ? normalizeConfiguredValue(options.moduleConfig.baseUrl) ??
+      normalizeConfiguredValue(options.config.baseUrl) ??
+      (await loadBaseUrl(options.cwd)) ??
+      options.registry.defaultServerUrl
+    : normalizeConfiguredValue(options.runtimeEnv[createModuleBaseUrlEnvName(options.moduleConfig.name)]) ??
+      normalizeConfiguredValue(options.runtimeEnv.BASE_URL) ??
+      normalizeConfiguredValue(options.moduleConfig.baseUrl) ??
+      normalizeConfiguredValue(options.config.baseUrl) ??
+      options.registry.defaultServerUrl;
+
+  if (!baseUrl) {
+    throw new Error(
+      `baseUrl is not configured for module "${options.moduleConfig.name}" and OpenAPI servers[0].url is missing.`,
+    );
+  }
+
+  return baseUrl;
+}
+
+export async function runGenerateCommand(
+  options: GenerateOptions,
+  context: CliContext = {},
+): Promise<GenerateResult> {
+  const cwd = resolveCwd(context);
+  const config = await loadOptionalConfig(cwd, options.config, options.openapi === undefined);
+  assertModuleOptionHasConfig(config, options.module);
+  const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
+  const scenario = await parseScenarioFile(scenarioPath);
+  const openApiContext = await loadScenarioOpenApiContext({
+    cwd,
+    config,
+    scenario,
+    cliOpenapi: options.openapi,
+    cliModuleName: options.module,
+    commandName: 'generate',
+    requireBaseUrl: true,
+  });
+
+  const ast = buildAst(scenario, openApiContext.registrySource, {
+    defaultModuleName: openApiContext.defaultModuleName,
+  });
   const outputPath = resolveOutputPath(cwd, config, options.scenario, options.write);
   const script = generateK6Script(ast, {
-    baseUrl,
+    baseUrl: openApiContext.baseUrl,
+    moduleBaseUrls: openApiContext.moduleBaseUrls,
     fileRootDir: resolveLoadTestDir(cwd, config),
     outputPath,
   });
   const result: GenerateResult = {
     outputPath,
     scenarioPath,
-    openapiPath,
-    baseUrl,
-    ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
+    openapiPath: openApiContext.openapiPath,
+    ...(openApiContext.openapiPaths === undefined ? {} : { openapiPaths: openApiContext.openapiPaths }),
+    baseUrl: openApiContext.baseUrl ?? '',
+    ...(openApiContext.moduleName === undefined ? {} : { moduleName: openApiContext.moduleName }),
+    ...(openApiContext.moduleNames === undefined ? {} : { moduleNames: openApiContext.moduleNames }),
   };
 
   await fs.mkdir(path.dirname(result.outputPath), { recursive: true });
@@ -829,29 +1152,33 @@ export async function runValidateCommand(
 ): Promise<ValidateResult> {
   const cwd = resolveCwd(context);
   const config = await loadOptionalConfig(cwd, options.config, options.openapi === undefined);
-  const moduleConfig = selectConfigModule(config, options.module);
+  assertModuleOptionHasConfig(config, options.module);
   const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
-  const moduleName = moduleConfig?.name ?? '<none>';
-  const openapiPath = resolveConfiguredOpenApiInput(
+  const scenario = await parseScenarioFile(scenarioPath);
+  const openApiContext = await loadScenarioOpenApiContext({
     cwd,
     config,
-    options.openapi,
-    moduleConfig?.snapshot,
-    '--openapi is required unless --config provides modules.<name>.snapshot',
-    `modules.${moduleName}.snapshot`,
-    'validate',
+    scenario,
+    cliOpenapi: options.openapi,
+    cliModuleName: options.module,
+    commandName: 'validate',
+    requireBaseUrl: false,
+  });
+  const validation = validateScenarioAgainstOpenApi(
+    scenario,
+    openApiContext.registrySource,
+    { defaultModuleName: openApiContext.defaultModuleName },
   );
-  const scenario = await parseScenarioFile(scenarioPath);
-  const registry = await parseOpenApiFile(openapiPath);
-  const validation = validateScenarioAgainstOpenApi(scenario, registry);
 
   return {
     scenarioPath,
-    openapiPath,
+    openapiPath: openApiContext.openapiPath,
+    ...(openApiContext.openapiPaths === undefined ? {} : { openapiPaths: openApiContext.openapiPaths }),
     scenarioName: validation.scenarioName,
     stepCount: validation.stepCount,
     warnings: validation.warnings,
-    ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
+    ...(openApiContext.moduleName === undefined ? {} : { moduleName: openApiContext.moduleName }),
+    ...(openApiContext.moduleNames === undefined ? {} : { moduleNames: openApiContext.moduleNames }),
   };
 }
 
@@ -958,39 +1285,30 @@ export async function runTestCommand(
 ): Promise<TestResult> {
   const cwd = resolveCwd(context);
   const config = await loadOptionalConfig(cwd, options.config, true);
-  const moduleConfig = selectConfigModule(config, options.module);
   const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
-  const moduleName = moduleConfig?.name ?? '<none>';
-  const openapiPath = resolveConfiguredOpenApiInput(
-    cwd,
-    config,
-    undefined,
-    moduleConfig?.snapshot,
-    'modules.<name>.snapshot is required to run test',
-    `modules.${moduleName}.snapshot`,
-    'test',
-  );
   const scenario = await parseScenarioFile(scenarioPath);
-  const registry = await parseOpenApiFile(openapiPath);
   const loadTestDir = resolveLoadTestDir(cwd, config);
   const loadTestEnv = await loadLoadTestEnv(loadTestDir);
   const runtimeEnv = {
     ...loadTestEnv,
     ...(context.env ?? process.env),
   };
-  const baseUrl =
-    normalizeConfiguredValue(runtimeEnv.BASE_URL) ??
-    normalizeConfiguredValue(moduleConfig?.baseUrl) ??
-    normalizeConfiguredValue(config?.baseUrl) ??
-    registry.defaultServerUrl;
+  const openApiContext = await loadScenarioOpenApiContext({
+    cwd,
+    config,
+    scenario,
+    cliModuleName: options.module,
+    commandName: 'test',
+    requireBaseUrl: true,
+    runtimeEnv,
+  });
 
-  if (!baseUrl) {
-    throw new Error('baseUrl is not configured and OpenAPI servers[0].url is missing.');
-  }
-
-  const ast = buildAst(scenario, registry);
+  const ast = buildAst(scenario, openApiContext.registrySource, {
+    defaultModuleName: openApiContext.defaultModuleName,
+  });
   const result = await executeAstScenario(ast, {
-    baseUrl,
+    baseUrl: openApiContext.baseUrl ?? '',
+    moduleBaseUrls: openApiContext.moduleBaseUrls,
     fileRootDir: loadTestDir,
     env: runtimeEnv,
     fetch: context.fetch,
@@ -1000,8 +1318,10 @@ export async function runTestCommand(
   return {
     ...result,
     scenarioPath,
-    openapiPath,
-    ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
+    openapiPath: openApiContext.openapiPath,
+    ...(openApiContext.openapiPaths === undefined ? {} : { openapiPaths: openApiContext.openapiPaths }),
+    ...(openApiContext.moduleName === undefined ? {} : { moduleName: openApiContext.moduleName }),
+    ...(openApiContext.moduleNames === undefined ? {} : { moduleNames: openApiContext.moduleNames }),
   };
 }
 
@@ -1174,10 +1494,21 @@ function writeUpdateSummary(
 
 function writeValidateSummary(stdout: WritableLike, result: ValidateResult, cwd: string): void {
   writeLine(stdout, `Validated ${formatDisplayPath(cwd, result.scenarioPath)}`);
-  writeLine(stdout, `  openapi  ${formatDisplayPath(cwd, result.openapiPath)}`);
+
+  if (result.openapiPaths !== undefined) {
+    writeLine(stdout, '  openapi');
+
+    for (const [moduleName, openapiPath] of Object.entries(result.openapiPaths)) {
+      writeLine(stdout, `    ${moduleName}  ${formatDisplayPath(cwd, openapiPath)}`);
+    }
+  } else {
+    writeLine(stdout, `  openapi  ${formatDisplayPath(cwd, result.openapiPath)}`);
+  }
 
   if (result.moduleName !== undefined) {
     writeLine(stdout, `  module   ${result.moduleName}`);
+  } else if (result.moduleNames !== undefined) {
+    writeLine(stdout, `  modules  ${result.moduleNames.join(', ')}`);
   }
 
   writeLine(stdout, `  scenario ${result.scenarioName}`);

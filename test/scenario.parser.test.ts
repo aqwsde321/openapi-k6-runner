@@ -103,6 +103,23 @@ describe('scenario parser', () => {
     });
   });
 
+  it('parses api.module on step API references', () => {
+    const scenario = parseScenarioSource([
+      'name: cross-module',
+      'steps:',
+      '  - id: login',
+      '    api:',
+      '      module: auth',
+      '      operationId: loginUser',
+      '',
+    ].join('\n'));
+
+    expect(scenario.steps[0]?.api).toEqual({
+      module: 'auth',
+      operationId: 'loginUser',
+    });
+  });
+
   it('parses multipart request fields and files', () => {
     const scenario = parseScenarioSource([
       'name: upload-product-image',
@@ -191,6 +208,32 @@ describe('scenario parser', () => {
     ).toThrowError(
       '<inline>: steps[0].api: api must include operationId or both method and path',
     );
+  });
+
+  it('fails when api.module is invalid', () => {
+    expect(() =>
+      parseScenarioSource([
+        'name: invalid-module',
+        'steps:',
+        '  - id: login',
+        '    api:',
+        '      module: "   "',
+        '      operationId: loginUser',
+        '',
+      ].join('\n')),
+    ).toThrowError('<inline>: steps[0].api.module must not be empty');
+
+    expect(() =>
+      parseScenarioSource([
+        'name: invalid-module',
+        'steps:',
+        '  - id: login',
+        '    api:',
+        '      module: 123',
+        '      operationId: loginUser',
+        '',
+      ].join('\n')),
+    ).toThrowError('<inline>: steps[0].api.module must be a string');
   });
 
   it('omits blank optional api fields before resolver sees them', () => {

@@ -384,7 +384,7 @@ MVP에서 condition은 흐름 분기 조건이 아니라 check/assertion이다. 
 
 ### MVP 상태
 
-P-09에서 구현된 MVP 기능이다. module 선택은 CLI의 `--module`로 수행하며, Scenario DSL 내부 `api.module`은 아직 지원하지 않는다.
+P-09에서 CLI `--module` 기반 선택을 구현했고, 이후 Scenario DSL 내부 `api.module`으로 step별 module 선택을 지원한다. `api.module`이 없는 step은 기존처럼 CLI `--module`, `defaultModule`, 단일 module 추론 순서로 module을 선택한다.
 
 ### 설정
 
@@ -410,14 +410,33 @@ defaultModule: bos
 modules:
   bos:
     openapi: https://api.example.com/bos/v3/api-docs
+    baseUrl: https://bos-api.example.com
     snapshot: openapi/bos.openapi.json
     catalog: openapi/bos.catalog.json
 
   mall:
     openapi: https://api.example.com/mall/v3/api-docs
+    baseUrl: https://mall-api.example.com
     snapshot: openapi/mall.openapi.json
     catalog: openapi/mall.catalog.json
 ```
+
+step별 module 선택:
+
+```yaml
+steps:
+  - id: login
+    api:
+      module: auth
+      operationId: loginUser
+
+  - id: create-order
+    api:
+      module: bos
+      operationId: createOrder
+```
+
+multi-module generated k6/test의 base URL 우선순위는 `BASE_URL_<MODULE>`, `BASE_URL`, `modules.<name>.baseUrl`, root `baseUrl`, OpenAPI `servers[0].url` 순서다. module env 이름은 module 이름을 대문자로 바꾸고 비영숫자를 `_`로 치환한다.
 
 ### CLI 방향
 
@@ -428,7 +447,7 @@ openapi-k6 generate -s smoke
 
 기본 흐름은 `load-tests/config.yaml`과 `defaultModule`을 사용한다. 기본 경로가 아니거나 특정 module을 지정해야 할 때만 `--config`, `--module`을 명시한다.
 
-### DSL 확장 방향
+### DSL 사용
 
 ```yaml
 steps:

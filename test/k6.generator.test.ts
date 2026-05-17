@@ -150,6 +150,75 @@ describe('k6 generator', () => {
     await expectValidJavaScript(workspace, script);
   });
 
+  it('generates module-specific base URL env fallbacks for multi-module scenarios', async () => {
+    const script = generateK6Script({
+      name: 'cross-module',
+      steps: [
+        {
+          id: 'login',
+          moduleName: 'auth',
+          method: 'POST',
+          path: '/login',
+          pathParameters: [],
+          request: {},
+        },
+        {
+          id: 'create-order',
+          moduleName: 'bos-api',
+          method: 'POST',
+          path: '/orders',
+          pathParameters: [],
+          request: {},
+        },
+      ],
+    }, {
+      baseUrl: 'https://fallback.test.local',
+      moduleBaseUrls: {
+        auth: 'https://auth.test.local',
+        'bos-api': 'https://bos.test.local',
+      },
+    });
+
+    expect(script).toContain('const BASE_URL_0 = __ENV.BASE_URL_AUTH || __ENV.BASE_URL || "https://auth.test.local";');
+    expect(script).toContain('const BASE_URL_1 = __ENV.BASE_URL_BOS_API || __ENV.BASE_URL || "https://bos.test.local";');
+    expect(script).toContain('const url0 = joinUrl(BASE_URL_0, `/login`);');
+    expect(script).toContain('const url1 = joinUrl(BASE_URL_1, `/orders`);');
+    await expectValidJavaScript(workspace, script);
+  });
+
+  it('rejects multi-module base URL env name collisions', () => {
+    expect(() =>
+      generateK6Script({
+        name: 'colliding-modules',
+        steps: [
+          {
+            id: 'dash',
+            moduleName: 'bos-api',
+            method: 'GET',
+            path: '/dash',
+            pathParameters: [],
+            request: {},
+          },
+          {
+            id: 'underscore',
+            moduleName: 'bos_api',
+            method: 'GET',
+            path: '/underscore',
+            pathParameters: [],
+            request: {},
+          },
+        ],
+      }, {
+        moduleBaseUrls: {
+          'bos-api': 'https://dash.test.local',
+          bos_api: 'https://underscore.test.local',
+        },
+      }),
+    ).toThrowError(
+      new K6GenerationError('module base URL env name collision: modules "bos-api", "bos_api" all map to BASE_URL_BOS_API'),
+    );
+  });
+
   it('compiles template values recursively without replacing missing values with empty strings', () => {
     expect(compileValueExpression('{{token}}')).toBe('context.token');
     expect(compileValueExpression('{{env.API_TOKEN}}')).toBe('__ENV.API_TOKEN');

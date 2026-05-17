@@ -143,6 +143,23 @@ modules:
 - `snapshot`: `sync`가 저장하고 `generate`가 읽을 OpenAPI snapshot
 - `catalog`: scenario 작성 시 참고할 endpoint 목록
 
+여러 module을 하나의 scenario에서 섞어야 하면 step마다 `api.module`을 지정합니다.
+
+```yaml
+steps:
+  - id: login
+    api:
+      module: auth
+      operationId: loginUser
+
+  - id: create-order
+    api:
+      module: bos
+      operationId: createOrder
+```
+
+`api.module`이 없는 step은 기존처럼 `--module`, `defaultModule`, 단일 module 추론 순서로 module을 선택합니다.
+
 외부 파일이나 URL을 가리키는 `$ref`는 snapshot 내부 참조로 묶어 저장하므로, 이후 `generate`는 원격 원본 없이 snapshot 파일만으로 실행할 수 있습니다.
 
 ## 2. OpenAPI -> Scenario Validate -> Scenario Test -> k6 흐름
@@ -312,6 +329,7 @@ __RUN_SMOKE_TRACE_REPORT_COMMAND__
 API base URL은 `__CLI_COMMAND__ generate` 실행 시점의 `config.yaml` `baseUrl` 값이 생성된 k6 스크립트에 기본값으로 들어갑니다.
 `config.yaml`을 수정한 뒤에는 스크립트를 다시 생성해야 반영됩니다.
 실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.
+multi-module scenario는 `BASE_URL_<MODULE>` 환경 변수를 먼저 읽습니다. 예를 들어 `auth`는 `BASE_URL_AUTH`, `bos-api`는 `BASE_URL_BOS_API`를 사용하고, 없으면 기존 `BASE_URL`과 config 기본값을 순서대로 사용합니다.
 
 ```bash
 __BASE_URL_RUN_COMMAND__
@@ -477,6 +495,7 @@ This section is for AI agents. Use it as a compact checklist after reading the K
 
 - Use `__CATALOG_QUERY_COMMAND__` or read `__CATALOG_PATH__` to pick endpoints; `validate`, `test`, and `generate` read the OpenAPI snapshot, not the catalog.
 - Prefer `api.operationId`; use `api.method` and `api.path` when operationId is missing or unclear.
+- Use `api.module` only when a scenario crosses multiple configured OpenAPI modules; it requires `config.yaml` module snapshots.
 - Use `extract` for response values and reference them later as `{{variableName}}`; use `{{env.NAME}}` for runtime secrets.
 - Put auth tokens under `request.headers`.
 - Do not use `request.body` and `request.multipart` in the same step.

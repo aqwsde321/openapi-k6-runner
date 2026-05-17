@@ -128,6 +128,26 @@ steps:
     condition: status == 200
 ```
 
+여러 OpenAPI module을 하나의 흐름에서 섞어야 하면 step의 `api.module`을 지정합니다. 지정하지 않은 step은 기존처럼 `--module`, `defaultModule`, 단일 module 추론 순서로 module을 선택합니다.
+
+```yaml
+steps:
+  - id: login
+    api:
+      module: auth
+      operationId: loginUser
+
+  - id: create-order
+    api:
+      module: bos
+      operationId: createOrder
+    request:
+      headers:
+        Authorization: "Bearer {{token}}"
+```
+
+생성된 k6 스크립트에서 multi-module scenario는 `BASE_URL_AUTH`, `BASE_URL_BOS`처럼 module별 환경변수를 먼저 읽고, 없으면 기존 `BASE_URL`과 config 기본값을 순서대로 사용합니다.
+
 `openapi-k6 test`는 이 YAML을 먼저 실행하고, 실패한 step과 검증식을 출력합니다.
 
 ```text
@@ -200,6 +220,7 @@ npx --yes openapi-k6 update
 - OpenAPI 3.x 문서를 대상으로 합니다. Swagger/OpenAPI 2.0 문서는 지원하지 않습니다.
 - `condition`은 분기가 아니라 검증식입니다. k6에서는 `check`로 생성되며 다음 step 실행을 막지 않습니다.
 - `extract`는 응답 JSON에서 값을 읽어 다음 step의 `{{token}}` 같은 template 값으로 연결하며, 생성된 k6에서는 추출 실패를 `check` 실패로 표시합니다.
+- `api.module`은 여러 OpenAPI module을 하나의 scenario에서 섞어 쓸 때 사용합니다. `--openapi` 단독 실행에서는 지원하지 않고 config의 `modules.<name>.snapshot`이 필요합니다.
 - `validate`는 지원하지 않는 `condition` 표현식과 `extract.from` JSONPath를 API 호출 전에 실패로 처리합니다.
 - 비밀값은 scenario YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조합니다.
 - `{{env.NAME}}`으로 참조한 값은 scenario test 출력과 생성된 k6 실패 로그에서 masking됩니다.
