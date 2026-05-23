@@ -151,7 +151,10 @@ modules:
 __CLI_COMMAND__ module add auth --openapi https://api.example.com/auth/v3/api-docs --base-url https://auth-api.example.com --sync
 __CLI_COMMAND__ module list
 __CLI_COMMAND__ module set-default auth
+__CLI_COMMAND__ module remove auth
 ```
+
+`module remove`는 config 항목만 제거하고 snapshot/catalog 파일은 삭제하지 않습니다. 현재 `defaultModule`이거나 scenario에서 참조 중인 module은 기본적으로 삭제를 막고, 의도한 경우에만 `--force`로 제거합니다.
 
 ```yaml
 steps:
@@ -486,6 +489,7 @@ __GENERATE_WORKFLOW_COMMAND__
 - 대상 API 변경: `config.yaml`의 `baseUrl`, `modules.<name>.openapi` 수정 후 `__CLI_COMMAND__ sync`와 `__CLI_COMMAND__ generate` 재실행
 - module 추가: `__CLI_COMMAND__ module add <name> --openapi <url-or-path> --sync`
 - 기본 module 변경: `__CLI_COMMAND__ module set-default <name>`
+- module 제거: `__CLI_COMMAND__ module remove <name>`
 
 ## 5. 제거 방법
 

@@ -144,7 +144,10 @@ steps:
 npx --yes openapi-k6 module add auth --openapi https://api.example.com/auth/v3/api-docs --base-url https://auth-api.example.com --sync
 npx --yes openapi-k6 module list
 npx --yes openapi-k6 module set-default auth
+npx --yes openapi-k6 module remove auth
 ```
+
+`module remove`는 config 항목만 제거하고 snapshot/catalog 파일은 삭제하지 않습니다. 현재 `defaultModule`이거나 scenario에서 참조 중인 module은 기본적으로 삭제를 막고, 의도한 경우에만 `--force`로 제거합니다.
 
 ```yaml
 steps:
@@ -269,6 +272,7 @@ pnpm exec openapi-k6 --help
 | OpenAPI module 추가 | `npx --yes openapi-k6 module add auth --openapi <url> --sync` |
 | OpenAPI module 목록 확인 | `npx --yes openapi-k6 module list` |
 | 기본 OpenAPI module 변경 | `npx --yes openapi-k6 module set-default auth` |
+| OpenAPI module 제거 | `npx --yes openapi-k6 module remove auth` |
 | scenario용 endpoint 검색 | `npx --yes openapi-k6 catalog --query login` |
 | scenario 정적 검증 | `npx --yes openapi-k6 validate -s <name>` |
 | scenario 실행 검증 | `npx --yes openapi-k6 test -s <name>` |

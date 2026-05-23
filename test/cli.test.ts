@@ -1963,6 +1963,127 @@ describe('openapi-k6 CLI', () => {
     ).rejects.toThrow('load-tests/config.yaml was not found. Run openapi-k6 init or pass --config.');
   });
 
+  it('removes non-default modules from config without deleting generated files', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://app.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '  vendor:',
+      '    openapi: https://vendor.test.local/v3/api-docs',
+      '    snapshot: openapi/vendor.openapi.json',
+      '    catalog: openapi/vendor.catalog.json',
+      '',
+    ]);
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await writeFile(path.join(workspace, 'load-tests/openapi/vendor.openapi.json'), '{}', 'utf8');
+    await writeFile(path.join(workspace, 'load-tests/openapi/vendor.catalog.json'), '{}', 'utf8');
+    const stdout = createCapture();
+
+    await runCli(
+      ['module', 'remove', 'vendor'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(stdout.output()).toContain('Module vendor removed from load-tests/config.yaml');
+    expect(config).toContain('defaultModule: app');
+    expect(config).not.toContain('  vendor:');
+    await expect(stat(path.join(workspace, 'load-tests/openapi/vendor.openapi.json'))).resolves.toBeTruthy();
+    await expect(stat(path.join(workspace, 'load-tests/openapi/vendor.catalog.json'))).resolves.toBeTruthy();
+  });
+
+  it('guards module remove for default, last, and referenced modules', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://app.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '  bos:',
+      '    openapi: https://bos.test.local/v3/api-docs',
+      '    snapshot: openapi/bos.openapi.json',
+      '    catalog: openapi/bos.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['module', 'remove', 'app'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('module "app" is defaultModule. Use --force to remove it.');
+
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://app.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['module', 'remove', 'app', '--force'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('cannot remove the last module "app".');
+
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://app.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '  bos:',
+      '    openapi: https://bos.test.local/v3/api-docs',
+      '    snapshot: openapi/bos.openapi.json',
+      '    catalog: openapi/bos.catalog.json',
+      '',
+    ]);
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/cross.yaml'),
+      [
+        'name: cross',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      module: bos',
+        '      operationId: createOrder',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(
+      runCli(
+        ['module', 'remove', 'bos'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('module "bos" is referenced by scenarios.');
+
+    const stdout = createCapture();
+
+    await runCli(
+      ['module', 'remove', 'bos', '--force'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(stdout.output()).toContain('Forced removal; scenario references still exist:');
+    expect(stdout.output()).toContain('load-tests/scenarios/cross.yaml step "create-order"');
+    expect(config).not.toContain('  bos:');
+  });
+
   it('explains how to create the catalog when the configured catalog file is missing', async () => {
     await writeConfig([
       'defaultModule: app',

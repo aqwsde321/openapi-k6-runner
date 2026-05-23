@@ -393,7 +393,10 @@ P-09에서 CLI `--module` 기반 선택을 구현했고, 이후 Scenario DSL 내
 openapi-k6 module add auth --openapi https://api.example.com/auth/v3/api-docs --sync
 openapi-k6 module list
 openapi-k6 module set-default auth
+openapi-k6 module remove auth
 ```
+
+`module remove`는 config 항목만 제거하고 snapshot/catalog 파일은 삭제하지 않는다. 마지막 module 삭제는 실패하며, `defaultModule` 또는 scenario 참조가 남은 module은 `--force` 없이는 제거하지 않는다.
 
 ### 설정
 

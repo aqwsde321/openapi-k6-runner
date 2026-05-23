@@ -2,7 +2,7 @@
 import { Command, CommanderError } from 'commander';
 import { parse as parseDotEnv } from 'dotenv';
 import { spawn } from 'node:child_process';
-import { createWriteStream, realpathSync, type WriteStream } from 'node:fs';
+import { createWriteStream, realpathSync, type Dirent, type WriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
@@ -144,6 +144,12 @@ export interface ModuleSetDefaultOptions {
   config?: string;
 }
 
+export interface ModuleRemoveOptions {
+  name: string;
+  config?: string;
+  force?: boolean;
+}
+
 export interface InitOptions {
   dir?: string;
   module?: string;
@@ -257,6 +263,14 @@ export interface ModuleSetDefaultResult {
   defaultModule: string;
 }
 
+export interface ModuleRemoveResult {
+  configPath: string;
+  moduleName: string;
+  removedDefault: boolean;
+  defaultModule?: string;
+  references: ModuleScenarioReference[];
+}
+
 export interface InitResult {
   directoryPath: string;
   configPath: string;
@@ -304,6 +318,11 @@ interface ScenarioModuleUse {
   moduleName: string;
   stepId: string;
   explicit: boolean;
+}
+
+interface ModuleScenarioReference {
+  scenarioPath: string;
+  stepId: string;
 }
 
 interface K6RunResult {
@@ -1046,6 +1065,28 @@ async function writeDefaultModuleConfig(config: LoadTestConfig, moduleName: stri
   });
 }
 
+async function removeModuleConfigEntry(
+  config: LoadTestConfig,
+  moduleName: string,
+  defaultModule: string | undefined,
+): Promise<void> {
+  await updateConfigDocument(config.path, (_document, root) => {
+    const modules = root.get('modules', true);
+
+    if (!isMap(modules)) {
+      throw new Error(`${config.path}: modules must be an object`);
+    }
+
+    modules.delete(moduleName);
+
+    if (defaultModule === undefined) {
+      root.delete('defaultModule');
+    } else {
+      root.set('defaultModule', defaultModule);
+    }
+  });
+}
+
 async function updateConfigDocument(
   configPath: string,
   update: (
@@ -1082,6 +1123,74 @@ function parseConfigDocumentRoot(
 
 function ensureTrailingNewline(value: string): string {
   return value.endsWith('\n') ? value : `${value}\n`;
+}
+
+function resolveDefaultAfterModuleRemoval(
+  config: LoadTestConfig,
+  moduleName: string,
+): string | undefined {
+  if (config.defaultModule !== moduleName) {
+    return config.defaultModule;
+  }
+
+  const remainingModules = [...config.modules.keys()].filter((name) => name !== moduleName);
+  return remainingModules.length === 1 ? remainingModules[0] : undefined;
+}
+
+async function findScenarioModuleReferences(
+  config: LoadTestConfig,
+  moduleName: string,
+): Promise<ModuleScenarioReference[]> {
+  const scenarioDir = path.join(config.dir, 'scenarios');
+  const scenarioFiles = await listScenarioFiles(scenarioDir);
+  const references: ModuleScenarioReference[] = [];
+
+  for (const scenarioPath of scenarioFiles) {
+    const scenario = await parseScenarioFile(scenarioPath);
+
+    for (const step of scenario.steps) {
+      if (step.api.module === moduleName) {
+        references.push({
+          scenarioPath,
+          stepId: step.id,
+        });
+      }
+    }
+  }
+
+  return references;
+}
+
+async function listScenarioFiles(directoryPath: string): Promise<string[]> {
+  let entries: Dirent[];
+
+  try {
+    entries = await fs.readdir(directoryPath, { withFileTypes: true });
+  } catch (error) {
+    if (isNodeErrorCode(error, 'ENOENT')) {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const entryPath = path.join(directoryPath, entry.name);
+
+    if (entry.isDirectory()) {
+      files.push(...await listScenarioFiles(entryPath));
+    } else if (entry.isFile() && isScenarioFile(entry.name)) {
+      files.push(entryPath);
+    }
+  }
+
+  return files.sort((left, right) => left.localeCompare(right));
+}
+
+function isScenarioFile(fileName: string): boolean {
+  return ['.yaml', '.yml', '.json'].includes(path.extname(fileName).toLowerCase());
 }
 
 function assertModuleOptionHasConfig(
@@ -1747,6 +1856,47 @@ export async function runModuleSetDefaultCommand(
   return {
     configPath: config.path,
     defaultModule: moduleName,
+  };
+}
+
+export async function runModuleRemoveCommand(
+  options: ModuleRemoveOptions,
+  context: CliContext = {},
+): Promise<ModuleRemoveResult> {
+  const cwd = resolveCwd(context);
+  const config = await loadRequiredConfigForModuleCommand(cwd, options.config);
+  const moduleName = normalizeModuleNameInput(options.name);
+
+  if (!config.modules.has(moduleName)) {
+    const available = [...config.modules.keys()].join(', ');
+    throw new Error(`${config.path}: module "${moduleName}" was not found. Available modules: ${available}`);
+  }
+
+  if (config.modules.size === 1) {
+    throw new Error(`${config.path}: cannot remove the last module "${moduleName}".`);
+  }
+
+  const removedDefault = config.defaultModule === moduleName;
+
+  if (removedDefault && options.force !== true) {
+    throw new Error(`${config.path}: module "${moduleName}" is defaultModule. Use --force to remove it.`);
+  }
+
+  const references = await findScenarioModuleReferences(config, moduleName);
+
+  if (references.length > 0 && options.force !== true) {
+    throw new Error(formatModuleScenarioReferenceError(cwd, moduleName, references));
+  }
+
+  const defaultModule = resolveDefaultAfterModuleRemoval(config, moduleName);
+  await removeModuleConfigEntry(config, moduleName, defaultModule);
+
+  return {
+    configPath: config.path,
+    moduleName,
+    removedDefault,
+    ...(defaultModule === undefined ? {} : { defaultModule }),
+    references,
   };
 }
 
@@ -2637,6 +2787,38 @@ function writeModuleSetDefaultSummary(
   writeLine(stdout, `Default module set to ${result.defaultModule} in ${formatDisplayPath(cwd, result.configPath)}`);
 }
 
+function writeModuleRemoveSummary(stdout: WritableLike, result: ModuleRemoveResult, cwd: string): void {
+  writeLine(stdout, `Module ${result.moduleName} removed from ${formatDisplayPath(cwd, result.configPath)}`);
+
+  if (result.removedDefault) {
+    writeLine(stdout, `  default   ${result.defaultModule ?? '(none)'}`);
+  }
+
+  if (result.references.length > 0) {
+    writeLine(stdout, '');
+    writeLine(stdout, 'Forced removal; scenario references still exist:');
+
+    for (const reference of result.references) {
+      writeLine(stdout, `  ${formatDisplayPath(cwd, reference.scenarioPath)} step "${reference.stepId}"`);
+    }
+  }
+}
+
+function formatModuleScenarioReferenceError(
+  cwd: string,
+  moduleName: string,
+  references: ModuleScenarioReference[],
+): string {
+  return [
+    `module "${moduleName}" is referenced by scenarios.`,
+    '',
+    ...references.map((reference) =>
+      `  ${formatDisplayPath(cwd, reference.scenarioPath)} step "${reference.stepId}"`),
+    '',
+    'Use --force to remove the config entry anyway.',
+  ].join('\n');
+}
+
 function formatModuleCommand(
   command: 'sync',
   configPath: string,
@@ -2901,6 +3083,17 @@ export function createProgram(context: CliContext = {}): Command {
     .action(async (name: string, options: Omit<ModuleSetDefaultOptions, 'name'>) => {
       const result = await runModuleSetDefaultCommand({ ...options, name }, context);
       writeModuleSetDefaultSummary(stdout, result, resolveCwd(context));
+    });
+
+  moduleCommand
+    .command('remove')
+    .description('Remove an OpenAPI module from config without deleting snapshot or catalog files.')
+    .argument('<name>', 'Module name')
+    .option('--config <path>', 'Load test config file path')
+    .option('--force', 'Remove even if the module is defaultModule or referenced by scenarios')
+    .action(async (name: string, options: Omit<ModuleRemoveOptions, 'name'>) => {
+      const result = await runModuleRemoveCommand({ ...options, name }, context);
+      writeModuleRemoveSummary(stdout, result, resolveCwd(context));
     });
 
   program
