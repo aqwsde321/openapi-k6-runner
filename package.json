@@ -38,6 +38,7 @@
     "build:watch": "pnpm run build:assets && tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "test": "vitest run",
     "test:compat": "node scripts/backward-compat-smoke.mjs",
+    "smoke:e2e": "node scripts/e2e-local-backend-smoke.mjs",
     "smoke:published": "node scripts/published-smoke.mjs",
     "typecheck": "tsc --noEmit"
   },

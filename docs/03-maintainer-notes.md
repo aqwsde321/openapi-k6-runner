@@ -88,8 +88,11 @@ pnpm run build:watch
 pnpm test
 pnpm run typecheck
 pnpm run build
+pnpm run smoke:e2e
 npm pack --dry-run
 ```
+
+`smoke:e2e`는 빌드된 `dist/cli/index.js`를 실제 로컬 fixture 백엔드에 붙여 `init -> module add --base-url --sync -> module list -> validate -> test -> generate -> run` 흐름을 확인합니다. 실제 k6 설치는 요구하지 않고, smoke 내부 fake k6로 `run` orchestration과 로그/리포트 환경값만 검증합니다.
 
 로컬 npm 캐시 권한 문제로 `npm pack --dry-run`이 실패하면 임시 캐시를 지정해 패키지 내용을 확인할 수 있습니다.
 
