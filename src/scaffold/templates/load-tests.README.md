@@ -148,11 +148,13 @@ modules:
 새 module은 `config.yaml`을 직접 편집하지 않고 CLI로 추가할 수 있습니다.
 
 ```bash
-__CLI_COMMAND__ module add auth --openapi https://api.example.com/auth/v3/api-docs --base-url https://auth-api.example.com --sync
+__CLI_COMMAND__ module add auth --base-url https://auth-api.example.com --sync
 __CLI_COMMAND__ module list
 __CLI_COMMAND__ module set-default auth
 __CLI_COMMAND__ module remove auth
 ```
+
+`--openapi`를 생략하면 `--base-url` 기준으로 `/v3/api-docs`, `/api-docs`, `/openapi.json` 같은 흔한 경로를 자동 탐색합니다. 사내 Swagger 경로가 다르면 `--openapi <url-or-path>`를 명시하면 됩니다.
 
 `module remove`는 config 항목만 제거하고 snapshot/catalog 파일은 삭제하지 않습니다. 현재 `defaultModule`이거나 scenario에서 참조 중인 module은 기본적으로 삭제를 막고, 의도한 경우에만 `--force`로 제거합니다.
 
@@ -495,7 +497,7 @@ __GENERATE_WORKFLOW_COMMAND__
 - endpoint 변경: `scenarios/smoke.yaml`의 `api.path`
 - header/body/query/multipart 추가: `scenarios/*.yaml`의 `request`
 - 대상 API 변경: `config.yaml`의 `baseUrl`, `modules.<name>.openapi` 수정 후 `__CLI_COMMAND__ sync`와 `__CLI_COMMAND__ generate` 재실행
-- module 추가: `__CLI_COMMAND__ module add <name> --openapi <url-or-path> --sync`
+- module 추가: `__CLI_COMMAND__ module add <name> --base-url <url> --sync`
 - module JSON 출력: `__CLI_COMMAND__ module list --json`
 - 기본 module 변경: `__CLI_COMMAND__ module set-default <name>`
 - module 제거: `__CLI_COMMAND__ module remove <name>`

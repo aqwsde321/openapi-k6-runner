@@ -129,7 +129,7 @@ export interface ModuleListOptions {
 
 export interface ModuleAddOptions {
   name: string;
-  openapi: string;
+  openapi?: string;
   baseUrl?: string;
   snapshot?: string;
   catalog?: string;
@@ -1772,11 +1772,56 @@ export async function runModuleListCommand(
   };
 }
 
+async function resolveOpenApiForModuleAdd(options: {
+  cwd: string;
+  config: LoadTestConfig;
+  moduleName: string;
+  openapi: string | undefined;
+  baseUrl: string | undefined;
+  stdout: WritableLike;
+  fetchImpl: typeof fetch;
+}): Promise<string> {
+  const explicitOpenApi = normalizeOptionalOptionValue(options.openapi, '--openapi');
+
+  if (explicitOpenApi !== undefined) {
+    return normalizeConfigPathReference(options.cwd, options.config.dir, explicitOpenApi);
+  }
+
+  if (options.baseUrl === undefined) {
+    throw new Error('--openapi is required unless --base-url is provided for OpenAPI auto-discovery.');
+  }
+
+  const baseUrl = normalizeBaseUrlInput(options.baseUrl);
+
+  if (!isHttpUrl(baseUrl)) {
+    throw new Error('--base-url must be an http(s) URL to discover OpenAPI. Pass --openapi for file paths.');
+  }
+
+  const result = await resolveOpenApiForInit(
+    options.cwd,
+    buildDefaultOpenApiUrl(baseUrl),
+    baseUrl,
+    options.stdout,
+    options.fetchImpl,
+  );
+
+  if (!result.ok) {
+    throw new Error([
+      `OpenAPI auto-discovery failed for module "${options.moduleName}": ${result.message}`,
+      '',
+      'Pass --openapi <path-or-url> explicitly or check --base-url.',
+    ].join('\n'));
+  }
+
+  return normalizeConfigPathReference(options.cwd, options.config.dir, result.openapi);
+}
+
 export async function runModuleAddCommand(
   options: ModuleAddOptions,
   context: CliContext = {},
 ): Promise<ModuleAddResult> {
   const cwd = resolveCwd(context);
+  const stdout = context.stdout ?? process.stdout;
   const config = await loadRequiredConfigForModuleCommand(cwd, options.config);
   const moduleName = normalizeModuleNameInput(options.name);
 
@@ -1784,16 +1829,20 @@ export async function runModuleAddCommand(
     throw new Error(`${config.path}: module "${moduleName}" already exists. Use --force to update it.`);
   }
 
-  const openapi = normalizeConfigPathReference(
+  const baseUrl = normalizeOptionalOptionValue(options.baseUrl, '--base-url');
+  const openapi = await resolveOpenApiForModuleAdd({
     cwd,
-    config.dir,
-    normalizeRequiredOptionValue(options.openapi, '--openapi'),
-  );
+    config,
+    moduleName,
+    openapi: options.openapi,
+    baseUrl,
+    stdout,
+    fetchImpl: context.fetch ?? fetch,
+  });
   const snapshot = normalizeOptionalOptionValue(options.snapshot, '--snapshot') ??
     `openapi/${moduleName}.openapi.json`;
   const catalog = normalizeOptionalOptionValue(options.catalog, '--catalog') ??
     `openapi/${moduleName}.catalog.json`;
-  const baseUrl = normalizeOptionalOptionValue(options.baseUrl, '--base-url');
   let synced: ModuleAddResult['synced'];
 
   if (options.sync === true) {
@@ -3086,7 +3135,7 @@ export function createProgram(context: CliContext = {}): Command {
     .command('add')
     .description('Add or update an OpenAPI module in config.')
     .argument('<name>', 'Module name')
-    .requiredOption('-o, --openapi <path-or-url>', 'OpenAPI spec file path or URL')
+    .option('-o, --openapi <path-or-url>', 'OpenAPI spec file path or URL; auto-discovered from --base-url when omitted')
     .option('--base-url <url>', 'Module-specific API base URL')
     .option('--snapshot <path>', 'OpenAPI snapshot path in config')
     .option('--catalog <path>', 'Endpoint catalog path in config')

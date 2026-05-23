@@ -1735,6 +1735,102 @@ describe('openapi-k6 CLI', () => {
     }));
   });
 
+  it('discovers module add OpenAPI from base URL when --openapi is omitted', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://app.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    const requestedUrls: string[] = [];
+    const stdout = createCapture();
+
+    await runCli(
+      ['module', 'add', 'auth', '--base-url', 'https://auth.test.local'],
+      {
+        cwd: workspace,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        fetch: async (input) => {
+          const url = String(input);
+          requestedUrls.push(url);
+
+          if (url === 'https://auth.test.local/api-docs') {
+            return createOpenApiResponse();
+          }
+
+          return new Response(JSON.stringify({ message: 'not found' }), {
+            status: 404,
+            headers: { 'content-type': 'application/json' },
+          });
+        },
+      },
+    );
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+    const output = stdout.output();
+
+    expect(requestedUrls).toEqual([
+      'https://auth.test.local/v3/api-docs',
+      'https://auth.test.local/api-docs',
+    ]);
+    expect(config).toContain('    baseUrl: https://auth.test.local');
+    expect(config).toContain('    openapi: https://auth.test.local/api-docs');
+    expect(output).toContain('OpenAPI discovery');
+    expect(output).toContain('https://auth.test.local/v3/api-docs  HTTP 404');
+    expect(output).toContain('https://auth.test.local/api-docs  OpenAPI 3.0.3');
+    expect(output).toContain('Module auth saved in load-tests/config.yaml');
+  });
+
+  it('fails module add discovery clearly before saving config', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://app.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    const before = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    await expect(
+      runCli(
+        ['module', 'add', 'auth'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('--openapi is required unless --base-url is provided for OpenAPI auto-discovery.');
+
+    await expect(
+      runCli(
+        ['module', 'add', 'auth', '--base-url', 'openapi.yaml'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('--base-url must be an http(s) URL to discover OpenAPI. Pass --openapi for file paths.');
+
+    await expect(
+      runCli(
+        ['module', 'add', 'auth', '--base-url', 'https://auth.test.local'],
+        {
+          cwd: workspace,
+          stdout: createSink(),
+          stderr: createSink(),
+          fetch: async () => new Response(JSON.stringify({ message: 'not found' }), {
+            status: 404,
+            headers: { 'content-type': 'application/json' },
+          }),
+        },
+      ),
+    ).rejects.toThrow('OpenAPI auto-discovery failed for module "auth": https://auth.test.local/swagger/v1/swagger.json: HTTP 404');
+
+    const after = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(after).toBe(before);
+  });
+
   it('updates duplicate modules only with --force and changes defaultModule explicitly', async () => {
     await writeConfig([
       'defaultModule: app',
