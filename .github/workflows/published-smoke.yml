@@ -20,6 +20,9 @@ concurrency:
   group: published-smoke-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.run_id }}
   cancel-in-progress: false
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   smoke:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'

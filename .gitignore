@@ -3,3 +3,5 @@ dist/
 coverage/
 .env
 .env.local
+.DS_Store
+load-tests/
