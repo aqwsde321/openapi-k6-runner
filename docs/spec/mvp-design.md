@@ -75,7 +75,7 @@ modules:
 - `modules.<name>.snapshot`: `sync`가 저장하고 `generate`가 읽을 OpenAPI snapshot
 - `modules.<name>.catalog`: scenario 작성 참고용 endpoint catalog
 
-멀티모듈은 `modules`에 항목을 추가하고 `--module`로 선택한다. Scenario DSL 내부 `api.module`은 아직 지원하지 않는다.
+멀티모듈은 `openapi-k6 module add/list/set-default/remove`로 config 항목을 관리하고, 기본 흐름에서는 `defaultModule`을 사용한다. 특정 명령에서 module을 고정해야 하면 `--module`을 사용하고, 하나의 scenario 안에서 여러 module을 섞어야 하면 step별 `api.module`을 지정한다.
 
 ## Scenario DSL
 
