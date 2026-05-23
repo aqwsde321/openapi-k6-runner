@@ -138,6 +138,14 @@ steps:
 
 여러 OpenAPI module을 하나의 흐름에서 섞어야 하면 step의 `api.module`을 지정합니다. 지정하지 않은 step은 기존처럼 `--module`, `defaultModule`, 단일 module 추론 순서로 module을 선택합니다.
 
+새 module은 config를 직접 편집하지 않고 CLI로 추가할 수 있습니다.
+
+```bash
+npx --yes openapi-k6 module add auth --openapi https://api.example.com/auth/v3/api-docs --base-url https://auth-api.example.com --sync
+npx --yes openapi-k6 module list
+npx --yes openapi-k6 module set-default auth
+```
+
 ```yaml
 steps:
   - id: login
@@ -258,6 +266,9 @@ pnpm exec openapi-k6 --help
 | --- | --- |
 | 작업 공간 생성 | `npx --yes openapi-k6 init` |
 | OpenAPI snapshot/catalog 갱신 | `npx --yes openapi-k6 sync` |
+| OpenAPI module 추가 | `npx --yes openapi-k6 module add auth --openapi <url> --sync` |
+| OpenAPI module 목록 확인 | `npx --yes openapi-k6 module list` |
+| 기본 OpenAPI module 변경 | `npx --yes openapi-k6 module set-default auth` |
 | scenario용 endpoint 검색 | `npx --yes openapi-k6 catalog --query login` |
 | scenario 정적 검증 | `npx --yes openapi-k6 validate -s <name>` |
 | scenario 실행 검증 | `npx --yes openapi-k6 test -s <name>` |

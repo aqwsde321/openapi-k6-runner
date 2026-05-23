@@ -8,7 +8,12 @@
 
 ### Added
 
+- `openapi-k6 module list/add/set-default` 명령을 추가해 `load-tests/config.yaml`의 OpenAPI module을 CLI로 관리할 수 있게 했습니다.
 - npm registry에 배포된 실제 패키지를 `npm exec`로 확인하는 published smoke 명령과 후속 GitHub Actions workflow를 추가했습니다.
+
+### Changed
+
+- `openapi-k6 module add`가 추가하는 config module 항목에 OpenAPI, snapshot, catalog 설명 주석을 함께 쓰도록 개선했습니다.
 
 ## [0.4.0] - 2026-05-18
 

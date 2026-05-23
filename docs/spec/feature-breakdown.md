@@ -387,6 +387,14 @@ MVP에서 condition은 흐름 분기 조건이 아니라 check/assertion이다. 
 
 P-09에서 CLI `--module` 기반 선택을 구현했고, 이후 Scenario DSL 내부 `api.module`으로 step별 module 선택을 지원한다. `api.module`이 없는 step은 기존처럼 CLI `--module`, `defaultModule`, 단일 module 추론 순서로 module을 선택한다.
 
+`module` 하위 명령은 config 수동 편집 없이 module 등록, 목록 확인, 기본 module 전환을 지원한다.
+
+```text
+openapi-k6 module add auth --openapi https://api.example.com/auth/v3/api-docs --sync
+openapi-k6 module list
+openapi-k6 module set-default auth
+```
+
 ### 설정
 
 단일 모듈 기본값:

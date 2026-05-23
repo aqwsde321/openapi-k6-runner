@@ -7,6 +7,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
+import { isMap, Pair, parseDocument, Scalar, YAMLMap } from 'yaml';
 
 import { buildAst } from '../compiler/ast.builder.js';
 import { generateK6Script } from '../compiler/k6.generator.js';
@@ -121,6 +122,28 @@ export interface CatalogOptions {
   json?: boolean;
 }
 
+export interface ModuleListOptions {
+  config?: string;
+  json?: boolean;
+}
+
+export interface ModuleAddOptions {
+  name: string;
+  openapi: string;
+  baseUrl?: string;
+  snapshot?: string;
+  catalog?: string;
+  setDefault?: boolean;
+  sync?: boolean;
+  force?: boolean;
+  config?: string;
+}
+
+export interface ModuleSetDefaultOptions {
+  name: string;
+  config?: string;
+}
+
 export interface InitOptions {
   dir?: string;
   module?: string;
@@ -197,6 +220,41 @@ export interface CatalogResult {
   warnings: string[];
   filters: CatalogFilters;
   moduleName?: string;
+}
+
+export interface ModuleListResult {
+  configPath: string;
+  defaultModule?: string;
+  modules: ModuleListItem[];
+}
+
+export interface ModuleListItem {
+  name: string;
+  isDefault: boolean;
+  openapi?: string;
+  baseUrl?: string;
+  snapshot?: string;
+  catalog?: string;
+}
+
+export interface ModuleAddResult {
+  configPath: string;
+  moduleName: string;
+  openapi: string;
+  snapshot: string;
+  catalog: string;
+  baseUrl?: string;
+  defaultModule?: string;
+  synced?: {
+    snapshotPath: string;
+    catalogPath: string;
+    operationCount: number;
+  };
+}
+
+export interface ModuleSetDefaultResult {
+  configPath: string;
+  defaultModule: string;
 }
 
 export interface InitResult {
@@ -836,6 +894,196 @@ function isScenarioName(value: string): boolean {
     path.extname(value) === '';
 }
 
+function normalizeModuleNameInput(value: string): string {
+  const moduleName = value.trim();
+
+  if (!/^[A-Za-z0-9_-]+$/.test(moduleName)) {
+    throw new Error(
+      `module must contain only letters, numbers, "_" or "-": ${JSON.stringify(value)}`,
+    );
+  }
+
+  return moduleName;
+}
+
+function normalizeRequiredOptionValue(value: string | undefined, optionName: string): string {
+  const normalized = value?.trim();
+
+  if (!normalized) {
+    throw new Error(`${optionName} must not be empty`);
+  }
+
+  return normalized;
+}
+
+function normalizeOptionalOptionValue(value: string | undefined, optionName: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return normalizeRequiredOptionValue(value, optionName);
+}
+
+function normalizeConfigPathReference(cwd: string, configDir: string, value: string): string {
+  const trimmed = value.trim();
+
+  if (!trimmed || isHttpUrl(trimmed) || path.isAbsolute(trimmed)) {
+    return trimmed;
+  }
+
+  const relativePath = path.relative(configDir, path.resolve(cwd, trimmed));
+  return normalizeCommandPath(relativePath || '.');
+}
+
+async function loadRequiredConfigForModuleCommand(
+  cwd: string,
+  configPath: string | undefined,
+): Promise<LoadTestConfig> {
+  const config = await loadOptionalConfig(cwd, configPath, true);
+
+  if (config === undefined) {
+    throw new Error(`${DEFAULT_CONFIG_PATH} was not found. Run openapi-k6 init or pass --config.`);
+  }
+
+  return config;
+}
+
+function resolveEffectiveDefaultModule(config: LoadTestConfig): string | undefined {
+  if (config.defaultModule !== undefined) {
+    return config.defaultModule;
+  }
+
+  if (config.modules.size === 1) {
+    const [moduleName] = config.modules.keys();
+    return moduleName;
+  }
+
+  return undefined;
+}
+
+async function writeModuleConfigEntry(
+  config: LoadTestConfig,
+  moduleName: string,
+  moduleConfig: {
+    openapi: string;
+    baseUrl?: string;
+    snapshot: string;
+    catalog: string;
+  },
+  setDefault: boolean,
+): Promise<void> {
+  await updateConfigDocument(config.path, (_document, root) => {
+    const modules = root.get('modules', true);
+
+    if (!isMap(modules)) {
+      throw new Error(`${config.path}: modules must be an object`);
+    }
+
+    const moduleNode = createModuleConfigNode(moduleConfig);
+
+    if (modules.has(moduleName)) {
+      modules.set(moduleName, moduleNode);
+    } else {
+      modules.add(new Pair(new Scalar(moduleName), moduleNode));
+    }
+
+    if (setDefault) {
+      root.set('defaultModule', moduleName);
+    }
+  });
+}
+
+function createModuleConfigNode(moduleConfig: {
+  openapi: string;
+  baseUrl?: string;
+  snapshot: string;
+  catalog: string;
+}): YAMLMap<Scalar<string>, Scalar<string>> {
+  const moduleNode = new YAMLMap<Scalar<string>, Scalar<string>>();
+
+  if (moduleConfig.baseUrl !== undefined) {
+    moduleNode.add(createCommentedScalarPair(
+      'baseUrl',
+      moduleConfig.baseUrl,
+      ' module 전용 API base URL입니다.\n 없으면 root baseUrl 또는 OpenAPI servers[0].url을 사용합니다.',
+    ));
+  }
+
+  moduleNode.add(createCommentedScalarPair(
+    'openapi',
+    moduleConfig.openapi,
+    ' sync가 읽을 OpenAPI URL 또는 파일 경로입니다.\n 예: https://api.example.com/v3/api-docs',
+  ));
+  moduleNode.add(createCommentedScalarPair(
+    'snapshot',
+    moduleConfig.snapshot,
+    ' sync가 저장하고 generate가 읽을 OpenAPI snapshot 경로입니다.\n 상대 경로는 이 config.yaml 위치 기준입니다.',
+  ));
+  moduleNode.add(createCommentedScalarPair(
+    'catalog',
+    moduleConfig.catalog,
+    ' scenario 작성자가 endpoint를 고를 때 참고할 catalog 경로입니다.\n generate 입력은 catalog가 아니라 snapshot입니다.',
+  ));
+
+  return moduleNode;
+}
+
+function createCommentedScalarPair(
+  key: string,
+  value: string,
+  commentBefore: string,
+): Pair<Scalar<string>, Scalar<string>> {
+  const keyNode = new Scalar(key);
+
+  keyNode.commentBefore = commentBefore;
+
+  return new Pair(keyNode, new Scalar(value));
+}
+
+async function writeDefaultModuleConfig(config: LoadTestConfig, moduleName: string): Promise<void> {
+  await updateConfigDocument(config.path, (_document, root) => {
+    root.set('defaultModule', moduleName);
+  });
+}
+
+async function updateConfigDocument(
+  configPath: string,
+  update: (
+    document: ReturnType<typeof parseDocument>,
+    root: ReturnType<typeof parseConfigDocumentRoot>,
+  ) => void,
+): Promise<void> {
+  const raw = await fs.readFile(configPath, 'utf8');
+  const document = parseDocument(raw);
+  const root = parseConfigDocumentRoot(configPath, document);
+
+  update(document, root);
+
+  await fs.writeFile(configPath, ensureTrailingNewline(document.toString({ lineWidth: 0 })), 'utf8');
+}
+
+function parseConfigDocumentRoot(
+  configPath: string,
+  document: ReturnType<typeof parseDocument>,
+) {
+  if (document.errors.length > 0) {
+    const message = document.errors[0]?.message ?? 'unknown YAML parse error';
+    throw new Error(`${configPath}: failed to parse config: ${message}`);
+  }
+
+  const root = document.contents;
+
+  if (!isMap(root)) {
+    throw new Error(`${configPath}: config must be an object`);
+  }
+
+  return root;
+}
+
+function ensureTrailingNewline(value: string): string {
+  return value.endsWith('\n') ? value : `${value}\n`;
+}
+
 function assertModuleOptionHasConfig(
   config: LoadTestConfig | undefined,
   moduleName: string | undefined,
@@ -1390,6 +1638,115 @@ export async function runCatalogCommand(
     warnings: shouldList ? findDuplicateOperationWarnings(operations) : [],
     filters,
     ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
+  };
+}
+
+export async function runModuleListCommand(
+  options: ModuleListOptions,
+  context: CliContext = {},
+): Promise<ModuleListResult> {
+  const cwd = resolveCwd(context);
+  const config = await loadRequiredConfigForModuleCommand(cwd, options.config);
+  const defaultModule = resolveEffectiveDefaultModule(config);
+
+  return {
+    configPath: config.path,
+    ...(defaultModule === undefined ? {} : { defaultModule }),
+    modules: [...config.modules.values()].map((moduleConfig) => ({
+      name: moduleConfig.name,
+      isDefault: moduleConfig.name === defaultModule,
+      ...(moduleConfig.openapi === undefined ? {} : { openapi: moduleConfig.openapi }),
+      ...(moduleConfig.baseUrl === undefined ? {} : { baseUrl: moduleConfig.baseUrl }),
+      ...(moduleConfig.snapshot === undefined ? {} : { snapshot: moduleConfig.snapshot }),
+      ...(moduleConfig.catalog === undefined ? {} : { catalog: moduleConfig.catalog }),
+    })),
+  };
+}
+
+export async function runModuleAddCommand(
+  options: ModuleAddOptions,
+  context: CliContext = {},
+): Promise<ModuleAddResult> {
+  const cwd = resolveCwd(context);
+  const config = await loadRequiredConfigForModuleCommand(cwd, options.config);
+  const moduleName = normalizeModuleNameInput(options.name);
+
+  if (config.modules.has(moduleName) && options.force !== true) {
+    throw new Error(`${config.path}: module "${moduleName}" already exists. Use --force to update it.`);
+  }
+
+  const openapi = normalizeConfigPathReference(
+    cwd,
+    config.dir,
+    normalizeRequiredOptionValue(options.openapi, '--openapi'),
+  );
+  const snapshot = normalizeOptionalOptionValue(options.snapshot, '--snapshot') ??
+    `openapi/${moduleName}.openapi.json`;
+  const catalog = normalizeOptionalOptionValue(options.catalog, '--catalog') ??
+    `openapi/${moduleName}.catalog.json`;
+  const baseUrl = normalizeOptionalOptionValue(options.baseUrl, '--base-url');
+  let synced: ModuleAddResult['synced'];
+
+  if (options.sync === true) {
+    const syncResult = await syncOpenApiSnapshot({
+      openapi: resolveConfigFilePath(config, openapi),
+      write: resolveConfigFilePath(config, snapshot),
+      catalog: resolveConfigFilePath(config, catalog),
+    });
+
+    synced = {
+      snapshotPath: syncResult.snapshotPath,
+      catalogPath: syncResult.catalogPath,
+      operationCount: syncResult.operationCount,
+    };
+  }
+
+  await writeModuleConfigEntry(
+    config,
+    moduleName,
+    {
+      openapi,
+      ...(baseUrl === undefined ? {} : { baseUrl }),
+      snapshot,
+      catalog,
+    },
+    options.setDefault === true,
+  );
+
+  const defaultModule = options.setDefault === true
+    ? moduleName
+    : resolveEffectiveDefaultModule(config);
+
+  return {
+    configPath: config.path,
+    moduleName,
+    openapi,
+    snapshot,
+    catalog,
+    ...(baseUrl === undefined ? {} : { baseUrl }),
+    ...(defaultModule === undefined ? {} : { defaultModule }),
+    ...(synced === undefined ? {} : { synced }),
+  };
+}
+
+export async function runModuleSetDefaultCommand(
+  options: ModuleSetDefaultOptions,
+  context: CliContext = {},
+): Promise<ModuleSetDefaultResult> {
+  const cwd = resolveCwd(context);
+  const config = await loadRequiredConfigForModuleCommand(cwd, options.config);
+  const moduleName = normalizeModuleNameInput(options.name);
+
+  if (!config.modules.has(moduleName)) {
+    const available = [...config.modules.keys()].join(', ');
+    throw new Error(`${config.path}: module "${moduleName}" was not found. Available modules: ${available}`);
+  }
+
+  await writeDefaultModuleConfig(config, moduleName);
+
+  return {
+    configPath: config.path,
+    defaultModule: moduleName,
   };
 }
 
@@ -2201,6 +2558,103 @@ function writeCatalogSummary(stdout: WritableLike, result: CatalogResult, cwd: s
   writeLine(stdout, '  openapi-k6 catalog --all');
 }
 
+function writeModuleListOutput(
+  stdout: WritableLike,
+  result: ModuleListResult,
+  cwd: string,
+  json: boolean | undefined,
+): void {
+  if (json === true) {
+    writeLine(stdout, JSON.stringify(formatModuleListJson(result), null, 2));
+    return;
+  }
+
+  writeLine(stdout, `Config: ${formatDisplayPath(cwd, result.configPath)}`);
+  writeLine(stdout, `Default: ${result.defaultModule ?? '(none)'}`);
+  writeLine(stdout, '');
+  writeLine(stdout, 'Modules:');
+
+  for (const moduleConfig of result.modules) {
+    writeLine(stdout, `  ${moduleConfig.isDefault ? '*' : '-'} ${moduleConfig.name}`);
+
+    if (moduleConfig.baseUrl !== undefined) {
+      writeLine(stdout, `      baseUrl   ${moduleConfig.baseUrl}`);
+    }
+
+    if (moduleConfig.openapi !== undefined) {
+      writeLine(stdout, `      openapi   ${moduleConfig.openapi}`);
+    }
+
+    if (moduleConfig.snapshot !== undefined) {
+      writeLine(stdout, `      snapshot  ${moduleConfig.snapshot}`);
+    }
+
+    if (moduleConfig.catalog !== undefined) {
+      writeLine(stdout, `      catalog   ${moduleConfig.catalog}`);
+    }
+  }
+}
+
+function formatModuleListJson(result: ModuleListResult): Record<string, unknown> {
+  return {
+    configPath: result.configPath,
+    ...(result.defaultModule === undefined ? {} : { defaultModule: result.defaultModule }),
+    modules: result.modules,
+  };
+}
+
+function writeModuleAddSummary(stdout: WritableLike, result: ModuleAddResult, cwd: string): void {
+  writeLine(stdout, `Module ${result.moduleName} saved in ${formatDisplayPath(cwd, result.configPath)}`);
+  writeLine(stdout, `  openapi   ${result.openapi}`);
+
+  if (result.baseUrl !== undefined) {
+    writeLine(stdout, `  baseUrl   ${result.baseUrl}`);
+  }
+
+  writeLine(stdout, `  snapshot  ${result.snapshot}`);
+  writeLine(stdout, `  catalog   ${result.catalog}`);
+
+  if (result.defaultModule === result.moduleName) {
+    writeLine(stdout, '  default   yes');
+  }
+
+  if (result.synced !== undefined) {
+    writeLine(stdout, '');
+    writeLine(stdout, `Synced ${formatDisplayPath(cwd, result.synced.snapshotPath)}`);
+    writeLine(stdout, `Catalog ${formatDisplayPath(cwd, result.synced.catalogPath)} (${result.synced.operationCount} operations)`);
+  } else {
+    writeLine(stdout, '');
+    writeLine(stdout, 'Next');
+    writeLine(stdout, `  ${formatModuleCommand('sync', result.configPath, result.moduleName, cwd)}`);
+  }
+}
+
+function writeModuleSetDefaultSummary(
+  stdout: WritableLike,
+  result: ModuleSetDefaultResult,
+  cwd: string,
+): void {
+  writeLine(stdout, `Default module set to ${result.defaultModule} in ${formatDisplayPath(cwd, result.configPath)}`);
+}
+
+function formatModuleCommand(
+  command: 'sync',
+  configPath: string,
+  moduleName: string,
+  cwd: string,
+): string {
+  const defaultConfigPath = path.join(cwd, DEFAULT_CONFIG_PATH);
+  const parts = ['npx', '--yes', 'openapi-k6', command];
+
+  if (path.resolve(configPath) !== defaultConfigPath) {
+    parts.push('--config', formatDisplayPath(cwd, configPath));
+  }
+
+  parts.push('--module', moduleName);
+
+  return parts.map(shellQuote).join(' ');
+}
+
 function writeCatalogOperations(stdout: WritableLike, result: CatalogResult, cwd: string): void {
   writeLine(stdout, `Catalog: ${formatDisplayPath(cwd, result.catalogPath)}`);
 
@@ -2406,6 +2860,47 @@ export function createProgram(context: CliContext = {}): Command {
     .action(async (options: CatalogOptions) => {
       const result = await runCatalogCommand(options, context);
       writeCatalogOutput(stdout, result, resolveCwd(context), options.json);
+    });
+
+  const moduleCommand = program
+    .command('module')
+    .description('Manage OpenAPI modules in load-tests/config.yaml.');
+
+  moduleCommand
+    .command('list')
+    .description('List configured OpenAPI modules.')
+    .option('--config <path>', 'Load test config file path')
+    .option('--json', 'Print JSON output')
+    .action(async (options: ModuleListOptions) => {
+      const result = await runModuleListCommand(options, context);
+      writeModuleListOutput(stdout, result, resolveCwd(context), options.json);
+    });
+
+  moduleCommand
+    .command('add')
+    .description('Add or update an OpenAPI module in config.')
+    .argument('<name>', 'Module name')
+    .requiredOption('-o, --openapi <path-or-url>', 'OpenAPI spec file path or URL')
+    .option('--base-url <url>', 'Module-specific API base URL')
+    .option('--snapshot <path>', 'OpenAPI snapshot path in config')
+    .option('--catalog <path>', 'Endpoint catalog path in config')
+    .option('--set-default', 'Set this module as defaultModule')
+    .option('--sync', 'Create snapshot and catalog before saving config')
+    .option('--force', 'Update an existing module')
+    .option('--config <path>', 'Load test config file path')
+    .action(async (name: string, options: Omit<ModuleAddOptions, 'name'>) => {
+      const result = await runModuleAddCommand({ ...options, name }, context);
+      writeModuleAddSummary(stdout, result, resolveCwd(context));
+    });
+
+  moduleCommand
+    .command('set-default')
+    .description('Set defaultModule in config.')
+    .argument('<name>', 'Module name')
+    .option('--config <path>', 'Load test config file path')
+    .action(async (name: string, options: Omit<ModuleSetDefaultOptions, 'name'>) => {
+      const result = await runModuleSetDefaultCommand({ ...options, name }, context);
+      writeModuleSetDefaultSummary(stdout, result, resolveCwd(context));
     });
 
   program

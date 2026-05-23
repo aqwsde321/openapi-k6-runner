@@ -145,6 +145,14 @@ modules:
 
 여러 module을 하나의 scenario에서 섞어야 하면 step마다 `api.module`을 지정합니다.
 
+새 module은 `config.yaml`을 직접 편집하지 않고 CLI로 추가할 수 있습니다.
+
+```bash
+__CLI_COMMAND__ module add auth --openapi https://api.example.com/auth/v3/api-docs --base-url https://auth-api.example.com --sync
+__CLI_COMMAND__ module list
+__CLI_COMMAND__ module set-default auth
+```
+
 ```yaml
 steps:
   - id: login
@@ -476,7 +484,8 @@ __GENERATE_WORKFLOW_COMMAND__
 - endpoint 변경: `scenarios/smoke.yaml`의 `api.path`
 - header/body/query/multipart 추가: `scenarios/*.yaml`의 `request`
 - 대상 API 변경: `config.yaml`의 `baseUrl`, `modules.<name>.openapi` 수정 후 `__CLI_COMMAND__ sync`와 `__CLI_COMMAND__ generate` 재실행
-- module 추가: `config.yaml`의 `modules` 항목 추가 후 `__CLI_COMMAND__ sync --module <name>`
+- module 추가: `__CLI_COMMAND__ module add <name> --openapi <url-or-path> --sync`
+- 기본 module 변경: `__CLI_COMMAND__ module set-default <name>`
 
 ## 5. 제거 방법
 

@@ -1660,6 +1660,309 @@ describe('openapi-k6 CLI', () => {
     ]);
   });
 
+  it('adds modules and lists configured modules', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://app.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    const addOutput = createCapture();
+
+    await runCli(
+      [
+        'module',
+        'add',
+        'auth',
+        '--openapi',
+        'https://auth.test.local/v3/api-docs',
+        '--base-url',
+        'https://auth-api.test.local',
+        '--set-default',
+      ],
+      { cwd: workspace, stdout: addOutput.stream, stderr: createSink() },
+    );
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(config).toContain('defaultModule: auth');
+    expect(config).toContain('  auth:');
+    expect(config).toContain('    # module 전용 API base URL입니다.');
+    expect(config).toContain('    # 없으면 root baseUrl 또는 OpenAPI servers[0].url을 사용합니다.');
+    expect(config).toContain('    baseUrl: https://auth-api.test.local');
+    expect(config).toContain('    # sync가 읽을 OpenAPI URL 또는 파일 경로입니다.');
+    expect(config).toContain('    openapi: https://auth.test.local/v3/api-docs');
+    expect(config).toContain('    # sync가 저장하고 generate가 읽을 OpenAPI snapshot 경로입니다.');
+    expect(config).toContain('    snapshot: openapi/auth.openapi.json');
+    expect(config).toContain('    # scenario 작성자가 endpoint를 고를 때 참고할 catalog 경로입니다.');
+    expect(config).toContain('    catalog: openapi/auth.catalog.json');
+    expect(addOutput.output()).toContain('Module auth saved in load-tests/config.yaml');
+    expect(addOutput.output()).toContain('default   yes');
+    expect(addOutput.output()).toContain('npx --yes openapi-k6 sync --module auth');
+
+    const listOutput = createCapture();
+    await runCli(
+      ['module', 'list'],
+      { cwd: workspace, stdout: listOutput.stream, stderr: createSink() },
+    );
+
+    expect(listOutput.output()).toContain('Default: auth');
+    expect(listOutput.output()).toContain('  - app');
+    expect(listOutput.output()).toContain('  * auth');
+
+    const jsonOutput = createCapture();
+    await runCli(
+      ['module', 'list', '--json'],
+      { cwd: workspace, stdout: jsonOutput.stream, stderr: createSink() },
+    );
+
+    const output = JSON.parse(jsonOutput.output()) as {
+      defaultModule: string;
+      modules: Array<{ name: string; isDefault: boolean; snapshot?: string }>;
+    };
+
+    expect(output.defaultModule).toBe('auth');
+    expect(output.modules).toContainEqual(expect.objectContaining({
+      name: 'auth',
+      isDefault: true,
+      snapshot: 'openapi/auth.openapi.json',
+    }));
+  });
+
+  it('updates duplicate modules only with --force and changes defaultModule explicitly', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://app.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '  bos:',
+      '    openapi: https://old-bos.test.local/v3/api-docs',
+      '    snapshot: openapi/old-bos.openapi.json',
+      '    catalog: openapi/old-bos.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['module', 'add', 'bos', '--openapi', 'https://bos.test.local/v3/api-docs'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('module "bos" already exists. Use --force to update it.');
+
+    await runCli(
+      [
+        'module',
+        'add',
+        'bos',
+        '--openapi',
+        'https://bos.test.local/v3/api-docs',
+        '--base-url',
+        'https://bos-api.test.local',
+        '--snapshot',
+        'openapi/bos.openapi.json',
+        '--catalog',
+        'openapi/bos.catalog.json',
+        '--force',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+    await runCli(
+      ['module', 'set-default', 'bos'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(config).toContain('defaultModule: bos');
+    expect(config).toContain('    baseUrl: https://bos-api.test.local');
+    expect(config).toContain('    openapi: https://bos.test.local/v3/api-docs');
+    expect(config).not.toContain('https://old-bos.test.local/v3/api-docs');
+
+    await expect(
+      runCli(
+        ['module', 'set-default', 'missing'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('module "missing" was not found. Available modules: app, bos');
+  });
+
+  it('syncs a newly added module before saving config', async () => {
+    await writeGenerateFixtures(workspace, 'https://auth-api.test.local');
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/auth.yaml'),
+      [
+        'name: auth',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://app.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    const stdout = createCapture();
+
+    await runCli(
+      [
+        'module',
+        'add',
+        'auth',
+        '--openapi',
+        'openapi.yaml',
+        '--sync',
+        '--set-default',
+      ],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+    const snapshot = await readFile(path.join(workspace, 'load-tests/openapi/auth.openapi.json'), 'utf8');
+    const catalog = await readFile(path.join(workspace, 'load-tests/openapi/auth.catalog.json'), 'utf8');
+
+    expect(config).toContain('defaultModule: auth');
+    expect(config).toContain('    # sync가 읽을 OpenAPI URL 또는 파일 경로입니다.');
+    expect(config).toContain('    openapi: ../openapi.yaml');
+    expect(config).toContain('    # generate 입력은 catalog가 아니라 snapshot입니다.');
+    expect(snapshot).toContain('"operationId": "getHealth"');
+    expect(catalog).toContain('"operationId": "getHealth"');
+    expect(stdout.output()).toContain('Synced load-tests/openapi/auth.openapi.json');
+    expect(stdout.output()).toContain('Catalog load-tests/openapi/auth.catalog.json (1 operations)');
+
+    await runCli(
+      ['validate', '--scenario', 'auth'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+    await runCli(
+      ['generate', '--scenario', 'auth', '--write', 'generated/auth.js'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const generated = await readFile(path.join(workspace, 'generated/auth.js'), 'utf8');
+    expect(generated).toContain('const url0 = joinUrl(BASE_URL, `/health`);');
+  });
+
+  it('uses custom config paths for module management commands', async () => {
+    await mkdir(path.join(workspace, 'custom-load-tests'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'custom-load-tests/config.yaml'),
+      [
+        'defaultModule: app',
+        'modules:',
+        '  app:',
+        '    openapi: https://app.test.local/v3/api-docs',
+        '    snapshot: openapi/app.openapi.json',
+        '    catalog: openapi/app.catalog.json',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    const addOutput = createCapture();
+
+    await runCli(
+      [
+        'module',
+        'add',
+        'auth',
+        '--config',
+        'custom-load-tests/config.yaml',
+        '--openapi',
+        'openapi.yaml',
+      ],
+      { cwd: workspace, stdout: addOutput.stream, stderr: createSink() },
+    );
+    await runCli(
+      ['module', 'set-default', 'auth', '--config', 'custom-load-tests/config.yaml'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const config = await readFile(path.join(workspace, 'custom-load-tests/config.yaml'), 'utf8');
+
+    expect(config).toContain('defaultModule: auth');
+    expect(config).toContain('  auth:');
+    expect(config).toContain('    openapi: ../openapi.yaml');
+    expect(config).toContain('    snapshot: openapi/auth.openapi.json');
+    expect(addOutput.output()).toContain('Module auth saved in custom-load-tests/config.yaml');
+    expect(addOutput.output()).toContain('npx --yes openapi-k6 sync --config custom-load-tests/config.yaml --module auth');
+
+    const listOutput = createCapture();
+    await runCli(
+      ['module', 'list', '--config', 'custom-load-tests/config.yaml', '--json'],
+      { cwd: workspace, stdout: listOutput.stream, stderr: createSink() },
+    );
+
+    const output = JSON.parse(listOutput.output()) as {
+      configPath: string;
+      defaultModule: string;
+      modules: Array<{ name: string; openapi?: string }>;
+    };
+
+    expect(output.configPath).toBe(path.join(workspace, 'custom-load-tests/config.yaml'));
+    expect(output.defaultModule).toBe('auth');
+    expect(output.modules).toContainEqual(expect.objectContaining({
+      name: 'auth',
+      openapi: '../openapi.yaml',
+    }));
+  });
+
+  it('does not save a module when module add --sync fails', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://app.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    const before = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    await expect(
+      runCli(
+        ['module', 'add', 'auth', '--openapi', 'missing-openapi.yaml', '--sync'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('missing-openapi.yaml');
+
+    const after = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+
+    expect(after).toBe(before);
+    await expect(
+      stat(path.join(workspace, 'load-tests/openapi/auth.openapi.json')),
+    ).rejects.toThrow();
+  });
+
+  it('explains that config is required for module management commands', async () => {
+    await expect(
+      runCli(
+        ['module', 'list'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('load-tests/config.yaml was not found. Run openapi-k6 init or pass --config.');
+
+    await expect(
+      runCli(
+        ['module', 'add', 'auth', '--openapi', 'openapi.yaml'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('load-tests/config.yaml was not found. Run openapi-k6 init or pass --config.');
+  });
+
   it('explains how to create the catalog when the configured catalog file is missing', async () => {
     await writeConfig([
       'defaultModule: app',
