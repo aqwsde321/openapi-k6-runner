@@ -156,6 +156,14 @@ __CLI_COMMAND__ module remove auth
 
 `module remove`는 config 항목만 제거하고 snapshot/catalog 파일은 삭제하지 않습니다. 현재 `defaultModule`이거나 scenario에서 참조 중인 module은 기본적으로 삭제를 막고, 의도한 경우에만 `--force`로 제거합니다.
 
+자동화나 UI adapter가 현재 module 구성을 읽어야 하면 `--json`을 사용합니다.
+
+```bash
+__CLI_COMMAND__ module list --json
+```
+
+출력에는 `configPath`, `defaultModule`, `modules[]`가 포함되고, 각 module은 `name`, `isDefault`, `baseUrl`, `openapi`, `snapshot`, `catalog` 필드를 가집니다.
+
 ```yaml
 steps:
   - id: login
@@ -488,6 +496,7 @@ __GENERATE_WORKFLOW_COMMAND__
 - header/body/query/multipart 추가: `scenarios/*.yaml`의 `request`
 - 대상 API 변경: `config.yaml`의 `baseUrl`, `modules.<name>.openapi` 수정 후 `__CLI_COMMAND__ sync`와 `__CLI_COMMAND__ generate` 재실행
 - module 추가: `__CLI_COMMAND__ module add <name> --openapi <url-or-path> --sync`
+- module JSON 출력: `__CLI_COMMAND__ module list --json`
 - 기본 module 변경: `__CLI_COMMAND__ module set-default <name>`
 - module 제거: `__CLI_COMMAND__ module remove <name>`
 

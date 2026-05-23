@@ -149,6 +149,14 @@ npx --yes openapi-k6 module remove auth
 
 `module remove`는 config 항목만 제거하고 snapshot/catalog 파일은 삭제하지 않습니다. 현재 `defaultModule`이거나 scenario에서 참조 중인 module은 기본적으로 삭제를 막고, 의도한 경우에만 `--force`로 제거합니다.
 
+자동화나 UI adapter가 현재 module 구성을 읽어야 하면 `--json`을 사용합니다.
+
+```bash
+npx --yes openapi-k6 module list --json
+```
+
+출력에는 `configPath`, `defaultModule`, `modules[]`가 포함되고, 각 module은 `name`, `isDefault`, `baseUrl`, `openapi`, `snapshot`, `catalog` 필드를 가집니다.
+
 ```yaml
 steps:
   - id: login
@@ -271,6 +279,7 @@ pnpm exec openapi-k6 --help
 | OpenAPI snapshot/catalog 갱신 | `npx --yes openapi-k6 sync` |
 | OpenAPI module 추가 | `npx --yes openapi-k6 module add auth --openapi <url> --sync` |
 | OpenAPI module 목록 확인 | `npx --yes openapi-k6 module list` |
+| OpenAPI module JSON 출력 | `npx --yes openapi-k6 module list --json` |
 | 기본 OpenAPI module 변경 | `npx --yes openapi-k6 module set-default auth` |
 | OpenAPI module 제거 | `npx --yes openapi-k6 module remove auth` |
 | scenario용 endpoint 검색 | `npx --yes openapi-k6 catalog --query login` |

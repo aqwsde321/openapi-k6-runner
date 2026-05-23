@@ -398,6 +398,8 @@ openapi-k6 module remove auth
 
 `module remove`는 config 항목만 제거하고 snapshot/catalog 파일은 삭제하지 않는다. 마지막 module 삭제는 실패하며, `defaultModule` 또는 scenario 참조가 남은 module은 `--force` 없이는 제거하지 않는다.
 
+자동화와 향후 UI adapter는 `openapi-k6 module list --json`으로 현재 config의 `defaultModule`과 `modules[]`를 구조화된 JSON으로 읽을 수 있다. 각 module 항목은 `name`, `isDefault`, `baseUrl`, `openapi`, `snapshot`, `catalog` 필드를 포함한다.
+
 ### 설정
 
 단일 모듈 기본값:
