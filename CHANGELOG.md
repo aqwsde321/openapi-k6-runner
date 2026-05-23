@@ -15,6 +15,7 @@
 ### Changed
 
 - `openapi-k6 module add`가 추가하는 config module 항목에 OpenAPI, snapshot, catalog 설명 주석을 함께 쓰도록 개선했습니다.
+- `openapi-k6 module add` 완료 출력에 다음에 실행할 catalog/module list 명령과 scenario `api.module` 힌트를 추가했습니다.
 
 ## [0.4.0] - 2026-05-18
 

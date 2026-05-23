@@ -1702,6 +1702,9 @@ describe('openapi-k6 CLI', () => {
     expect(addOutput.output()).toContain('Module auth saved in load-tests/config.yaml');
     expect(addOutput.output()).toContain('default   yes');
     expect(addOutput.output()).toContain('npx --yes openapi-k6 sync --module auth');
+    expect(addOutput.output()).toContain('npx --yes openapi-k6 catalog --module auth --all');
+    expect(addOutput.output()).toContain('npx --yes openapi-k6 module list');
+    expect(addOutput.output()).toContain('add api.module: auth to scenario steps that use this module');
 
     const listOutput = createCapture();
     await runCli(
@@ -1843,6 +1846,9 @@ describe('openapi-k6 CLI', () => {
     expect(catalog).toContain('"operationId": "getHealth"');
     expect(stdout.output()).toContain('Synced load-tests/openapi/auth.openapi.json');
     expect(stdout.output()).toContain('Catalog load-tests/openapi/auth.catalog.json (1 operations)');
+    expect(stdout.output()).toContain('npx --yes openapi-k6 catalog --module auth --all');
+    expect(stdout.output()).toContain('npx --yes openapi-k6 module list');
+    expect(stdout.output()).not.toContain('npx --yes openapi-k6 sync --module auth');
 
     await runCli(
       ['validate', '--scenario', 'auth'],
@@ -1899,6 +1905,8 @@ describe('openapi-k6 CLI', () => {
     expect(config).toContain('    snapshot: openapi/auth.openapi.json');
     expect(addOutput.output()).toContain('Module auth saved in custom-load-tests/config.yaml');
     expect(addOutput.output()).toContain('npx --yes openapi-k6 sync --config custom-load-tests/config.yaml --module auth');
+    expect(addOutput.output()).toContain('npx --yes openapi-k6 catalog --config custom-load-tests/config.yaml --module auth --all');
+    expect(addOutput.output()).toContain('npx --yes openapi-k6 module list --config custom-load-tests/config.yaml');
 
     const listOutput = createCapture();
     await runCli(

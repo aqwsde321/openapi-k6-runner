@@ -2772,11 +2772,22 @@ function writeModuleAddSummary(stdout: WritableLike, result: ModuleAddResult, cw
     writeLine(stdout, '');
     writeLine(stdout, `Synced ${formatDisplayPath(cwd, result.synced.snapshotPath)}`);
     writeLine(stdout, `Catalog ${formatDisplayPath(cwd, result.synced.catalogPath)} (${result.synced.operationCount} operations)`);
-  } else {
-    writeLine(stdout, '');
-    writeLine(stdout, 'Next');
+  }
+
+  writeModuleAddNextSteps(stdout, result, cwd);
+}
+
+function writeModuleAddNextSteps(stdout: WritableLike, result: ModuleAddResult, cwd: string): void {
+  writeLine(stdout, '');
+  writeLine(stdout, 'Next');
+
+  if (result.synced === undefined) {
     writeLine(stdout, `  ${formatModuleCommand('sync', result.configPath, result.moduleName, cwd)}`);
   }
+
+  writeLine(stdout, `  ${formatModuleCommand('catalog', result.configPath, result.moduleName, cwd, ['--all'])}`);
+  writeLine(stdout, `  ${formatModuleListCommand(result.configPath, cwd)}`);
+  writeLine(stdout, `  add api.module: ${result.moduleName} to scenario steps that use this module`);
 }
 
 function writeModuleSetDefaultSummary(
@@ -2820,10 +2831,11 @@ function formatModuleScenarioReferenceError(
 }
 
 function formatModuleCommand(
-  command: 'sync',
+  command: 'sync' | 'catalog',
   configPath: string,
   moduleName: string,
   cwd: string,
+  extraArgs: string[] = [],
 ): string {
   const defaultConfigPath = path.join(cwd, DEFAULT_CONFIG_PATH);
   const parts = ['npx', '--yes', 'openapi-k6', command];
@@ -2833,6 +2845,18 @@ function formatModuleCommand(
   }
 
   parts.push('--module', moduleName);
+  parts.push(...extraArgs);
+
+  return parts.map(shellQuote).join(' ');
+}
+
+function formatModuleListCommand(configPath: string, cwd: string): string {
+  const defaultConfigPath = path.join(cwd, DEFAULT_CONFIG_PATH);
+  const parts = ['npx', '--yes', 'openapi-k6', 'module', 'list'];
+
+  if (path.resolve(configPath) !== defaultConfigPath) {
+    parts.push('--config', formatDisplayPath(cwd, configPath));
+  }
 
   return parts.map(shellQuote).join(' ');
 }
