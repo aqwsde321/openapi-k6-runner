@@ -92,7 +92,7 @@ pnpm run smoke:e2e
 npm pack --dry-run
 ```
 
-`smoke:e2e`는 빌드된 `dist/cli/index.js`를 실제 로컬 fixture 백엔드에 붙여 `init -> module add --base-url --sync -> module list -> validate -> test -> generate -> run` 흐름을 확인합니다. 실제 k6 설치는 요구하지 않고, smoke 내부 fake k6로 `run` orchestration과 로그/리포트 환경값만 검증합니다.
+`smoke:e2e`는 빌드된 `dist/cli/index.js`를 실제 로컬 fixture 백엔드에 붙여 `init -> module add --base-url --sync -> module list -> validate -> test -> generate -> run` 흐름을 확인합니다. 실제 k6 설치는 요구하지 않고, smoke 내부 fake k6로 `run` orchestration과 로그/리포트 환경값만 검증합니다. 이 smoke는 CI와 Publish workflow 모두에서 `pnpm run build` 다음에 실행됩니다.
 
 로컬 npm 캐시 권한 문제로 `npm pack --dry-run`이 실패하면 임시 캐시를 지정해 패키지 내용을 확인할 수 있습니다.
 
@@ -123,7 +123,7 @@ git tag "v$VERSION"
 git push origin main --tags
 ```
 
-`.github/workflows/publish.yml`은 태그의 `v`를 제외한 값과 `package.json`의 `version`이 같을 때만 `pnpm run typecheck`, `pnpm test`, `pnpm run build`, `npm pack --dry-run`, `npm publish`를 실행합니다.
+`.github/workflows/publish.yml`은 태그의 `v`를 제외한 값과 `package.json`의 `version`이 같을 때만 `pnpm run typecheck`, `pnpm test`, `pnpm run build`, `pnpm run smoke:e2e`, `npm pack --dry-run`, `npm publish`를 실행합니다.
 
 Publish workflow가 성공하면 `.github/workflows/published-smoke.yml`이 실제 npm registry 배포본을 `npm exec`로 다시 실행합니다. 수동으로 같은 확인을 하려면 아래처럼 실행합니다.
 
