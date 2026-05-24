@@ -86,7 +86,7 @@ src/
 
 - YAML/JSON Scenario DSL을 파싱한다.
 - `steps` 안의 `- include: ./partials/login.yaml`을 entry scenario 디렉터리 안의 공통 step 파일로 펼친다.
-- entry scenario의 `vars:`와 `fixtures:`를 `{{vars.NAME}}` template 값으로 제공해 include partial과 본문 step이 같은 테스트 데이터를 공유하게 한다.
+- entry scenario의 `vars:`와 `fixtures:`, CLI `--var-file`/`--var` override를 `{{vars.NAME}}` template 값으로 제공해 include partial과 본문 step이 같은 테스트 데이터를 공유하게 한다.
 - `operationId` 또는 `method + path`가 OpenAPI snapshot에 존재하는지 확인한다.
 - 필수 path/query/header parameter와 request body 또는 multipart 입력을 검증한다.
 - `{{token}}` 같은 context template이 이전 step의 `extract`에서 만들어졌는지 확인한다.

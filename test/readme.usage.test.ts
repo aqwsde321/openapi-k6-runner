@@ -77,6 +77,9 @@ describe('README usage guide', () => {
     expect(readme).toContain('- include: ./partials/login.yaml');
     expect(readme).toContain('sku: "{{vars.sku}}"');
     expect(readme).toContain('`partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다.');
+    expect(readme).toContain('우선순위는 scenario `fixtures:` < scenario `vars:` < CLI `--var-file` < CLI `--var`입니다.');
+    expect(readme).toContain('npx --yes openapi-k6 validate -s smoke --var-file load-tests/scenarios/fixtures/stage.yaml');
+    expect(readme).toContain('npx --yes openapi-k6 test -s smoke --var sku=ABC-001');
     expect(readme).toContain('### 5. Scenario 정적 검증');
     expect(readme).toContain('npx --yes openapi-k6 validate -s smoke');
     expect(readme).toContain('`validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다.');
@@ -118,6 +121,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('비밀값은 scenario YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조합니다.');
     expect(readme).toContain('`vars:`는 entry scenario에 정의하는 literal 테스트 데이터입니다.');
     expect(readme).toContain('`fixtures:`는 entry scenario 디렉터리 안의 YAML object를 읽어 `vars`로 병합합니다.');
+    expect(readme).toContain('CLI `--var-file`과 `--var`는 `validate`, `generate`, `test`, `run` 실행 시점에 같은 `vars`를 덮어씁니다.');
     expect(readme).toContain('`steps` 안에서 `- include: ./partials/login.yaml`로 공통 step 파일을 펼칠 수 있습니다.');
     expect(readme).toContain('`validate`는 지원하지 않는 `condition` 표현식, `extract.from` JSONPath, 아직 이전 step에서 추출되지 않은 `{{token}}` 같은 context template 참조를 API 호출 전에 실패로 처리합니다.');
     expect(readme).toContain('`body`와 `multipart`는 같은 step에서 함께 쓰지 않습니다.');
@@ -128,6 +132,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('| scenario용 endpoint 검색 | `npx --yes openapi-k6 catalog --query login` |');
     expect(readme).toContain('| scenario 정적 검증 | `npx --yes openapi-k6 validate -s <name>` |');
     expect(readme).toContain('| scenario 실행 검증 | `npx --yes openapi-k6 test -s <name>` |');
+    expect(readme).toContain('| 환경별 vars override | `npx --yes openapi-k6 test -s <name> --var-file load-tests/scenarios/fixtures/stage.yaml --var sku=ABC-001` |');
     expect(readme).toContain('| 정적 검증, 생성, k6 실행 | `npx --yes openapi-k6 run -s <name> --log -- --vus 1` |');
     expect(readme).toContain('| k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <name>` |');
     expect(readme).toContain('| k6 설치 후 실행 | `./load-tests/run.sh <name> --log` |');
@@ -144,7 +149,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('init 후 생성된 load-tests/README.md를 읽고, 그 문서의 작업 순서와 규칙을 기준으로 진행해.');
     expect(readme).toContain('npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 생성해.');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query login처럼 적절한 검색어로 테스트할 endpoint 후보를 확인해.');
-    expect(readme).toContain('반복 데이터는 scenario 상단 vars:나 fixtures: YAML 파일에 두고 {{vars.NAME}}으로 참조해.');
+    expect(readme).toContain('반복 데이터는 scenario 상단 vars:나 fixtures: YAML 파일에 두고 {{vars.NAME}}으로 참조해. 환경별로만 바뀌는 값은 --var-file 또는 --var로 덮어써.');
     expect(readme).toContain('반복되는 로그인/seed 흐름은 load-tests/scenarios/partials/*.yaml로 분리하고 steps에서 - include: ./partials/login.yaml로 재사용해.');
     expect(readme).toContain('npx --yes openapi-k6 validate -s <name>으로 YAML/OpenAPI 정합성을 먼저 확인해.');
     expect(readme).toContain('npx --yes openapi-k6 test -s <name>으로 실제 API 흐름을 검증해.');

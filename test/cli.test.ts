@@ -435,6 +435,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('sku: "{{vars.sku}}"');
     expect(readme).toContain('`partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다.');
     expect(readme).toContain('`init`은 `load-tests/scenarios/partials/login.yaml.example`과 `load-tests/scenarios/fixtures/dev.yaml.example`도 함께 생성합니다.');
+    expect(readme).toContain('우선순위는 scenario `fixtures:` < scenario `vars:` < CLI `--var-file` < CLI `--var`입니다.');
+    expect(readme).toContain('npx --yes openapi-k6 validate -s smoke --var-file load-tests/scenarios/fixtures/stage.yaml');
+    expect(readme).toContain('npx --yes openapi-k6 test -s smoke --var sku=ABC-001');
     expect(readme).toContain('npx --yes openapi-k6 validate -s smoke');
     expect(readme).toContain('npx --yes openapi-k6 test -s smoke');
     expect(readme).toContain('`npx --yes openapi-k6 validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다.');
@@ -448,6 +451,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('## 4. 자주 하는 수정');
     expect(readme).toContain('## 5. 제거 방법');
     expect(readme).toContain('- 반복 테스트 데이터 추가: entry scenario 상단 `vars:` 또는 `fixtures:` YAML 파일과 request의 `{{vars.NAME}}`');
+    expect(readme).toContain('- 환경별 테스트 데이터 override: `--var-file load-tests/scenarios/fixtures/stage.yaml` 또는 `--var sku=ABC-001`');
     expect(readme).toContain('- 공통 로그인/seed 재사용: `scenarios/partials/*.yaml`을 만들고 scenario `steps`에서 `- include: ./partials/login.yaml`');
     expect(readme).toContain('- 작업 공간 점검: `npx --yes openapi-k6 doctor`');
     expect(readme).toContain('Authorization: "Bearer {{token}}"');
@@ -480,6 +484,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('### Scenario Notes');
     expect(readme).toContain('Use `npx --yes openapi-k6 catalog --query login` or read `load-tests/openapi/pharma.catalog.json` to pick endpoints; `validate`, `test`, and `generate` read the OpenAPI snapshot, not the catalog.');
     expect(readme).toContain('Put repeated literal test data in entry scenario `vars:` or scenario fixture YAML files and reference it as `{{vars.NAME}}`.');
+    expect(readme).toContain('For environment-specific smoke data, pass `--var-file` or `--var` to `validate`, `generate`, `test`, or `run`.');
     expect(readme).toContain('Reuse common login/seed flows with `- include: ./partials/login.yaml`; include files stay under the entry scenario directory.');
     expect(readme).toContain('Do not use `request.body` and `request.multipart` in the same step.');
     expect(readme).toContain('Config-relative paths resolve from the directory containing `config.yaml`.');
@@ -2772,6 +2777,160 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('const VARS = {"loginId":"tester@example.com"};');
     expect(output).toContain('"username": VARS.loginId');
     expect(output).toContain('"Authorization": `Bearer ${context.token}`');
+  });
+
+  it('applies CLI var files and inline vars across validate, generate, test, and run', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'load-tests/scenarios/fixtures'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/fixtures/stage.yaml'),
+      [
+        'sku: FILE-SKU',
+        'tenantId: tenant-stage',
+        'quantity: 2',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'vars:',
+        '  sku: SCENARIO-SKU',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        sku: "{{vars.sku}}"',
+        '        tenantId: "{{vars.tenantId}}"',
+        '        quantity: "{{vars.quantity}}"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const overrideArgs = [
+      '--var-file',
+      'load-tests/scenarios/fixtures/stage.yaml',
+      '--var',
+      'sku=CLI-SKU',
+      '--var',
+      'quantity=3',
+    ];
+
+    await runCli(
+      ['validate', '-s', 'smoke', ...overrideArgs],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    await runCli(
+      ['generate', '-s', 'smoke', ...overrideArgs],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const generated = await readFile(path.join(workspace, 'load-tests/generated/smoke.k6.js'), 'utf8');
+
+    expect(generated).toContain('const VARS = {"sku":"CLI-SKU","tenantId":"tenant-stage","quantity":3};');
+    expect(generated).toContain('"sku": VARS.sku');
+    expect(generated).toContain('"tenantId": VARS.tenantId');
+    expect(generated).toContain('"quantity": VARS.quantity');
+
+    let requestBody: unknown;
+    await runCli(
+      ['test', '-s', 'smoke', ...overrideArgs, '--no-color'],
+      {
+        cwd: workspace,
+        stdout: createSink(),
+        stderr: createSink(),
+        env: {},
+        fetch: async (_input, init) => {
+          requestBody = JSON.parse(String(init?.body));
+          return new Response(JSON.stringify({ id: 'order-1' }), {
+            status: 201,
+            statusText: 'Created',
+          });
+        },
+      },
+    );
+
+    expect(requestBody).toEqual({
+      sku: 'CLI-SKU',
+      tenantId: 'tenant-stage',
+      quantity: 3,
+    });
+
+    const binDir = path.join(workspace, 'bin');
+    await writeFakeK6(binDir, ['echo fake-k6-output']);
+    await runCli(
+      ['run', '-s', 'smoke', ...overrideArgs],
+      {
+        cwd: workspace,
+        stdout: createSink(),
+        stderr: createSink(),
+        env: {
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        },
+      },
+    );
+
+    const runGenerated = await readFile(path.join(workspace, 'load-tests/generated/smoke.k6.js'), 'utf8');
+
+    expect(runGenerated).toContain('const VARS = {"sku":"CLI-SKU","tenantId":"tenant-stage","quantity":3};');
+  });
+
+  it('fails clearly for invalid CLI scenario var overrides', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        sku: "{{vars.sku}}"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['validate', '-s', 'smoke', '--var', 'bad-name=SKU-1'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('--var must match ^[A-Za-z_$][A-Za-z0-9_$]*$ for {{vars.NAME}} references');
+
+    await expect(
+      runCli(
+        ['validate', '-s', 'smoke', '--var-file', 'load-tests/scenarios/fixtures/missing.yaml'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow('var file was not found');
   });
 
   it('reports scenario validation issues before running API requests', async () => {

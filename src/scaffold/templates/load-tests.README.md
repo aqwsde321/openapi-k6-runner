@@ -257,6 +257,14 @@ steps:
 `partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다. `fixtures/dev.yaml`은 `loginId: tester@example.com`처럼 변수 이름을 key로 두는 YAML object입니다.
 `init`은 `__DIRECTORY__/scenarios/partials/login.yaml.example`과 `__DIRECTORY__/scenarios/fixtures/dev.yaml.example`도 함께 생성합니다. 실제 endpoint/데이터에 맞게 수정한 뒤 `.example`을 제거해 사용하세요.
 
+같은 scenario를 stage/prod 데이터로 짧게 재사용할 때는 실행 명령에 `--var-file`이나 `--var`를 붙입니다. 우선순위는 scenario `fixtures:` < scenario `vars:` < CLI `--var-file` < CLI `--var`입니다.
+
+```bash
+__VALIDATE_SMOKE_COMMAND__ --var-file __DIRECTORY__/scenarios/fixtures/stage.yaml
+__TEST_SMOKE_COMMAND__ --var sku=ABC-001
+__RUN_SMOKE_CLI_COMMAND__ --var-file __DIRECTORY__/scenarios/fixtures/stage.yaml -- --vus 1
+```
+
 생성/수정: scenario YAML
 
 ### 2-3. Scenario 정적 검증
@@ -536,6 +544,7 @@ __GENERATE_WORKFLOW_COMMAND__
 - endpoint 변경: `scenarios/smoke.yaml`의 `api.path`
 - header/body/query/multipart 추가: `scenarios/*.yaml`의 `request`
 - 반복 테스트 데이터 추가: entry scenario 상단 `vars:` 또는 `fixtures:` YAML 파일과 request의 `{{vars.NAME}}`
+- 환경별 테스트 데이터 override: `--var-file __DIRECTORY__/scenarios/fixtures/stage.yaml` 또는 `--var sku=ABC-001`
 - 공통 로그인/seed 재사용: `scenarios/partials/*.yaml`을 만들고 scenario `steps`에서 `- include: ./partials/login.yaml`
 - 대상 API 변경: `config.yaml`의 `baseUrl`, `modules.<name>.openapi` 수정 후 `__CLI_COMMAND__ sync`와 `__CLI_COMMAND__ generate` 재실행
 - module 추가: `__CLI_COMMAND__ module add <name> --base-url <url> --sync`
@@ -592,6 +601,7 @@ This section is for AI agents. Use it as a compact checklist after reading the K
 - Use `__CATALOG_QUERY_COMMAND__` or read `__CATALOG_PATH__` to pick endpoints; `validate`, `test`, and `generate` read the OpenAPI snapshot, not the catalog.
 - Prefer `api.operationId`; use `api.method` and `api.path` when operationId is missing or unclear.
 - Put repeated literal test data in entry scenario `vars:` or scenario fixture YAML files and reference it as `{{vars.NAME}}`.
+- For environment-specific smoke data, pass `--var-file` or `--var` to `validate`, `generate`, `test`, or `run`.
 - Reuse common login/seed flows with `- include: ./partials/login.yaml`; include files stay under the entry scenario directory.
 - Use `api.module` only when a scenario crosses multiple configured OpenAPI modules; it requires `config.yaml` module snapshots.
 - Use `extract` for response values and reference them later as `{{variableName}}`; use `{{env.NAME}}` for runtime secrets.

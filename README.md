@@ -102,6 +102,14 @@ steps:
 
 `partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다. `fixtures/dev.yaml`은 `loginId: tester@example.com`처럼 변수 이름을 key로 두는 YAML object입니다.
 
+같은 scenario를 stage/prod 데이터로 짧게 재사용할 때는 실행 명령에 `--var-file`이나 `--var`를 붙입니다. 우선순위는 scenario `fixtures:` < scenario `vars:` < CLI `--var-file` < CLI `--var`입니다.
+
+```bash
+npx --yes openapi-k6 validate -s smoke --var-file load-tests/scenarios/fixtures/stage.yaml
+npx --yes openapi-k6 test -s smoke --var sku=ABC-001
+npx --yes openapi-k6 run -s smoke --var-file load-tests/scenarios/fixtures/stage.yaml -- --vus 1
+```
+
 ### 5. Scenario 정적 검증
 
 ```bash
@@ -315,7 +323,7 @@ npx --yes openapi-k6 update
 - OpenAPI 3.x 문서를 대상으로 합니다. Swagger/OpenAPI 2.0 문서는 지원하지 않습니다.
 - `condition`은 분기가 아니라 검증식입니다. k6에서는 `check`로 생성되며 다음 step 실행을 막지 않습니다.
 - `extract`는 응답 JSON에서 값을 읽어 다음 step의 `{{token}}` 같은 template 값으로 연결하며, 생성된 k6에서는 추출 실패를 `check` 실패로 표시합니다.
-- `vars:`는 entry scenario에 정의하는 literal 테스트 데이터입니다. `fixtures:`는 entry scenario 디렉터리 안의 YAML object를 읽어 `vars`로 병합합니다. include partial은 entry scenario의 `vars`를 사용할 수 있지만 자체 `vars`/`fixtures`는 정의하지 않습니다.
+- `vars:`는 entry scenario에 정의하는 literal 테스트 데이터입니다. `fixtures:`는 entry scenario 디렉터리 안의 YAML object를 읽어 `vars`로 병합합니다. CLI `--var-file`과 `--var`는 `validate`, `generate`, `test`, `run` 실행 시점에 같은 `vars`를 덮어씁니다. include partial은 entry scenario의 `vars`를 사용할 수 있지만 자체 `vars`/`fixtures`는 정의하지 않습니다.
 - `steps` 안에서 `- include: ./partials/login.yaml`로 공통 step 파일을 펼칠 수 있습니다. include는 local file만 지원하고 entry scenario 디렉터리 밖으로 나갈 수 없습니다.
 - `api.module`은 여러 OpenAPI module을 하나의 scenario에서 섞어 쓸 때 사용합니다. `--openapi` 단독 실행에서는 지원하지 않고 config의 `modules.<name>.snapshot`이 필요합니다.
 - `validate`는 지원하지 않는 `condition` 표현식, `extract.from` JSONPath, 아직 이전 step에서 추출되지 않은 `{{token}}` 같은 context template 참조를 API 호출 전에 실패로 처리합니다.
@@ -355,6 +363,7 @@ pnpm exec openapi-k6 --help
 | scenario용 endpoint 검색 | `npx --yes openapi-k6 catalog --query login` |
 | scenario 정적 검증 | `npx --yes openapi-k6 validate -s <name>` |
 | scenario 실행 검증 | `npx --yes openapi-k6 test -s <name>` |
+| 환경별 vars override | `npx --yes openapi-k6 test -s <name> --var-file load-tests/scenarios/fixtures/stage.yaml --var sku=ABC-001` |
 | 정적 검증, 생성, k6 실행 | `npx --yes openapi-k6 run -s <name> --log -- --vus 1` |
 | k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <name>` |
 | k6 설치 후 실행 | `./load-tests/run.sh <name> --log` |
@@ -378,7 +387,7 @@ AI coding agent에게 아래 프롬프트를 붙여넣으세요. `load-tests/REA
 6. npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 생성해.
 7. npx --yes openapi-k6 catalog --query login처럼 적절한 검색어로 테스트할 endpoint 후보를 확인해. 필요하면 load-tests/openapi/*.catalog.json도 열어봐.
 8. 내가 원하는 API 흐름을 확인한 뒤 load-tests/scenarios/*.yaml을 작성하거나 수정해.
-반복 데이터는 scenario 상단 vars:나 fixtures: YAML 파일에 두고 {{vars.NAME}}으로 참조해.
+반복 데이터는 scenario 상단 vars:나 fixtures: YAML 파일에 두고 {{vars.NAME}}으로 참조해. 환경별로만 바뀌는 값은 --var-file 또는 --var로 덮어써.
    반복되는 로그인/seed 흐름은 load-tests/scenarios/partials/*.yaml로 분리하고 steps에서 - include: ./partials/login.yaml로 재사용해.
 9. npx --yes openapi-k6 validate -s <name>으로 YAML/OpenAPI 정합성을 먼저 확인해.
 10. npx --yes openapi-k6 test -s <name>으로 실제 API 흐름을 검증해.

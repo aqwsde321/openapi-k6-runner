@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `validate`, `generate`, `test`, `run`에 `--var-file`과 `--var` 옵션을 추가해 같은 scenario를 환경별 테스트 데이터로 실행할 수 있게 했습니다.
+
 ## [0.6.0] - 2026-05-24
 
 ### Added

@@ -7,7 +7,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
-import { isMap, Pair, parseDocument, Scalar, YAMLMap } from 'yaml';
+import { isMap, Pair, parse as parseYaml, parseDocument, Scalar, YAMLMap } from 'yaml';
 
 import { buildAst } from '../compiler/ast.builder.js';
 import { generateK6Script } from '../compiler/k6.generator.js';
@@ -63,6 +63,8 @@ const COMMON_OPENAPI_PATHS = [
 ];
 const TODO_VALUE = 'TODO';
 const CLI_VERSION = CURRENT_SCAFFOLD_VERSION;
+const VAR_NAME_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+const RESERVED_VAR_NAMES = new Set(['__proto__']);
 
 export interface CliContext {
   cwd?: string;
@@ -82,6 +84,8 @@ export interface GenerateOptions {
   write?: string;
   config?: string;
   module?: string;
+  varFile?: string[];
+  var?: string[];
 }
 
 export interface ValidateOptions {
@@ -89,6 +93,8 @@ export interface ValidateOptions {
   openapi?: string;
   config?: string;
   module?: string;
+  varFile?: string[];
+  var?: string[];
 }
 
 export interface SyncOptions {
@@ -104,6 +110,8 @@ export interface TestOptions {
   config?: string;
   module?: string;
   color?: boolean;
+  varFile?: string[];
+  var?: string[];
 }
 
 export interface RunOptions {
@@ -116,6 +124,8 @@ export interface RunOptions {
   report?: boolean;
   openDashboard?: boolean;
   k6Args?: string[];
+  varFile?: string[];
+  var?: string[];
 }
 
 export interface CatalogOptions {
@@ -818,6 +828,132 @@ async function loadLoadTestEnv(loadTestDir: string): Promise<Record<string, stri
 
     throw error;
   }
+}
+
+async function applyScenarioVarOverrides(
+  cwd: string,
+  scenario: Scenario,
+  options: Pick<GenerateOptions, 'varFile' | 'var'>,
+): Promise<Scenario> {
+  const fileVars = await loadScenarioVarFiles(cwd, normalizeRepeatedOption(options.varFile));
+  const inlineVars = parseInlineScenarioVars(normalizeRepeatedOption(options.var));
+  const mergedVars = {
+    ...(scenario.vars ?? {}),
+    ...fileVars,
+    ...inlineVars,
+  };
+
+  if (Object.keys(mergedVars).length === 0 && scenario.vars === undefined) {
+    return scenario;
+  }
+
+  return {
+    ...scenario,
+    vars: mergedVars,
+  };
+}
+
+async function loadScenarioVarFiles(
+  cwd: string,
+  values: string[],
+): Promise<Record<string, unknown>> {
+  const vars: Record<string, unknown> = {};
+
+  for (const value of values) {
+    const filePath = path.resolve(cwd, value);
+    Object.assign(vars, await loadScenarioVarFile(filePath));
+  }
+
+  return vars;
+}
+
+async function loadScenarioVarFile(filePath: string): Promise<Record<string, unknown>> {
+  let source: string;
+  let document: unknown;
+
+  try {
+    source = await fs.readFile(filePath, 'utf8');
+  } catch (error) {
+    if (isNodeErrorCode(error, 'ENOENT')) {
+      throw new Error(`${filePath}: var file was not found`);
+    }
+
+    throw error;
+  }
+
+  try {
+    document = parseYaml(source);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${filePath}: failed to parse var file: ${message}`);
+  }
+
+  return parseScenarioVarsRecord(document, `${filePath}: var file`);
+}
+
+function parseInlineScenarioVars(values: string[]): Record<string, unknown> {
+  const vars: Record<string, unknown> = {};
+
+  for (const value of values) {
+    const separatorIndex = value.indexOf('=');
+
+    if (separatorIndex <= 0) {
+      throw new Error(`--var must use name=value syntax: ${JSON.stringify(value)}`);
+    }
+
+    const name = value.slice(0, separatorIndex).trim();
+    const rawValue = value.slice(separatorIndex + 1);
+
+    validateScenarioVarName(name, '--var');
+    vars[name] = parseInlineScenarioVarValue(name, rawValue);
+  }
+
+  return vars;
+}
+
+function parseInlineScenarioVarValue(name: string, value: string): unknown {
+  if (value === '') {
+    return '';
+  }
+
+  try {
+    return parseYaml(value);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`failed to parse --var ${name}: ${message}`);
+  }
+}
+
+function parseScenarioVarsRecord(value: unknown, pathLabel: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${pathLabel} must be an object`);
+  }
+
+  const vars = value as Record<string, unknown>;
+
+  for (const key of Object.keys(vars)) {
+    validateScenarioVarName(key, `${pathLabel}.${key}`);
+  }
+
+  return { ...vars };
+}
+
+function validateScenarioVarName(name: string, pathLabel: string): void {
+  if (!name.trim()) {
+    throw new Error(`${pathLabel}: variable name must not be empty`);
+  }
+
+  if (!VAR_NAME_PATTERN.test(name)) {
+    throw new Error(`${pathLabel} must match ${VAR_NAME_PATTERN.source} for {{vars.NAME}} references`);
+  }
+
+  if (RESERVED_VAR_NAMES.has(name)) {
+    throw new Error(`${pathLabel} is reserved and cannot be referenced as {{vars.${name}}}`);
+  }
+}
+
+function normalizeRepeatedOption(value: string[] | undefined): string[] {
+  return Array.isArray(value) ? value : [];
 }
 
 function selectConfigModule(
@@ -1644,7 +1780,11 @@ export async function runGenerateCommand(
   const config = await loadOptionalConfig(cwd, options.config, options.openapi === undefined);
   assertModuleOptionHasConfig(config, options.module);
   const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
-  const scenario = await parseScenarioFile(scenarioPath);
+  const scenario = await applyScenarioVarOverrides(
+    cwd,
+    await parseScenarioFile(scenarioPath),
+    options,
+  );
   const openApiContext = await loadScenarioOpenApiContext({
     cwd,
     config,
@@ -1695,7 +1835,11 @@ export async function runRunCommand(
   const config = await loadOptionalConfig(cwd, options.config, true);
   assertModuleOptionHasConfig(config, options.module);
   const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
-  const scenario = await parseScenarioFile(scenarioPath);
+  const scenario = await applyScenarioVarOverrides(
+    cwd,
+    await parseScenarioFile(scenarioPath),
+    options,
+  );
   const loadTestDir = resolveLoadTestDir(cwd, config);
   const loadTestEnv = await loadLoadTestEnv(loadTestDir);
   const runtimeEnv = {
@@ -1775,7 +1919,11 @@ export async function runValidateCommand(
   const config = await loadOptionalConfig(cwd, options.config, options.openapi === undefined);
   assertModuleOptionHasConfig(config, options.module);
   const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
-  const scenario = await parseScenarioFile(scenarioPath);
+  const scenario = await applyScenarioVarOverrides(
+    cwd,
+    await parseScenarioFile(scenarioPath),
+    options,
+  );
   const openApiContext = await loadScenarioOpenApiContext({
     cwd,
     config,
@@ -2110,7 +2258,11 @@ export async function runTestCommand(
   const cwd = resolveCwd(context);
   const config = await loadOptionalConfig(cwd, options.config, true);
   const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
-  const scenario = await parseScenarioFile(scenarioPath);
+  const scenario = await applyScenarioVarOverrides(
+    cwd,
+    await parseScenarioFile(scenarioPath),
+    options,
+  );
   const loadTestDir = resolveLoadTestDir(cwd, config);
   const loadTestEnv = await loadLoadTestEnv(loadTestDir);
   const runtimeEnv = {
@@ -3406,6 +3558,10 @@ function shouldUseLiveOutput(
   return stream.isTTY === true;
 }
 
+function collectRepeatedOption(value: string, previous: string[] | undefined): string[] {
+  return [...(previous ?? []), value];
+}
+
 export function createProgram(context: CliContext = {}): Command {
   const stdout = context.stdout ?? process.stdout;
   const stderr = context.stderr ?? process.stderr;
@@ -3468,6 +3624,8 @@ export function createProgram(context: CliContext = {}): Command {
     .option('-w, --write <path>', 'Output k6 script path (defaults to load-tests/generated/<scenario>.k6.js)')
     .option('--config <path>', 'Load test config file path')
     .option('-m, --module <name>', 'Module name from config')
+    .option('--var-file <path>', 'Load scenario vars from a YAML object file; repeatable', collectRepeatedOption)
+    .option('--var <name=value>', 'Override one scenario var; repeatable and parsed as a YAML value', collectRepeatedOption)
     .action(async (options: GenerateOptions) => {
       const result = await runGenerateCommand(options, context);
       writeScaffoldUpdateNotice(stdout, result.scaffoldWarnings ?? [], result.scaffoldUpdateCommand);
@@ -3481,6 +3639,8 @@ export function createProgram(context: CliContext = {}): Command {
     .option('-w, --write <path>', 'Output k6 script path (defaults to load-tests/generated/<scenario>.k6.js)')
     .option('--config <path>', 'Load test config file path')
     .option('-m, --module <name>', 'Module name from config')
+    .option('--var-file <path>', 'Load scenario vars from a YAML object file; repeatable', collectRepeatedOption)
+    .option('--var <name=value>', 'Override one scenario var; repeatable and parsed as a YAML value', collectRepeatedOption)
     .option('--log', 'Save k6 output to load-tests/logs/<scenario>.log')
     .option('--trace', 'Print OpenAPI step start/end logs from the generated k6 script')
     .option('--report', 'Export k6 Web Dashboard HTML to load-tests/logs/<scenario>-report.html')
@@ -3586,6 +3746,8 @@ export function createProgram(context: CliContext = {}): Command {
     .option('-o, --openapi <path>', 'OpenAPI spec file path')
     .option('--config <path>', 'Load test config file path')
     .option('-m, --module <name>', 'Module name from config')
+    .option('--var-file <path>', 'Load scenario vars from a YAML object file; repeatable', collectRepeatedOption)
+    .option('--var <name=value>', 'Override one scenario var; repeatable and parsed as a YAML value', collectRepeatedOption)
     .action(async (options: ValidateOptions) => {
       const result = await runValidateCommand(options, context);
       writeValidateSummary(stdout, result, resolveCwd(context));
@@ -3597,6 +3759,8 @@ export function createProgram(context: CliContext = {}): Command {
     .requiredOption('-s, --scenario <path-or-name>', 'Scenario DSL file path or load-tests scenario name')
     .option('--config <path>', 'Load test config file path')
     .option('-m, --module <name>', 'Module name from config')
+    .option('--var-file <path>', 'Load scenario vars from a YAML object file; repeatable', collectRepeatedOption)
+    .option('--var <name=value>', 'Override one scenario var; repeatable and parsed as a YAML value', collectRepeatedOption)
     .option('--no-color', 'Disable ANSI color output')
     .action(async (options: TestOptions) => {
       const colorEnv = context.env ?? process.env;
