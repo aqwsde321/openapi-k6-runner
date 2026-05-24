@@ -9,6 +9,9 @@
 ### Changed
 
 - `pnpm run smoke:e2e`가 seed/auth/bos fixture를 서로 다른 로컬 서버 포트로 띄워 module별 OpenAPI 탐색과 cross-module API 호출을 검증하도록 보강했습니다.
+- README와 scaffold README에 서로 다른 Swagger/OpenAPI 서버를 module로 연결하는 사용 예시를 보강했습니다.
+- 유지보수자가 현재 아키텍처와 검증 체계를 빠르게 파악할 수 있도록 프로젝트 리뷰 문서를 추가했습니다.
+- `init`/`update`가 scaffold metadata를 기록하고, 오래된 scaffold에서 `validate`/`test`/`generate`/`run` 실행 시 구분되는 `Scaffold update available` 안내를 표시하도록 했습니다.
 
 ## [0.5.0] - 2026-05-24
 

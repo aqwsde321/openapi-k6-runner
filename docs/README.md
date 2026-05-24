@@ -9,6 +9,7 @@
 ## 유지보수
 
 - [도구 개발/유지보수](./03-maintainer-notes.md): 로컬 checkout 실행, 검증, npm 배포 절차
+- [프로젝트 리뷰](./project-review.md): 현재 아키텍처, 검증 체계, 호환성 원칙, 다음 개선 후보
 
 ## 현재 스펙
 

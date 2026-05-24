@@ -19,6 +19,7 @@
     "README.md",
     "CHANGELOG.md",
     "docs/03-maintainer-notes.md",
+    "docs/project-review.md",
     ".env.example"
   ],
   "keywords": [

@@ -27,6 +27,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('| Scenario YAML | 로그인, 추출, 인증 요청 같은 API 흐름을 YAML로 표현합니다. |');
     expect(readme).toContain('| 검증 관문 | k6 실행 전에 OpenAPI 정합성, 요청 구성, 추출, 설정 오류를 잡습니다. |');
     expect(readme).toContain('| OpenAPI catalog | `catalog` 명령으로 scenario에 쓸 `operationId`, `method`, `path`를 찾습니다. |');
+    expect(readme).toContain('| 멀티모듈/멀티서버 | `module add`와 `api.module`로 서로 다른 OpenAPI/Swagger 서버를 하나의 scenario에서 연결합니다. |');
     expect(readme).toContain('| `load-tests/` 작업 공간 | config, scenario, snapshot, 생성된 k6 스크립트, runner를 백엔드 프로젝트 안에서 관리합니다. |');
     expect(readme).toContain('| AI 작업 프롬프트 | 루트 README에서 시작하고 생성 README로 이어지는 작업 지침을 제공합니다. |');
 
@@ -59,7 +60,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('대화형 터미널에서는 `baseUrl`만 묻고 `<baseUrl>/v3/api-docs`가 OpenAPI 3.x JSON인지 확인합니다.');
     expect(readme).toContain('그래도 찾지 못할 때만 OpenAPI spec URL 또는 파일 경로를 묻습니다.');
     expect(readme).toContain('### 2. 설정 확인');
-    expect(readme).toContain('OpenAPI URL이 확인되면 `load-tests/config.yaml`의 `baseUrl`과 `openapi`가 채워집니다.');
+    expect(readme).toContain('OpenAPI URL이 확인되면 `load-tests/config.yaml`의 `baseUrl`과 `modules.<name>.openapi`가 채워집니다.');
     expect(readme).toContain('자동 탐색이 실패하면 CLI 안내에 따라 URL/파일 경로를 입력하거나 `skip`으로 넘어간 뒤 config를 나중에 수정할 수 있습니다.');
     expect(readme).toContain('### 3. OpenAPI snapshot/catalog 생성');
     expect(readme).toContain('npx --yes openapi-k6 sync');
@@ -81,6 +82,12 @@ describe('README usage guide', () => {
     expect(readme).toContain('npx --yes openapi-k6 generate -s smoke');
     expect(readme).toContain('./load-tests/run.sh smoke --log');
     expect(readme).toContain('k6 스크립트 실행에는 k6 설치가 필요합니다.');
+    expect(readme).toContain('### 여러 백엔드 서버를 연결할 때');
+    expect(readme).toContain('인증 서버와 업무 서버처럼 Swagger/OpenAPI 주소가 다른 백엔드를 하나의 scenario에서 이어야 하면 module을 추가합니다.');
+    expect(readme).toContain('npx --yes openapi-k6 module add auth --base-url https://auth-api.example.com --sync');
+    expect(readme).toContain('npx --yes openapi-k6 module add bos --base-url https://bos-api.example.com --sync');
+    expect(readme).toContain('생성된 k6 스크립트는 `BASE_URL_AUTH`, `BASE_URL_BOS` 같은 module별 환경변수를 먼저 읽습니다.');
+    expect(readme).toContain('같은 `operationId`가 여러 module에 있어도 step의 `api.module` 안에서만 찾습니다.');
     expect(readme).not.toContain('cd /path/to/backend-project');
 
     expect(readme).not.toContain('<summary>Scenario YAML 예시</summary>');
@@ -90,8 +97,9 @@ describe('README usage guide', () => {
     expect(readme).toContain('OpenAPI snapshot과 생성된 k6 스크립트는 명령으로 다시 만듭니다.');
     expect(readme).toContain('load-tests/run.sh');
     expect(readme).toContain('기본 `load-tests/.gitignore`는 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.');
-    expect(readme).toContain('기존 `load-tests/config.yaml`과 scenario를 보존한 채 README, runner, `.env.example`, `.gitignore` 같은 scaffold 파일만 최신화하려면 `update`를 사용합니다.');
+    expect(readme).toContain('기존 `load-tests/config.yaml`과 scenario를 보존한 채 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화하려면 `update`를 사용합니다.');
     expect(readme).toContain('`update`는 `load-tests/config.yaml`, `.env`, `scenarios/`, `openapi/`, `generated/`, `logs/`를 보존합니다.');
+    expect(readme).toContain('오래된 scaffold에서 `validate`, `test`, `generate`, `run`을 실행하면 최신 README/runner를 받을 수 있도록 `Scaffold update available` notice와 `npx --yes openapi-k6 update` 명령이 표시됩니다.');
 
     expect(readme).toContain('<summary>검증 규칙과 제약</summary>');
     expect(readme).toContain('OpenAPI 3.x 문서를 대상으로 합니다. Swagger/OpenAPI 2.0 문서는 지원하지 않습니다.');
@@ -126,7 +134,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('scenario test가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 마.');
     expect(readme).toContain('통과한 scenario만 npx --yes openapi-k6 run -s <name> --log -- --vus 1 --iterations 1로 짧게 실행해.');
     expect(readme).toContain('스크립트만 필요하면 npx --yes openapi-k6 generate -s <name>으로 생성해.');
-    expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore는 scaffold 파일이므로 명시 요청 없이는 수정하지 마.');
+    expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore, load-tests/.openapi-k6.json은 scaffold 파일이므로 명시 요청 없이는 수정하지 마.');
     expect(readme).toContain('비밀값은 scenario YAML에 직접 쓰지 말고 {{env.NAME}}으로 참조해. 실제 값은 load-tests/.env에만 둬.');
     expect(readme).toContain('작업 중간부터는 생성 README를 기준으로 따르세요.');
 

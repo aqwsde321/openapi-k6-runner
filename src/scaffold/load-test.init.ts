@@ -20,6 +20,7 @@ export interface InitLoadTestsResult {
   runScriptPath: string;
   scenarioPath: string;
   readmePath: string;
+  metadataPath: string;
 }
 
 export interface UpdateLoadTestsOptions {
@@ -38,6 +39,7 @@ export interface UpdateLoadTestsResult {
   gitignorePath: string;
   runScriptPath: string;
   readmePath: string;
+  metadataPath: string;
 }
 
 export class InitLoadTestsError extends Error {
@@ -51,6 +53,8 @@ const README_TEMPLATE = readFileSync(
   new URL('./templates/load-tests.README.md', import.meta.url),
   'utf8',
 );
+export const CURRENT_SCAFFOLD_VERSION = '0.5.0';
+export const SCAFFOLD_METADATA_FILENAME = '.openapi-k6.json';
 
 export async function initLoadTests(
   options: InitLoadTestsOptions,
@@ -64,6 +68,7 @@ export async function initLoadTests(
   const runScriptPath = path.join(directoryPath, 'run.sh');
   const scenarioPath = path.join(directoryPath, 'scenarios/smoke.yaml');
   const readmePath = path.join(directoryPath, 'README.md');
+  const metadataPath = path.join(directoryPath, SCAFFOLD_METADATA_FILENAME);
   const smokePath = normalizeEndpointPath(options.smokePath ?? '/health');
 
   if (!options.force && (await pathExists(configPath))) {
@@ -92,6 +97,7 @@ export async function initLoadTests(
   await fs.chmod(runScriptPath, 0o755);
   await writeTextFile(scenarioPath, renderSmokeScenario(smokePath), options.force);
   await writeTextFile(readmePath, renderReadme(moduleName, directory), options.force);
+  await writeTextFile(metadataPath, renderScaffoldMetadata(), options.force);
 
   return {
     directoryPath,
@@ -101,6 +107,7 @@ export async function initLoadTests(
     runScriptPath,
     scenarioPath,
     readmePath,
+    metadataPath,
   };
 }
 
@@ -115,6 +122,7 @@ export async function updateLoadTests(
   const gitignorePath = path.join(directoryPath, '.gitignore');
   const runScriptPath = path.join(directoryPath, 'run.sh');
   const readmePath = path.join(directoryPath, 'README.md');
+  const metadataPath = path.join(directoryPath, SCAFFOLD_METADATA_FILENAME);
 
   if (!(await pathExists(configPath))) {
     throw new InitLoadTestsError(
@@ -135,6 +143,7 @@ export async function updateLoadTests(
   await writeTextFile(gitignorePath, renderGitignore(), true);
   await writeTextFile(runScriptPath, renderRunScript(), true);
   await fs.chmod(runScriptPath, 0o755);
+  await writeTextFile(metadataPath, renderScaffoldMetadata(), true);
   await writeTextFile(
     readmePath,
     renderReadme(moduleName, directory, {
@@ -152,6 +161,7 @@ export async function updateLoadTests(
     gitignorePath,
     runScriptPath,
     readmePath,
+    metadataPath,
   };
 }
 
@@ -327,10 +337,20 @@ function renderGitignore(): string {
   return [
     '*',
     '!.gitignore',
+    `!${SCAFFOLD_METADATA_FILENAME}`,
     '!scenarios/',
     '!scenarios/**',
     '',
   ].join('\n');
+}
+
+function renderScaffoldMetadata(): string {
+  return JSON.stringify({
+    tool: 'openapi-k6',
+    schemaVersion: 1,
+    scaffoldVersion: CURRENT_SCAFFOLD_VERSION,
+    generatedAt: new Date().toISOString(),
+  }, null, 2) + '\n';
 }
 
 function renderRunScript(): string {

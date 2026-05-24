@@ -26,7 +26,7 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
 11. 스크립트만 필요하면 __GENERATE_NAME_COMMAND__ 형식으로 k6 script를 생성해.
 12. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 예상 확인 포인트를 알려줘.
 
-__DIRECTORY__/README.md, __RUN_SCRIPT_PATH__, __DIRECTORY__/.env.example, __DIRECTORY__/.gitignore는 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.
+__DIRECTORY__/README.md, __RUN_SCRIPT_PATH__, __DIRECTORY__/.env.example, __DIRECTORY__/.gitignore, __DIRECTORY__/.openapi-k6.json은 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.
 __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.
 비밀 값은 scenario YAML에 직접 쓰지 말고 {{env.NAME}}으로 참조해. 실제 값은 __ENV_PATH__에만 둬.
 ```
@@ -107,6 +107,7 @@ __DIRECTORY__/
 ├── config.yaml
 ├── .env.example
 ├── .env          # 필요 시 직접 생성, git commit 금지
+├── .openapi-k6.json
 ├── .gitignore
 ├── run.sh
 ├── __SNAPSHOT_CONFIG_VALUE__
@@ -145,10 +146,11 @@ modules:
 
 여러 module을 하나의 scenario에서 섞어야 하면 step마다 `api.module`을 지정합니다.
 
-새 module은 `config.yaml`을 직접 편집하지 않고 CLI로 추가할 수 있습니다.
+인증 서버와 업무 서버처럼 Swagger/OpenAPI 주소가 서로 다른 백엔드를 하나의 scenario에서 이어야 할 때도 같은 방식입니다. 새 module은 `config.yaml`을 직접 편집하지 않고 CLI로 추가할 수 있습니다.
 
 ```bash
 __CLI_COMMAND__ module add auth --base-url https://auth-api.example.com --sync
+__CLI_COMMAND__ module add bos --base-url https://bos-api.example.com --sync
 __CLI_COMMAND__ module list
 __CLI_COMMAND__ module set-default auth
 __CLI_COMMAND__ module remove auth
@@ -172,14 +174,21 @@ steps:
     api:
       module: auth
       operationId: loginUser
+    extract:
+      token:
+        from: $.token
 
   - id: create-order
     api:
       module: bos
       operationId: createOrder
+    request:
+      headers:
+        Authorization: "Bearer {{token}}"
 ```
 
 `api.module`이 없는 step은 기존처럼 `--module`, `defaultModule`, 단일 module 추론 순서로 module을 선택합니다.
+같은 `operationId`가 여러 module에 있어도 step의 `api.module` 안에서만 찾습니다.
 
 외부 파일이나 URL을 가리키는 `$ref`는 snapshot 내부 참조로 묶어 저장하므로, 이후 `generate`는 원격 원본 없이 snapshot 파일만으로 실행할 수 있습니다.
 
@@ -380,9 +389,11 @@ API base URL은 `__CLI_COMMAND__ generate` 실행 시점의 `config.yaml` `baseU
 `config.yaml`을 수정한 뒤에는 스크립트를 다시 생성해야 반영됩니다.
 실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.
 multi-module scenario는 `BASE_URL_<MODULE>` 환경 변수를 먼저 읽습니다. 예를 들어 `auth`는 `BASE_URL_AUTH`, `bos-api`는 `BASE_URL_BOS_API`를 사용하고, 없으면 기존 `BASE_URL`과 config 기본값을 순서대로 사용합니다.
+서로 다른 서버를 대상으로 실행할 때는 module별 값을 따로 넘기면 됩니다.
 
 ```bash
 __BASE_URL_RUN_COMMAND__
+BASE_URL_AUTH=https://auth-api.example.com BASE_URL_BOS=https://bos-api.example.com __RUN_SMOKE_COMMAND__
 ```
 
 ## 3. 비밀 값 사용
@@ -504,7 +515,8 @@ __GENERATE_WORKFLOW_COMMAND__
 
 ## 5. 제거 방법
 
-`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore` 같은 scaffold 파일만 최신화합니다.
+`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.
+오래된 scaffold에서 `validate`, `test`, `generate`, `run`을 실행하면 최신 README/runner를 받을 수 있도록 `Scaffold update available` notice와 `__UPDATE_COMMAND__` 명령이 표시됩니다.
 
 ```bash
 __UPDATE_COMMAND__

@@ -6,6 +6,7 @@ import { PassThrough, Writable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { runCli } from '../src/cli/index.js';
+import { CURRENT_SCAFFOLD_VERSION } from '../src/scaffold/load-test.init.js';
 
 function createSink(): Writable {
   return new Writable({
@@ -279,6 +280,9 @@ describe('openapi-k6 CLI', () => {
     const runScriptSyntax = spawnSync('bash', ['-n', runScriptPath], { encoding: 'utf8' });
     const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
     const readme = await readFile(path.join(workspace, 'load-tests/README.md'), 'utf8');
+    const metadata = JSON.parse(
+      await readFile(path.join(workspace, 'load-tests/.openapi-k6.json'), 'utf8'),
+    ) as { tool: string; schemaVersion: number; scaffoldVersion: string; generatedAt: string };
 
     expect(config).toBe([
       '# API 호출 기준 URL입니다. 생성된 k6 스크립트의 기본 BASE_URL로 사용됩니다.',
@@ -316,7 +320,13 @@ describe('openapi-k6 CLI', () => {
       'LOGIN_PASSWORD=',
       '',
     ].join('\n'));
-    expect(gitignore).toBe('*\n!.gitignore\n!scenarios/\n!scenarios/**\n');
+    expect(gitignore).toBe('*\n!.gitignore\n!.openapi-k6.json\n!scenarios/\n!scenarios/**\n');
+    expect(metadata).toMatchObject({
+      tool: 'openapi-k6',
+      schemaVersion: 1,
+      scaffoldVersion: CURRENT_SCAFFOLD_VERSION,
+    });
+    expect(new Date(metadata.generatedAt).toString()).not.toBe('Invalid Date');
     expect(runScript).toContain('#!/usr/bin/env bash');
     expect(runScript).toContain('SCENARIO="smoke"');
     expect(runScript).toContain('LOG_ENABLED=false');
@@ -469,7 +479,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('스크립트만 필요하면 npx --yes openapi-k6 generate -s <name> 형식으로 k6 script를 생성해.');
     expect(readme).toContain('장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고');
     expect(readme).not.toContain('### Prompt Examples');
-    expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore는 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.');
+    expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore, load-tests/.openapi-k6.json은 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.');
     expect(readme).not.toContain('### Scenario DSL Reference');
     expect(readme).not.toContain('Follow this order: fill remaining TODO values');
     expect(readme).not.toContain('사람이 직접 볼 핵심은 여기까지입니다.');
@@ -1254,7 +1264,8 @@ describe('openapi-k6 CLI', () => {
 
     expect(config).toContain('baseUrl: https://changed.test.local');
     expect(readme).toContain('# load-tests');
-    expect(readme).toContain('`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore` 같은 scaffold 파일만 최신화합니다.');
+    expect(readme).toContain('`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.');
+    expect(readme).toContain('오래된 scaffold에서 `validate`, `test`, `generate`, `run`을 실행하면 최신 README/runner를 받을 수 있도록 `Scaffold update available` notice와 `npx --yes openapi-k6 update` 명령이 표시됩니다.');
     expect(runScript).toContain('exec k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH"');
     expect(scenario).toContain('path: /health');
     expect(env).toBe('LOGIN_PASSWORD=local-secret\n');
@@ -1300,6 +1311,9 @@ describe('openapi-k6 CLI', () => {
     const runScript = await readFile(path.join(workspace, 'load-tests/run.sh'), 'utf8');
     const envExample = await readFile(path.join(workspace, 'load-tests/.env.example'), 'utf8');
     const gitignore = await readFile(path.join(workspace, 'load-tests/.gitignore'), 'utf8');
+    const metadata = JSON.parse(
+      await readFile(path.join(workspace, 'load-tests/.openapi-k6.json'), 'utf8'),
+    ) as { scaffoldVersion: string };
     const env = await readFile(path.join(workspace, 'load-tests/.env'), 'utf8');
     const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
     const generated = await readFile(path.join(workspace, 'load-tests/generated/custom.k6.js'), 'utf8');
@@ -1314,7 +1328,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 update');
     expect(runScript).toContain('exec k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH"');
     expect(envExample).toContain('LOGIN_PASSWORD=');
-    expect(gitignore).toBe('*\n!.gitignore\n!scenarios/\n!scenarios/**\n');
+    expect(gitignore).toBe('*\n!.gitignore\n!.openapi-k6.json\n!scenarios/\n!scenarios/**\n');
+    expect(metadata.scaffoldVersion).toBe(CURRENT_SCAFFOLD_VERSION);
     expect(env).toBe('LOGIN_PASSWORD=local-secret\n');
     expect(scenario).toBe('name: kept\nsteps: []\n');
     expect(generated).toBe('export default function () {}\n');
@@ -2518,6 +2533,11 @@ describe('openapi-k6 CLI', () => {
     expect(stdout.output()).toContain('  module   app');
     expect(stdout.output()).toContain('  scenario smoke');
     expect(stdout.output()).toContain('  steps    3');
+    expect(stdout.output()).not.toContain('Warnings:');
+    expect(stdout.output()).toContain('Scaffold update available:');
+    expect(stdout.output()).toContain('load-tests/.openapi-k6.json was not found.');
+    expect(stdout.output()).toContain('  command  npx --yes openapi-k6 update');
+    expect(stdout.output()).toContain('  keeps    config, scenarios, .env, snapshots, generated scripts, and logs unchanged');
   });
 
   it('reports scenario validation issues before running API requests', async () => {
