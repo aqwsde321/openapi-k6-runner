@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `pnpm run smoke:e2e`가 seed/auth/bos fixture를 서로 다른 로컬 서버 포트로 띄워 module별 OpenAPI 탐색과 cross-module API 호출을 검증하도록 보강했습니다.
+
 ## [0.5.0] - 2026-05-24
 
 ### Added

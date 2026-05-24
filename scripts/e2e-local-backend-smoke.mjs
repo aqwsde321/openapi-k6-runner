@@ -13,11 +13,10 @@ async function main() {
   await assertBuiltCliExists();
 
   const workspace = await mkdtemp(path.join(tmpdir(), 'openapi-k6-e2e-'));
-  let server;
+  let fixture;
 
   try {
-    server = await startFixtureBackend();
-    const origin = `http://127.0.0.1:${server.port}`;
+    fixture = await startFixtureBackends();
     const projectDir = path.join(workspace, 'backend-project');
     const k6ArgsLogPath = path.join(workspace, 'k6-args.txt');
     const k6EnvLogPath = path.join(workspace, 'k6-env.txt');
@@ -26,15 +25,20 @@ async function main() {
       k6EnvLogPath,
     });
 
-    await runMultiModuleFlow(projectDir, origin, env, {
+    await runMultiModuleFlow(projectDir, fixture, env, {
       k6ArgsLogPath,
       k6EnvLogPath,
     });
 
-    console.log(`Local backend E2E smoke passed for ${origin}.`);
+    console.log([
+      'Local backend E2E smoke passed for',
+      `seed=${fixture.seedBaseUrl},`,
+      `auth=${fixture.authBaseUrl},`,
+      `bos=${fixture.bosBaseUrl}.`,
+    ].join(' '));
   } finally {
-    if (server !== undefined) {
-      await server.close();
+    if (fixture !== undefined) {
+      await fixture.close();
     }
 
     await rm(workspace, { recursive: true, force: true });
@@ -142,10 +146,18 @@ function shellQuote(value) {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-async function runMultiModuleFlow(projectDir, origin, env, options) {
-  const seedBaseUrl = `${origin}/seed`;
-  const authBaseUrl = `${origin}/auth`;
-  const bosBaseUrl = `${origin}/bos`;
+async function runMultiModuleFlow(projectDir, fixture, env, options) {
+  const {
+    seedBaseUrl,
+    authBaseUrl,
+    bosBaseUrl,
+  } = fixture;
+
+  assertDistinctOrigins({
+    seed: seedBaseUrl,
+    auth: authBaseUrl,
+    bos: bosBaseUrl,
+  });
 
   await mkdir(projectDir, { recursive: true });
   await runCli([
@@ -170,6 +182,8 @@ async function runMultiModuleFlow(projectDir, origin, env, options) {
   ], projectDir, env);
   assertIncludes(authAdd.stdout, `${authBaseUrl}/v3/api-docs  HTTP 404`, 'auth module add should try the default OpenAPI path first');
   assertIncludes(authAdd.stdout, `${authBaseUrl}/api-docs  OpenAPI 3.0.3`, 'auth module add should discover the fallback OpenAPI path');
+  assertRequestLog(fixture.requests.auth, 'GET /v3/api-docs', 'auth OpenAPI discovery should try the default path');
+  assertRequestLog(fixture.requests.auth, 'GET /api-docs', 'auth OpenAPI discovery should try the fallback path');
 
   const bosAdd = await runCli([
     'module',
@@ -180,6 +194,7 @@ async function runMultiModuleFlow(projectDir, origin, env, options) {
     '--sync',
   ], projectDir, env);
   assertIncludes(bosAdd.stdout, `${bosBaseUrl}/v3/api-docs  OpenAPI 3.0.3`, 'bos module add should discover the default OpenAPI path');
+  assertRequestLog(fixture.requests.bos, 'GET /v3/api-docs', 'bos OpenAPI discovery should try the default path');
 
   await writeFile(
     path.join(projectDir, 'load-tests/.env'),
@@ -209,6 +224,8 @@ async function runMultiModuleFlow(projectDir, origin, env, options) {
   const test = await runCli(['test', '-s', 'cross-module', '--no-color'], projectDir, env);
   assertIncludes(test.stdout, 'summary:', 'cross-module scenario test should print a summary');
   assertIncludes(test.stdout, 'PASS', 'cross-module scenario test should pass');
+  assertRequestLog(fixture.requests.auth, 'POST /login', 'cross-module test should call the auth server');
+  assertRequestLog(fixture.requests.bos, 'POST /orders', 'cross-module test should call the bos server');
 
   await runCli(['generate', '-s', 'cross-module'], projectDir, env);
   const generatedScript = path.join(projectDir, 'load-tests/generated/cross-module.k6.js');
@@ -323,6 +340,21 @@ function assertModuleList(stdout, expectedNames, expectedDefault) {
   }
 }
 
+function assertDistinctOrigins(namedUrls) {
+  const origins = Object.entries(namedUrls).map(([name, url]) => [name, new URL(url).origin]);
+  const uniqueOrigins = new Set(origins.map(([, origin]) => origin));
+
+  if (uniqueOrigins.size !== origins.length) {
+    throw new Error(`expected fixture modules to use distinct server origins; got ${JSON.stringify(Object.fromEntries(origins))}`);
+  }
+}
+
+function assertRequestLog(requests, expected, message) {
+  if (!requests.includes(expected)) {
+    throw new Error(`${message}\nExpected request: ${expected}\nReceived requests:\n${requests.join('\n')}`);
+  }
+}
+
 function assertK6Args(rawArgs) {
   const args = rawArgs.trim().split('\n');
 
@@ -372,31 +404,32 @@ function createCrossModuleScenario() {
   ].join('\n');
 }
 
-function startFixtureBackend() {
-  const server = createServer(async (request, response) => {
-    const url = new URL(request.url ?? '/', 'http://fixture.local');
-
-    if (request.method === 'GET' && url.pathname === '/seed/v3/api-docs') {
-      sendJson(response, 200, createSeedOpenApi('/seed'));
+async function startFixtureBackends() {
+  const seed = await startFixtureServer(async ({ request, response, url, origin }) => {
+    if (request.method === 'GET' && url.pathname === '/v3/api-docs') {
+      sendJson(response, 200, createSeedOpenApi(origin));
       return;
     }
 
-    if (request.method === 'GET' && url.pathname === '/auth/v3/api-docs') {
+    if (request.method === 'GET' && url.pathname === '/health') {
+      sendJson(response, 200, { ok: true });
+      return;
+    }
+
+    sendJson(response, 404, { error: 'not found' });
+  });
+  const auth = await startFixtureServer(async ({ request, response, url, origin }) => {
+    if (request.method === 'GET' && url.pathname === '/v3/api-docs') {
       sendJson(response, 404, { error: 'not found' });
       return;
     }
 
-    if (request.method === 'GET' && url.pathname === '/auth/api-docs') {
-      sendJson(response, 200, createAuthOpenApi('/auth'));
+    if (request.method === 'GET' && url.pathname === '/api-docs') {
+      sendJson(response, 200, createAuthOpenApi(origin));
       return;
     }
 
-    if (request.method === 'GET' && url.pathname === '/bos/v3/api-docs') {
-      sendJson(response, 200, createBosOpenApi('/bos'));
-      return;
-    }
-
-    if (request.method === 'POST' && url.pathname === '/auth/login') {
+    if (request.method === 'POST' && url.pathname === '/login') {
       const body = await readJsonRequest(request);
 
       if (body.username !== 'smoke') {
@@ -408,7 +441,15 @@ function startFixtureBackend() {
       return;
     }
 
-    if (request.method === 'POST' && url.pathname === '/bos/orders') {
+    sendJson(response, 404, { error: 'not found' });
+  });
+  const bos = await startFixtureServer(async ({ request, response, url, origin }) => {
+    if (request.method === 'GET' && url.pathname === '/v3/api-docs') {
+      sendJson(response, 200, createBosOpenApi(origin));
+      return;
+    }
+
+    if (request.method === 'POST' && url.pathname === '/orders') {
       const authorization = request.headers.authorization;
       const body = await readJsonRequest(request);
 
@@ -429,6 +470,41 @@ function startFixtureBackend() {
     sendJson(response, 404, { error: 'not found' });
   });
 
+  return {
+    seedBaseUrl: seed.origin,
+    authBaseUrl: auth.origin,
+    bosBaseUrl: bos.origin,
+    requests: {
+      seed: seed.requests,
+      auth: auth.requests,
+      bos: bos.requests,
+    },
+    close: async () => {
+      await Promise.all([
+        seed.close(),
+        auth.close(),
+        bos.close(),
+      ]);
+    },
+  };
+}
+
+function startFixtureServer(handler) {
+  const requests = [];
+  let origin = 'http://fixture.local';
+  const server = createServer(async (request, response) => {
+    const url = new URL(request.url ?? '/', origin);
+    requests.push(`${request.method} ${url.pathname}`);
+
+    try {
+      await handler({ request, response, url, origin });
+    } catch (error) {
+      sendJson(response, 500, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', () => {
@@ -439,8 +515,10 @@ function startFixtureBackend() {
         return;
       }
 
+      origin = `http://127.0.0.1:${address.port}`;
       resolve({
-        port: address.port,
+        origin,
+        requests,
         close: () => new Promise((closeResolve, closeReject) => {
           server.close((error) => {
             if (error) {
