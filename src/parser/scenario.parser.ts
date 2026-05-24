@@ -4,6 +4,16 @@ import { parse as parseYaml } from 'yaml';
 
 import type { ApiReference, ExtractRule, MultipartFile, MultipartRequest, Scenario, Step, StepRequest } from '../core/types.js';
 
+interface ParsedStepEntry {
+  step: Step;
+  stepPath: string;
+}
+
+interface ScenarioFileParseContext {
+  entryDir: string;
+  stack: string[];
+}
+
 export class ScenarioParseError extends Error {
   constructor(message: string) {
     super(message);
@@ -12,8 +22,24 @@ export class ScenarioParseError extends Error {
 }
 
 export async function parseScenarioFile(filePath: string): Promise<Scenario> {
-  const source = await fs.readFile(filePath, 'utf8');
-  return parseScenarioSource(source, filePath);
+  const resolvedPath = path.resolve(filePath);
+  const scenario = await parseScenarioFileInternal(
+    resolvedPath,
+    {
+      entryDir: path.dirname(resolvedPath),
+      stack: [resolvedPath],
+    },
+    true,
+  );
+
+  if (scenario.name === undefined) {
+    throw new ScenarioParseError(`${resolvedPath}: name must be a string`);
+  }
+
+  return {
+    name: scenario.name,
+    steps: finalizeSteps(scenario.steps),
+  };
 }
 
 export function parseScenarioSource(source: string, sourcePath = '<inline>'): Scenario {
@@ -41,20 +67,197 @@ export function parseScenarioDocument(document: unknown, sourcePath = '<inline>'
     throw new ScenarioParseError(`${sourcePath}: steps must be a non-empty array`);
   }
 
-  const usedStepIds = new Set<string>();
-  const steps = root.steps.map((stepValue, index) => {
+  const steps = finalizeSteps(root.steps.map((stepValue, index) => {
     const stepPath = `${sourcePath}: steps[${index}]`;
-    const step = parseStep(stepValue, stepPath);
-
-    if (usedStepIds.has(step.id)) {
-      throw new ScenarioParseError(`${stepPath}: duplicate step id "${step.id}"`);
-    }
-
-    usedStepIds.add(step.id);
-    return step;
-  });
+    return {
+      step: parseStepOrRejectInclude(stepValue, stepPath),
+      stepPath,
+    };
+  }));
 
   return { name, steps };
+}
+
+async function parseScenarioFileInternal(
+  filePath: string,
+  context: ScenarioFileParseContext,
+  requireName: boolean,
+): Promise<{ name?: string; steps: ParsedStepEntry[] }> {
+  let source: string;
+  let document: unknown;
+
+  try {
+    source = await fs.readFile(filePath, 'utf8');
+  } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === 'ENOENT'
+    ) {
+      throw new ScenarioParseError(`${filePath}: scenario file was not found`);
+    }
+
+    throw error;
+  }
+
+  try {
+    document = parseYaml(source);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ScenarioParseError(`${filePath}: failed to parse scenario DSL: ${message}`);
+  }
+
+  const root = expectRecord(document, `${filePath}: scenario must be an object`);
+  const name = parseScenarioName(root.name, filePath, requireName);
+  const steps = await parseFileStepEntries(root.steps, filePath, context);
+
+  return {
+    ...(name === undefined ? {} : { name }),
+    steps,
+  };
+}
+
+function parseScenarioName(value: unknown, sourcePath: string, requireName: boolean): string | undefined {
+  if (value === undefined && !requireName) {
+    return undefined;
+  }
+
+  const name = expectString(value, `${sourcePath}: name must be a string`);
+
+  if (!name.trim()) {
+    throw new ScenarioParseError(`${sourcePath}: name must not be empty`);
+  }
+
+  return name;
+}
+
+async function parseFileStepEntries(
+  value: unknown,
+  sourcePath: string,
+  context: ScenarioFileParseContext,
+): Promise<ParsedStepEntry[]> {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new ScenarioParseError(`${sourcePath}: steps must be a non-empty array`);
+  }
+
+  const entries: ParsedStepEntry[] = [];
+
+  for (const [index, stepValue] of value.entries()) {
+    const stepPath = `${sourcePath}: steps[${index}]`;
+    const includePath = parseIncludeStep(stepValue, stepPath);
+
+    if (includePath !== undefined) {
+      const includedPath = resolveIncludePath(includePath, stepPath, sourcePath, context);
+      entries.push(...(await parseIncludedScenarioFile(includedPath, context)));
+      continue;
+    }
+
+    entries.push({
+      step: parseStep(stepValue, stepPath),
+      stepPath,
+    });
+  }
+
+  return entries;
+}
+
+async function parseIncludedScenarioFile(
+  filePath: string,
+  context: ScenarioFileParseContext,
+): Promise<ParsedStepEntry[]> {
+  if (context.stack.includes(filePath)) {
+    const cycle = [...context.stack, filePath].map((entry) => path.relative(context.entryDir, entry) || '.').join(' -> ');
+    throw new ScenarioParseError(`${filePath}: include cycle detected: ${cycle}`);
+  }
+
+  const scenario = await parseScenarioFileInternal(
+    filePath,
+    {
+      entryDir: context.entryDir,
+      stack: [...context.stack, filePath],
+    },
+    false,
+  );
+
+  return scenario.steps;
+}
+
+function parseStepOrRejectInclude(value: unknown, stepPath: string): Step {
+  if (parseIncludeStep(value, stepPath) !== undefined) {
+    throw new ScenarioParseError(`${stepPath}: include steps require parseScenarioFile`);
+  }
+
+  return parseStep(value, stepPath);
+}
+
+function parseIncludeStep(value: unknown, stepPath: string): string | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !('include' in value)) {
+    return undefined;
+  }
+
+  const rawStep = value as Record<string, unknown>;
+  const keys = Object.keys(rawStep);
+
+  if (keys.length !== 1) {
+    throw new ScenarioParseError(`${stepPath}: include step can only contain include`);
+  }
+
+  return parseIncludePath(rawStep.include, `${stepPath}.include`);
+}
+
+function parseIncludePath(value: unknown, pathLabel: string): string {
+  if (typeof value !== 'string') {
+    throw new ScenarioParseError(`${pathLabel} must be a string`);
+  }
+
+  const includePath = value.trim();
+
+  if (!includePath) {
+    throw new ScenarioParseError(`${pathLabel} must not be empty`);
+  }
+
+  if (includePath.includes('{{')) {
+    throw new ScenarioParseError(`${pathLabel} must be a static path without templates`);
+  }
+
+  if (path.isAbsolute(includePath)) {
+    throw new ScenarioParseError(`${pathLabel} must be relative to the entry scenario directory`);
+  }
+
+  return includePath;
+}
+
+function resolveIncludePath(
+  includePath: string,
+  stepPath: string,
+  sourcePath: string,
+  context: ScenarioFileParseContext,
+): string {
+  const resolvedPath = path.resolve(path.dirname(sourcePath), includePath);
+  const relativePath = path.relative(context.entryDir, resolvedPath);
+
+  if (relativePath === '' || relativePath.split(path.sep).includes('..') || path.isAbsolute(relativePath)) {
+    throw new ScenarioParseError(`${stepPath}.include must stay inside the entry scenario directory`);
+  }
+
+  return resolvedPath;
+}
+
+function finalizeSteps(entries: ParsedStepEntry[]): Step[] {
+  const usedStepIds = new Set<string>();
+  const steps: Step[] = [];
+
+  for (const entry of entries) {
+    if (usedStepIds.has(entry.step.id)) {
+      throw new ScenarioParseError(`${entry.stepPath}: duplicate step id "${entry.step.id}"`);
+    }
+
+    usedStepIds.add(entry.step.id);
+    steps.push(entry.step);
+  }
+
+  return steps;
 }
 
 function parseStep(value: unknown, stepPath: string): Step {

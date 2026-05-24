@@ -229,6 +229,23 @@ __CATALOG_QUERY_COMMAND__
 
 기본 smoke 테스트는 `__SCENARIO_PATH__`를 수정합니다. 새 테스트는 `__SCENARIO_TEMPLATE_PATH__` 파일을 만듭니다.
 
+반복되는 로그인, seed, cleanup 흐름은 별도 YAML로 분리한 뒤 scenario의 원하는 위치에서 include할 수 있습니다. include 경로는 entry scenario 파일 기준 상대 경로이며, entry scenario 디렉터리 안에 있어야 합니다.
+
+```yaml
+name: order-flow
+
+steps:
+  - include: ./partials/login.yaml
+  - id: create-order
+    api:
+      operationId: createOrder
+    request:
+      headers:
+        Authorization: "Bearer {{token}}"
+```
+
+`partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다.
+
 생성/수정: scenario YAML
 
 ### 2-3. Scenario 정적 검증
@@ -507,6 +524,7 @@ __GENERATE_WORKFLOW_COMMAND__
 
 - endpoint 변경: `scenarios/smoke.yaml`의 `api.path`
 - header/body/query/multipart 추가: `scenarios/*.yaml`의 `request`
+- 공통 로그인/seed 재사용: `scenarios/partials/*.yaml`을 만들고 scenario `steps`에서 `- include: ./partials/login.yaml`
 - 대상 API 변경: `config.yaml`의 `baseUrl`, `modules.<name>.openapi` 수정 후 `__CLI_COMMAND__ sync`와 `__CLI_COMMAND__ generate` 재실행
 - module 추가: `__CLI_COMMAND__ module add <name> --base-url <url> --sync`
 - module JSON 출력: `__CLI_COMMAND__ module list --json`
@@ -560,6 +578,7 @@ This section is for AI agents. Use it as a compact checklist after reading the K
 
 - Use `__CATALOG_QUERY_COMMAND__` or read `__CATALOG_PATH__` to pick endpoints; `validate`, `test`, and `generate` read the OpenAPI snapshot, not the catalog.
 - Prefer `api.operationId`; use `api.method` and `api.path` when operationId is missing or unclear.
+- Reuse common login/seed flows with `- include: ./partials/login.yaml`; include files stay under the entry scenario directory.
 - Use `api.module` only when a scenario crosses multiple configured OpenAPI modules; it requires `config.yaml` module snapshots.
 - Use `extract` for response values and reference them later as `{{variableName}}`; use `{{env.NAME}}` for runtime secrets.
 - `validate` rejects context templates that are not produced by an earlier step `extract`.

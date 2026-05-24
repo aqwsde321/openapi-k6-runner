@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Scenario YAML의 `steps`에서 `- include: ./partials/login.yaml`로 공통 step 파일을 펼쳐 여러 scenario에서 로그인/seed 흐름을 재사용할 수 있게 했습니다.
+
 ## [0.5.1] - 2026-05-24
 
 ### Changed

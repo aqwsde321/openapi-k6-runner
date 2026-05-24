@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -101,6 +101,149 @@ describe('scenario parser', () => {
         query: { includePosts: true },
       },
     });
+  });
+
+  it('expands included scenario steps from relative files', async () => {
+    const scenarioPath = path.join(workspace, 'smoke.yaml');
+    await mkdir(path.join(workspace, 'partials'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'partials/login.yaml'),
+      [
+        'steps:',
+        '  - id: login',
+        '    api:',
+        '      operationId: loginUser',
+        '    extract:',
+        '      token:',
+        '        from: $.token',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      scenarioPath,
+      [
+        'name: included-flow',
+        'steps:',
+        '  - include: ./partials/login.yaml',
+        '  - id: get-me',
+        '    api:',
+        '      operationId: getMe',
+        '    request:',
+        '      headers:',
+        '        Authorization: "Bearer {{token}}"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const scenario = await parseScenarioFile(scenarioPath);
+
+    expect(scenario).toEqual({
+      name: 'included-flow',
+      steps: [
+        {
+          id: 'login',
+          api: { operationId: 'loginUser' },
+          extract: { token: { from: '$.token' } },
+        },
+        {
+          id: 'get-me',
+          api: { operationId: 'getMe' },
+          request: {
+            headers: { Authorization: 'Bearer {{token}}' },
+          },
+        },
+      ],
+    });
+  });
+
+  it('fails when included and local steps duplicate an id', async () => {
+    const scenarioPath = path.join(workspace, 'smoke.yaml');
+    await writeFile(
+      path.join(workspace, 'login.yaml'),
+      [
+        'steps:',
+        '  - id: login',
+        '    api:',
+        '      operationId: loginUser',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      scenarioPath,
+      [
+        'name: duplicated-include',
+        'steps:',
+        '  - include: ./login.yaml',
+        '  - id: login',
+        '    api:',
+        '      operationId: loginAgain',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(scenarioPath)).rejects.toThrowError('steps[1]: duplicate step id "login"');
+  });
+
+  it('rejects include cycles and include paths outside the entry scenario directory', async () => {
+    const scenarioPath = path.join(workspace, 'smoke.yaml');
+    await mkdir(path.join(workspace, 'partials'), { recursive: true });
+    await writeFile(
+      scenarioPath,
+      [
+        'name: cycle',
+        'steps:',
+        '  - include: ./partials/a.yaml',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(path.join(workspace, 'partials/a.yaml'), 'steps:\n  - include: ../smoke.yaml\n', 'utf8');
+
+    await expect(parseScenarioFile(scenarioPath)).rejects.toThrowError('include cycle detected');
+
+    await writeFile(
+      scenarioPath,
+      [
+        'name: outside',
+        'steps:',
+        '  - include: ../outside.yaml',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(scenarioPath)).rejects.toThrowError('include must stay inside the entry scenario directory');
+  });
+
+  it('fails clearly when an included file is missing', async () => {
+    const scenarioPath = path.join(workspace, 'smoke.yaml');
+    await writeFile(
+      scenarioPath,
+      [
+        'name: missing-include',
+        'steps:',
+        '  - include: ./missing.yaml',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(scenarioPath)).rejects.toThrowError('missing.yaml: scenario file was not found');
+  });
+
+  it('rejects include steps when parsing inline sources', () => {
+    expect(() =>
+      parseScenarioSource([
+        'name: inline-include',
+        'steps:',
+        '  - include: ./login.yaml',
+        '',
+      ].join('\n')),
+    ).toThrowError('<inline>: steps[0]: include steps require parseScenarioFile');
   });
 
   it('parses api.module on step API references', () => {

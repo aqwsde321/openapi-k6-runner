@@ -419,6 +419,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('`catalog` 명령으로 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.');
     expect(readme).toContain('전체 catalog 파일은 `load-tests/openapi/pharma.catalog.json`에 있습니다.');
     expect(readme).toContain('기본 smoke 테스트는 `load-tests/scenarios/smoke.yaml`를 수정합니다.');
+    expect(readme).toContain('반복되는 로그인, seed, cleanup 흐름은 별도 YAML로 분리한 뒤 scenario의 원하는 위치에서 include할 수 있습니다.');
+    expect(readme).toContain('- include: ./partials/login.yaml');
+    expect(readme).toContain('`partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다.');
     expect(readme).toContain('npx --yes openapi-k6 validate -s smoke');
     expect(readme).toContain('npx --yes openapi-k6 test -s smoke');
     expect(readme).toContain('`npx --yes openapi-k6 validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다.');
@@ -431,6 +434,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('## 3. 비밀 값 사용');
     expect(readme).toContain('## 4. 자주 하는 수정');
     expect(readme).toContain('## 5. 제거 방법');
+    expect(readme).toContain('- 공통 로그인/seed 재사용: `scenarios/partials/*.yaml`을 만들고 scenario `steps`에서 `- include: ./partials/login.yaml`');
     expect(readme).toContain('Authorization: "Bearer {{token}}"');
     expect(readme).toContain('password: "{{env.LOGIN_PASSWORD}}"');
     expect(readme).toContain('여러 API를 이어야 할 때는 이전 step의 `extract`로 응답 값을 저장하고');
@@ -460,6 +464,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Do not write secrets in YAML. Use `{{env.NAME}}` and store real values only in `load-tests/.env`.');
     expect(readme).toContain('### Scenario Notes');
     expect(readme).toContain('Use `npx --yes openapi-k6 catalog --query login` or read `load-tests/openapi/pharma.catalog.json` to pick endpoints; `validate`, `test`, and `generate` read the OpenAPI snapshot, not the catalog.');
+    expect(readme).toContain('Reuse common login/seed flows with `- include: ./partials/login.yaml`; include files stay under the entry scenario directory.');
     expect(readme).toContain('Do not use `request.body` and `request.multipart` in the same step.');
     expect(readme).toContain('Config-relative paths resolve from the directory containing `config.yaml`.');
     expect(readme).toContain('`load-tests/run.sh`: k6 runner that auto-loads `load-tests/.env` values');
@@ -2538,6 +2543,109 @@ describe('openapi-k6 CLI', () => {
     expect(stdout.output()).toContain('load-tests/.openapi-k6.json was not found.');
     expect(stdout.output()).toContain('  command  npx --yes openapi-k6 update');
     expect(stdout.output()).toContain('  keeps    config, scenarios, .env, snapshots, generated scripts, and logs unchanged');
+  });
+
+  it('validates and generates scenarios with included reusable steps', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios/partials'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/openapi/app.openapi.yaml'),
+      [
+        'openapi: 3.0.3',
+        'info:',
+        '  title: App API',
+        '  version: 1.0.0',
+        'servers:',
+        '  - url: https://openapi-fallback.test.local',
+        'paths:',
+        '  /login:',
+        '    post:',
+        '      operationId: loginUser',
+        '      requestBody:',
+        '        required: true',
+        '        content:',
+        '          application/json:',
+        '            schema:',
+        '              type: object',
+        '      responses:',
+        '        "200":',
+        '          description: OK',
+        '  /me:',
+        '    get:',
+        '      operationId: getMe',
+        '      parameters:',
+        '        - name: Authorization',
+        '          in: header',
+        '          required: true',
+        '          schema:',
+        '            type: string',
+        '      responses:',
+        '        "200":',
+        '          description: OK',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/partials/login.yaml'),
+      [
+        'steps:',
+        '  - id: login',
+        '    api:',
+        '      operationId: loginUser',
+        '    request:',
+        '      body:',
+        '        username: "{{env.LOGIN_ID}}"',
+        '    extract:',
+        '      token:',
+        '        from: $.token',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - include: ./partials/login.yaml',
+        '  - id: get-me',
+        '    api:',
+        '      operationId: getMe',
+        '    request:',
+        '      headers:',
+        '        Authorization: "Bearer {{token}}"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const stdout = createCapture();
+    await runCli(
+      ['validate', '-s', 'smoke'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    expect(stdout.output()).toContain('  steps    2');
+
+    await runCli(
+      ['generate', '-s', 'smoke'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const output = await readFile(path.join(workspace, 'load-tests/generated/smoke.k6.js'), 'utf8');
+
+    expect(output).toContain('group("login POST /login", () => {');
+    expect(output).toContain('group("get-me GET /me", () => {');
+    expect(output).toContain('"Authorization": `Bearer ${context.token}`');
   });
 
   it('reports scenario validation issues before running API requests', async () => {

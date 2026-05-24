@@ -25,6 +25,7 @@ describe('README usage guide', () => {
 
     expect(readme).toContain('## 핵심 기능');
     expect(readme).toContain('| Scenario YAML | 로그인, 추출, 인증 요청 같은 API 흐름을 YAML로 표현합니다. |');
+    expect(readme).toContain('| 재사용 step include | 로그인/seed 같은 공통 step YAML을 여러 scenario에서 include해 반복을 줄입니다. |');
     expect(readme).toContain('| 검증 관문 | k6 실행 전에 OpenAPI 정합성, 요청 구성, 추출, 설정 오류를 잡습니다. |');
     expect(readme).toContain('| OpenAPI catalog | `catalog` 명령으로 scenario에 쓸 `operationId`, `method`, `path`를 찾습니다. |');
     expect(readme).toContain('| 멀티모듈/멀티서버 | `module add`와 `api.module`로 서로 다른 OpenAPI/Swagger 서버를 하나의 scenario에서 연결합니다. |');
@@ -68,6 +69,9 @@ describe('README usage guide', () => {
     expect(readme).toContain('`catalog` 명령으로 테스트할 endpoint의 `operationId`, `method`, `path`, request body 여부를 확인합니다.');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query login');
     expect(readme).toContain('그 다음 `load-tests/scenarios/smoke.yaml`을 API 흐름에 맞게 수정합니다.');
+    expect(readme).toContain('반복되는 로그인, seed, cleanup 흐름은 별도 YAML로 분리한 뒤 scenario의 원하는 위치에서 include할 수 있습니다.');
+    expect(readme).toContain('- include: ./partials/login.yaml');
+    expect(readme).toContain('`partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다.');
     expect(readme).toContain('### 5. Scenario 정적 검증');
     expect(readme).toContain('npx --yes openapi-k6 validate -s smoke');
     expect(readme).toContain('`validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다.');
@@ -105,6 +109,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('OpenAPI 3.x 문서를 대상으로 합니다. Swagger/OpenAPI 2.0 문서는 지원하지 않습니다.');
     expect(readme).toContain('`condition`은 분기가 아니라 검증식입니다.');
     expect(readme).toContain('비밀값은 scenario YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조합니다.');
+    expect(readme).toContain('`steps` 안에서 `- include: ./partials/login.yaml`로 공통 step 파일을 펼칠 수 있습니다.');
     expect(readme).toContain('`validate`는 지원하지 않는 `condition` 표현식, `extract.from` JSONPath, 아직 이전 step에서 추출되지 않은 `{{token}}` 같은 context template 참조를 API 호출 전에 실패로 처리합니다.');
     expect(readme).toContain('`body`와 `multipart`는 같은 step에서 함께 쓰지 않습니다.');
 
@@ -129,6 +134,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('init 후 생성된 load-tests/README.md를 읽고, 그 문서의 작업 순서와 규칙을 기준으로 진행해.');
     expect(readme).toContain('npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 생성해.');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query login처럼 적절한 검색어로 테스트할 endpoint 후보를 확인해.');
+    expect(readme).toContain('반복되는 로그인/seed 흐름은 load-tests/scenarios/partials/*.yaml로 분리하고 steps에서 - include: ./partials/login.yaml로 재사용해.');
     expect(readme).toContain('npx --yes openapi-k6 validate -s <name>으로 YAML/OpenAPI 정합성을 먼저 확인해.');
     expect(readme).toContain('npx --yes openapi-k6 test -s <name>으로 실제 API 흐름을 검증해.');
     expect(readme).toContain('scenario test가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 마.');
