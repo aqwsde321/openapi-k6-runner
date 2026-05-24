@@ -280,6 +280,7 @@ describe('openapi-k6 CLI', () => {
     const runScriptSyntax = spawnSync('bash', ['-n', runScriptPath], { encoding: 'utf8' });
     const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
     const partialExample = await readFile(path.join(workspace, 'load-tests/scenarios/partials/login.yaml.example'), 'utf8');
+    const dataFixtureExample = await readFile(path.join(workspace, 'load-tests/scenarios/fixtures/dev.yaml.example'), 'utf8');
     const readme = await readFile(path.join(workspace, 'load-tests/README.md'), 'utf8');
     const metadata = JSON.parse(
       await readFile(path.join(workspace, 'load-tests/.openapi-k6.json'), 'utf8'),
@@ -358,6 +359,8 @@ describe('openapi-k6 CLI', () => {
     expect(partialExample).toContain('username: "{{vars.loginId}}"');
     expect(partialExample).toContain('password: "{{env.LOGIN_PASSWORD}}"');
     expect(partialExample).toContain('token:');
+    expect(dataFixtureExample).toContain('loginId: tester@example.com');
+    expect(dataFixtureExample).toContain('sku: ABC-001');
     expect(readme).toContain('npx --yes openapi-k6 sync');
     expect(readme).toContain('npx --yes openapi-k6 run -s smoke --log');
     expect(readme).toContain('npx --yes openapi-k6 generate \\');
@@ -398,6 +401,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('pnpm exec openapi-k6 ...');
     expect(readme).toContain('이 폴더는 백엔드 프로젝트 안에서 OpenAPI snapshot, scenario YAML, scenario validate/test, 생성된 k6 스크립트를 관리합니다.');
     expect(readme).toContain('partials/login.yaml.example');
+    expect(readme).toContain('fixtures/dev.yaml.example');
     expect(readme).toContain('핵심 흐름은 OpenAPI catalog에서 API를 고르고, `validate`로 YAML/OpenAPI 정합성을 먼저 확인한 뒤');
     expect(readme).toContain('다음 단계로 넘어가는 기준은 간단합니다. `npx --yes openapi-k6 validate`와 `npx --yes openapi-k6 test`가 통과한 scenario만 generate/run 합니다.');
     expect(readme).toContain('`npx --yes openapi-k6 validate`로 YAML/OpenAPI 정합성을 확인하고, `npx --yes openapi-k6 test`가 통과한 scenario만 `run`하거나 `generate`/`run.sh`로 실행합니다.');
@@ -426,10 +430,11 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('전체 catalog 파일은 `load-tests/openapi/pharma.catalog.json`에 있습니다.');
     expect(readme).toContain('기본 smoke 테스트는 `load-tests/scenarios/smoke.yaml`를 수정합니다.');
     expect(readme).toContain('SKU, tenant, page size 같은 테스트 데이터는 entry scenario의 `vars:`에 두고 `{{vars.NAME}}`으로 참조합니다.');
+    expect(readme).toContain('환경별 데이터가 많으면 entry scenario의 `fixtures:`에 YAML fixture를 추가합니다.');
     expect(readme).toContain('- include: ./partials/login.yaml');
     expect(readme).toContain('sku: "{{vars.sku}}"');
     expect(readme).toContain('`partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다.');
-    expect(readme).toContain('`init`은 `load-tests/scenarios/partials/login.yaml.example`도 함께 생성합니다.');
+    expect(readme).toContain('`init`은 `load-tests/scenarios/partials/login.yaml.example`과 `load-tests/scenarios/fixtures/dev.yaml.example`도 함께 생성합니다.');
     expect(readme).toContain('npx --yes openapi-k6 validate -s smoke');
     expect(readme).toContain('npx --yes openapi-k6 test -s smoke');
     expect(readme).toContain('`npx --yes openapi-k6 validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다.');
@@ -442,7 +447,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('## 3. 비밀 값 사용');
     expect(readme).toContain('## 4. 자주 하는 수정');
     expect(readme).toContain('## 5. 제거 방법');
-    expect(readme).toContain('- 반복 테스트 데이터 추가: entry scenario 상단 `vars:`와 request의 `{{vars.NAME}}`');
+    expect(readme).toContain('- 반복 테스트 데이터 추가: entry scenario 상단 `vars:` 또는 `fixtures:` YAML 파일과 request의 `{{vars.NAME}}`');
     expect(readme).toContain('- 공통 로그인/seed 재사용: `scenarios/partials/*.yaml`을 만들고 scenario `steps`에서 `- include: ./partials/login.yaml`');
     expect(readme).toContain('- 작업 공간 점검: `npx --yes openapi-k6 doctor`');
     expect(readme).toContain('Authorization: "Bearer {{token}}"');
@@ -474,7 +479,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Do not write secrets in YAML. Use `{{env.NAME}}` and store real values only in `load-tests/.env`.');
     expect(readme).toContain('### Scenario Notes');
     expect(readme).toContain('Use `npx --yes openapi-k6 catalog --query login` or read `load-tests/openapi/pharma.catalog.json` to pick endpoints; `validate`, `test`, and `generate` read the OpenAPI snapshot, not the catalog.');
-    expect(readme).toContain('Put repeated literal test data in entry scenario `vars:` and reference it as `{{vars.NAME}}`.');
+    expect(readme).toContain('Put repeated literal test data in entry scenario `vars:` or scenario fixture YAML files and reference it as `{{vars.NAME}}`.');
     expect(readme).toContain('Reuse common login/seed flows with `- include: ./partials/login.yaml`; include files stay under the entry scenario directory.');
     expect(readme).toContain('Do not use `request.body` and `request.multipart` in the same step.');
     expect(readme).toContain('Config-relative paths resolve from the directory containing `config.yaml`.');
@@ -1311,6 +1316,8 @@ describe('openapi-k6 CLI', () => {
     await writeFile(path.join(workspace, 'load-tests/.gitignore'), '.env\n', 'utf8');
     await writeFile(path.join(workspace, 'load-tests/.env'), 'LOGIN_PASSWORD=local-secret\n', 'utf8');
     await writeFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'name: kept\nsteps: []\n', 'utf8');
+    await rm(path.join(workspace, 'load-tests/scenarios/partials'), { recursive: true, force: true });
+    await rm(path.join(workspace, 'load-tests/scenarios/fixtures'), { recursive: true, force: true });
     await writeFile(path.join(workspace, 'load-tests/generated/custom.k6.js'), 'export default function () {}\n', 'utf8');
     await writeFile(path.join(workspace, 'load-tests/openapi/custom.openapi.json'), '{}\n', 'utf8');
     await mkdir(path.join(workspace, 'load-tests/logs'), { recursive: true });
@@ -1332,13 +1339,17 @@ describe('openapi-k6 CLI', () => {
     ) as { scaffoldVersion: string };
     const env = await readFile(path.join(workspace, 'load-tests/.env'), 'utf8');
     const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
+    const partialExample = await readFile(path.join(workspace, 'load-tests/scenarios/partials/login.yaml.example'), 'utf8');
+    const dataFixtureExample = await readFile(path.join(workspace, 'load-tests/scenarios/fixtures/dev.yaml.example'), 'utf8');
     const generated = await readFile(path.join(workspace, 'load-tests/generated/custom.k6.js'), 'utf8');
     const snapshot = await readFile(path.join(workspace, 'load-tests/openapi/custom.openapi.json'), 'utf8');
     const log = await readFile(path.join(workspace, 'load-tests/logs/smoke.log'), 'utf8');
 
     expect(output.output()).toContain('Updated load-tests scaffold metadata in load-tests');
     expect(output.output()).toContain('kept config  load-tests/config.yaml');
-    expect(output.output()).toContain('kept scenarios, snapshots, generated scripts, logs, and .env unchanged');
+    expect(output.output()).toContain('partial      load-tests/scenarios/partials/login.yaml.example');
+    expect(output.output()).toContain('fixture      load-tests/scenarios/fixtures/dev.yaml.example');
+    expect(output.output()).toContain('kept existing scenarios, snapshots, generated scripts, logs, and .env unchanged');
     expect(config).toBe('baseUrl: https://kept.test.local\nmodules:\n  pharma:\n    openapi: https://kept.test.local/v3/api-docs\n');
     expect(readme).toContain('# load-tests');
     expect(readme).toContain('npx --yes openapi-k6 update');
@@ -1348,6 +1359,8 @@ describe('openapi-k6 CLI', () => {
     expect(metadata.scaffoldVersion).toBe(CURRENT_SCAFFOLD_VERSION);
     expect(env).toBe('LOGIN_PASSWORD=local-secret\n');
     expect(scenario).toBe('name: kept\nsteps: []\n');
+    expect(partialExample).toContain('username: "{{vars.loginId}}"');
+    expect(dataFixtureExample).toContain('sku: ABC-001');
     expect(generated).toBe('export default function () {}\n');
     expect(snapshot).toBe('{}\n');
     expect(log).toBe('old log\n');
@@ -2703,12 +2716,21 @@ describe('openapi-k6 CLI', () => {
       ].join('\n'),
       'utf8',
     );
+    await mkdir(path.join(workspace, 'load-tests/scenarios/fixtures'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/fixtures/dev.yaml'),
+      [
+        'loginId: tester@example.com',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
     await writeFile(
       path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
       [
         'name: smoke',
-        'vars:',
-        '  loginId: tester@example.com',
+        'fixtures:',
+        '  - ./fixtures/dev.yaml',
         'steps:',
         '  - include: ./partials/login.yaml',
         '  - id: get-me',

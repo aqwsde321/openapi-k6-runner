@@ -10,6 +10,7 @@ interface ParsedStepEntry {
 }
 
 const TEMPLATE_REFERENCE_NAME_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+const RESERVED_VAR_NAMES = new Set(['__proto__']);
 
 interface ScenarioFileParseContext {
   entryDir: string;
@@ -61,6 +62,11 @@ export function parseScenarioSource(source: string, sourcePath = '<inline>'): Sc
 export function parseScenarioDocument(document: unknown, sourcePath = '<inline>'): Scenario {
   const root = expectRecord(document, `${sourcePath}: scenario must be an object`);
   const name = expectString(root.name, `${sourcePath}: name must be a string`);
+
+  if (root.fixtures !== undefined) {
+    throw new ScenarioParseError(`${sourcePath}: fixtures require parseScenarioFile`);
+  }
+
   const vars = root.vars === undefined
     ? undefined
     : parseVars(root.vars, `${sourcePath}: vars`);
@@ -120,7 +126,9 @@ async function parseScenarioFileInternal(
 
   const root = expectRecord(document, `${filePath}: scenario must be an object`);
   const name = parseScenarioName(root.name, filePath, requireName);
-  const vars = parseScenarioVars(root.vars, filePath, requireName);
+  const fixtureVars = await parseScenarioFixtureVars(root.fixtures, filePath, requireName, context);
+  const ownVars = parseScenarioVars(root.vars, filePath, requireName);
+  const vars = mergeScenarioVars(fixtureVars, ownVars);
   const steps = await parseFileStepEntries(root.steps, filePath, context);
 
   return {
@@ -160,6 +168,79 @@ function parseScenarioVars(
   return parseVars(value, `${sourcePath}: vars`);
 }
 
+async function parseScenarioFixtureVars(
+  value: unknown,
+  sourcePath: string,
+  isEntryScenario: boolean,
+  context: ScenarioFileParseContext,
+): Promise<Record<string, unknown> | undefined> {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isEntryScenario) {
+    throw new ScenarioParseError(`${sourcePath}: included scenario files must not define fixtures; define fixtures in the entry scenario`);
+  }
+
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new ScenarioParseError(`${sourcePath}: fixtures must be a non-empty array`);
+  }
+
+  const vars: Record<string, unknown> = {};
+
+  for (const [index, rawFixturePath] of value.entries()) {
+    const fixturePath = parseFixturePath(rawFixturePath, `${sourcePath}: fixtures[${index}]`);
+    const resolvedPath = resolveScenarioLocalPath(
+      fixturePath,
+      `${sourcePath}: fixtures[${index}]`,
+      sourcePath,
+      context,
+    );
+
+    Object.assign(vars, await readFixtureVars(resolvedPath));
+  }
+
+  return vars;
+}
+
+function mergeScenarioVars(
+  fixtureVars: Record<string, unknown> | undefined,
+  ownVars: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (fixtureVars === undefined && ownVars === undefined) {
+    return undefined;
+  }
+
+  return {
+    ...(fixtureVars ?? {}),
+    ...(ownVars ?? {}),
+  };
+}
+
+async function readFixtureVars(filePath: string): Promise<Record<string, unknown>> {
+  let source: string;
+  let document: unknown;
+
+  try {
+    source = await fs.readFile(filePath, 'utf8');
+  } catch (error) {
+    if (isNodeErrorCode(error, 'ENOENT')) {
+      throw new ScenarioParseError(`${filePath}: fixture file was not found`);
+    }
+
+    throw error;
+  }
+
+  try {
+    document = parseYaml(source);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ScenarioParseError(`${filePath}: failed to parse fixture: ${message}`);
+  }
+
+  return parseVars(document, `${filePath}: fixture`);
+}
+
 function parseVars(value: unknown, pathLabel: string): Record<string, unknown> {
   const vars = expectRecord(value, `${pathLabel} must be an object`);
 
@@ -170,6 +251,10 @@ function parseVars(value: unknown, pathLabel: string): Record<string, unknown> {
 
     if (!TEMPLATE_REFERENCE_NAME_PATTERN.test(key)) {
       throw new ScenarioParseError(`${pathLabel}.${key} must match ${TEMPLATE_REFERENCE_NAME_PATTERN.source} for {{vars.NAME}} references`);
+    }
+
+    if (RESERVED_VAR_NAMES.has(key)) {
+      throw new ScenarioParseError(`${pathLabel}.${key} is reserved and cannot be referenced as {{vars.${key}}}`);
     }
   }
 
@@ -251,25 +336,33 @@ function parseIncludeStep(value: unknown, stepPath: string): string | undefined 
 }
 
 function parseIncludePath(value: unknown, pathLabel: string): string {
+  return parseScenarioLocalPath(value, pathLabel);
+}
+
+function parseFixturePath(value: unknown, pathLabel: string): string {
+  return parseScenarioLocalPath(value, pathLabel);
+}
+
+function parseScenarioLocalPath(value: unknown, pathLabel: string): string {
   if (typeof value !== 'string') {
     throw new ScenarioParseError(`${pathLabel} must be a string`);
   }
 
-  const includePath = value.trim();
+  const localPath = value.trim();
 
-  if (!includePath) {
+  if (!localPath) {
     throw new ScenarioParseError(`${pathLabel} must not be empty`);
   }
 
-  if (includePath.includes('{{')) {
+  if (localPath.includes('{{')) {
     throw new ScenarioParseError(`${pathLabel} must be a static path without templates`);
   }
 
-  if (path.isAbsolute(includePath)) {
+  if (path.isAbsolute(localPath)) {
     throw new ScenarioParseError(`${pathLabel} must be relative to the entry scenario directory`);
   }
 
-  return includePath;
+  return localPath;
 }
 
 function resolveIncludePath(
@@ -278,11 +371,20 @@ function resolveIncludePath(
   sourcePath: string,
   context: ScenarioFileParseContext,
 ): string {
-  const resolvedPath = path.resolve(path.dirname(sourcePath), includePath);
+  return resolveScenarioLocalPath(includePath, `${stepPath}.include`, sourcePath, context);
+}
+
+function resolveScenarioLocalPath(
+  localPath: string,
+  pathLabel: string,
+  sourcePath: string,
+  context: ScenarioFileParseContext,
+): string {
+  const resolvedPath = path.resolve(path.dirname(sourcePath), localPath);
   const relativePath = path.relative(context.entryDir, resolvedPath);
 
   if (relativePath === '' || relativePath.split(path.sep).includes('..') || path.isAbsolute(relativePath)) {
-    throw new ScenarioParseError(`${stepPath}.include must stay inside the entry scenario directory`);
+    throw new ScenarioParseError(`${pathLabel} must stay inside the entry scenario directory`);
   }
 
   return resolvedPath;
@@ -542,4 +644,8 @@ function optionalNonEmptyString(value: unknown, message: string): string | undef
 
   const trimmed = parsed.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function isNodeErrorCode(error: unknown, code: string): boolean {
+  return Boolean(error && typeof error === 'object' && 'code' in error && error.code === code);
 }

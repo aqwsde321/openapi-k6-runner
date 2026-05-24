@@ -287,6 +287,139 @@ describe('scenario parser', () => {
     });
   });
 
+  it('loads scenario fixture vars before top-level vars', async () => {
+    await mkdir(path.join(workspace, 'fixtures'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'fixtures/dev.yaml'),
+      [
+        'loginId: tester@example.com',
+        'sku: FIXTURE-SKU',
+        'tenantId: tenant-main',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const scenarioPath = path.join(workspace, 'scenario.yaml');
+    await writeFile(
+      scenarioPath,
+      [
+        'name: fixture-vars-flow',
+        'fixtures:',
+        '  - ./fixtures/dev.yaml',
+        'vars:',
+        '  sku: INLINE-SKU',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        loginId: "{{vars.loginId}}"',
+        '        sku: "{{vars.sku}}"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const scenario = await parseScenarioFile(scenarioPath);
+
+    expect(scenario.vars).toEqual({
+      loginId: 'tester@example.com',
+      sku: 'INLINE-SKU',
+      tenantId: 'tenant-main',
+    });
+  });
+
+  it('fails when inline source declares scenario fixtures', () => {
+    expect(() =>
+      parseScenarioSource([
+        'name: inline-fixtures',
+        'fixtures:',
+        '  - ./fixtures/dev.yaml',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '',
+      ].join('\n')),
+    ).toThrowError('<inline>: fixtures require parseScenarioFile');
+  });
+
+  it('fails when scenario fixture path leaves the entry scenario directory', async () => {
+    await writeFile(
+      path.join(workspace, 'scenario.yaml'),
+      [
+        'name: outside-fixture',
+        'fixtures:',
+        '  - ../dev.yaml',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(path.join(workspace, 'scenario.yaml'))).rejects.toThrowError('fixtures[0] must stay inside the entry scenario directory');
+  });
+
+  it('fails when a scenario fixture file is missing', async () => {
+    await writeFile(
+      path.join(workspace, 'scenario.yaml'),
+      [
+        'name: missing-fixture',
+        'fixtures:',
+        '  - ./fixtures/dev.yaml',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(path.join(workspace, 'scenario.yaml'))).rejects.toThrowError('fixtures/dev.yaml: fixture file was not found');
+  });
+
+  it('fails when scenario fixture vars cannot be referenced by template syntax', async () => {
+    await mkdir(path.join(workspace, 'fixtures'), { recursive: true });
+    await writeFile(path.join(workspace, 'fixtures/dev.yaml'), 'order-id: order-1\n', 'utf8');
+    await writeFile(
+      path.join(workspace, 'scenario.yaml'),
+      [
+        'name: invalid-fixture-vars',
+        'fixtures:',
+        '  - ./fixtures/dev.yaml',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(path.join(workspace, 'scenario.yaml'))).rejects.toThrowError('fixture.order-id must match ^[A-Za-z_$][A-Za-z0-9_$]*$ for {{vars.NAME}} references');
+  });
+
+  it('fails when vars use reserved JavaScript prototype names', () => {
+    expect(() =>
+      parseScenarioSource([
+        'name: reserved-vars',
+        'vars:',
+        '  __proto__: polluted',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '',
+      ].join('\n')),
+    ).toThrowError('<inline>: vars.__proto__ is reserved and cannot be referenced as {{vars.__proto__}}');
+  });
+
   it('fails when vars cannot be referenced by template syntax', () => {
     expect(() =>
       parseScenarioSource([
@@ -329,6 +462,35 @@ describe('scenario parser', () => {
     );
 
     await expect(parseScenarioFile(scenarioPath)).rejects.toThrowError('included scenario files must not define vars');
+  });
+
+  it('fails when an included scenario file defines fixtures', async () => {
+    const scenarioPath = path.join(workspace, 'smoke.yaml');
+    await writeFile(
+      path.join(workspace, 'login.yaml'),
+      [
+        'fixtures:',
+        '  - ./fixtures/dev.yaml',
+        'steps:',
+        '  - id: login',
+        '    api:',
+        '      operationId: loginUser',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      scenarioPath,
+      [
+        'name: included-fixtures',
+        'steps:',
+        '  - include: ./login.yaml',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(scenarioPath)).rejects.toThrowError('included scenario files must not define fixtures');
   });
 
   it('parses multipart request fields and files', () => {

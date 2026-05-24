@@ -8,10 +8,10 @@
 
 ### Added
 
-- Scenario YAML 상단 `vars:`와 `{{vars.NAME}}` template 참조를 추가해 SKU, tenant 같은 테스트 데이터를 scenario 단위로 관리할 수 있게 했습니다.
+- Scenario YAML 상단 `vars:`와 `fixtures:` 및 `{{vars.NAME}}` template 참조를 추가해 SKU, tenant 같은 테스트 데이터를 scenario 단위로 관리할 수 있게 했습니다.
 - Scenario YAML의 `steps`에서 `- include: ./partials/login.yaml`로 공통 step 파일을 펼쳐 여러 scenario에서 로그인/seed 흐름을 재사용할 수 있게 했습니다.
 - `openapi-k6 doctor` 명령을 추가해 config, snapshot, catalog, scaffold metadata, module base URL env 충돌, k6 설치 여부를 한 번에 점검할 수 있게 했습니다.
-- `init`이 `scenarios/partials/login.yaml.example` 예시를 함께 생성하도록 했습니다.
+- `init`이 `scenarios/partials/login.yaml.example`과 `scenarios/fixtures/dev.yaml.example` 예시를 함께 생성하도록 했습니다.
 
 ## [0.5.1] - 2026-05-24
 

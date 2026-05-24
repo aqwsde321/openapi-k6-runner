@@ -20,6 +20,7 @@ export interface InitLoadTestsResult {
   runScriptPath: string;
   scenarioPath: string;
   partialExamplePath: string;
+  dataFixtureExamplePath: string;
   readmePath: string;
   metadataPath: string;
 }
@@ -39,6 +40,8 @@ export interface UpdateLoadTestsResult {
   envExamplePath: string;
   gitignorePath: string;
   runScriptPath: string;
+  partialExamplePath: string;
+  dataFixtureExamplePath: string;
   readmePath: string;
   metadataPath: string;
 }
@@ -69,6 +72,7 @@ export async function initLoadTests(
   const runScriptPath = path.join(directoryPath, 'run.sh');
   const scenarioPath = path.join(directoryPath, 'scenarios/smoke.yaml');
   const partialExamplePath = path.join(directoryPath, 'scenarios/partials/login.yaml.example');
+  const dataFixtureExamplePath = path.join(directoryPath, 'scenarios/fixtures/dev.yaml.example');
   const readmePath = path.join(directoryPath, 'README.md');
   const metadataPath = path.join(directoryPath, SCAFFOLD_METADATA_FILENAME);
   const smokePath = normalizeEndpointPath(options.smokePath ?? '/health');
@@ -88,6 +92,7 @@ export async function initLoadTests(
 
   await fs.mkdir(path.join(directoryPath, 'openapi'), { recursive: true });
   await fs.mkdir(path.join(directoryPath, 'scenarios/partials'), { recursive: true });
+  await fs.mkdir(path.join(directoryPath, 'scenarios/fixtures'), { recursive: true });
   await fs.mkdir(path.join(directoryPath, 'generated'), { recursive: true });
 
   const openapi = normalizeOpenApiForConfig(options.cwd, directoryPath, options.openapi);
@@ -99,6 +104,7 @@ export async function initLoadTests(
   await fs.chmod(runScriptPath, 0o755);
   await writeTextFile(scenarioPath, renderSmokeScenario(smokePath), options.force);
   await writeTextFile(partialExamplePath, renderLoginPartialExample(), options.force);
+  await writeTextFile(dataFixtureExamplePath, renderDataFixtureExample(), options.force);
   await writeTextFile(readmePath, renderReadme(moduleName, directory), options.force);
   await writeTextFile(metadataPath, renderScaffoldMetadata(), options.force);
 
@@ -110,6 +116,7 @@ export async function initLoadTests(
     runScriptPath,
     scenarioPath,
     partialExamplePath,
+    dataFixtureExamplePath,
     readmePath,
     metadataPath,
   };
@@ -125,6 +132,8 @@ export async function updateLoadTests(
   const envExamplePath = path.join(directoryPath, '.env.example');
   const gitignorePath = path.join(directoryPath, '.gitignore');
   const runScriptPath = path.join(directoryPath, 'run.sh');
+  const partialExamplePath = path.join(directoryPath, 'scenarios/partials/login.yaml.example');
+  const dataFixtureExamplePath = path.join(directoryPath, 'scenarios/fixtures/dev.yaml.example');
   const readmePath = path.join(directoryPath, 'README.md');
   const metadataPath = path.join(directoryPath, SCAFFOLD_METADATA_FILENAME);
 
@@ -143,10 +152,19 @@ export async function updateLoadTests(
   await fs.mkdir(path.join(directoryPath, 'openapi'), { recursive: true });
   await fs.mkdir(path.join(directoryPath, 'generated'), { recursive: true });
   await fs.mkdir(path.join(directoryPath, 'scenarios'), { recursive: true });
+  await fs.mkdir(path.join(directoryPath, 'scenarios/partials'), { recursive: true });
+  await fs.mkdir(path.join(directoryPath, 'scenarios/fixtures'), { recursive: true });
   await writeTextFile(envExamplePath, renderEnvExample(), true);
   await writeTextFile(gitignorePath, renderGitignore(), true);
   await writeTextFile(runScriptPath, renderRunScript(), true);
   await fs.chmod(runScriptPath, 0o755);
+  if (!(await pathExists(partialExamplePath))) {
+    await writeTextFile(partialExamplePath, renderLoginPartialExample(), false);
+  }
+
+  if (!(await pathExists(dataFixtureExamplePath))) {
+    await writeTextFile(dataFixtureExamplePath, renderDataFixtureExample(), false);
+  }
   await writeTextFile(metadataPath, renderScaffoldMetadata(), true);
   await writeTextFile(
     readmePath,
@@ -164,6 +182,8 @@ export async function updateLoadTests(
     envExamplePath,
     gitignorePath,
     runScriptPath,
+    partialExamplePath,
+    dataFixtureExamplePath,
     readmePath,
     metadataPath,
   };
@@ -346,6 +366,22 @@ function renderLoginPartialExample(): string {
     '      token:',
     '        from: $.token',
     '    condition: status == 200',
+    '',
+  ].join('\n');
+}
+
+function renderDataFixtureExample(): string {
+  return [
+    '# Rename this file to dev.yaml and load it from a scenario:',
+    '#',
+    '# fixtures:',
+    '#   - ./fixtures/dev.yaml',
+    '#',
+    '# Scenario vars override values loaded from fixture files.',
+    '',
+    'loginId: tester@example.com',
+    'sku: ABC-001',
+    'tenantId: tenant-main',
     '',
   ].join('\n');
 }

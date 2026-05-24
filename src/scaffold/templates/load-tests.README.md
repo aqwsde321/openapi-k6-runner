@@ -114,7 +114,8 @@ __DIRECTORY__/
 ├── __CATALOG_CONFIG_VALUE__
 ├── scenarios/
 │   ├── smoke.yaml
-│   └── partials/login.yaml.example
+│   ├── partials/login.yaml.example
+│   └── fixtures/dev.yaml.example
 ├── fixtures/     # 파일 업로드 fixture가 필요할 때 직접 생성
 └── generated/
     └── smoke.k6.js
@@ -230,13 +231,15 @@ __CATALOG_QUERY_COMMAND__
 
 기본 smoke 테스트는 `__SCENARIO_PATH__`를 수정합니다. 새 테스트는 `__SCENARIO_TEMPLATE_PATH__` 파일을 만듭니다.
 
-SKU, tenant, page size 같은 테스트 데이터는 entry scenario의 `vars:`에 두고 `{{vars.NAME}}`으로 참조합니다. 반복되는 로그인, seed, cleanup 흐름은 별도 YAML로 분리한 뒤 scenario의 원하는 위치에서 include할 수 있습니다. include 경로는 entry scenario 파일 기준 상대 경로이며, entry scenario 디렉터리 안에 있어야 합니다.
+SKU, tenant, page size 같은 테스트 데이터는 entry scenario의 `vars:`에 두고 `{{vars.NAME}}`으로 참조합니다. 환경별 데이터가 많으면 entry scenario의 `fixtures:`에 YAML fixture를 추가합니다. fixture 경로는 entry scenario 파일 기준 상대 경로이며, fixture 값은 먼저 로드되고 scenario의 `vars:`가 같은 이름을 덮어씁니다. 반복되는 로그인, seed, cleanup 흐름은 별도 YAML로 분리한 뒤 scenario의 원하는 위치에서 include할 수 있습니다. include 경로도 entry scenario 파일 기준 상대 경로이며, entry scenario 디렉터리 안에 있어야 합니다.
 
 ```yaml
 name: order-flow
 
+fixtures:
+  - ./fixtures/dev.yaml
+
 vars:
-  loginId: tester@example.com
   sku: ABC-001
 
 steps:
@@ -251,8 +254,8 @@ steps:
         sku: "{{vars.sku}}"
 ```
 
-`partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다.
-`init`은 `__DIRECTORY__/scenarios/partials/login.yaml.example`도 함께 생성합니다. 실제 endpoint 이름에 맞게 수정한 뒤 `login.yaml`로 이름을 바꿔 include하세요.
+`partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다. `fixtures/dev.yaml`은 `loginId: tester@example.com`처럼 변수 이름을 key로 두는 YAML object입니다.
+`init`은 `__DIRECTORY__/scenarios/partials/login.yaml.example`과 `__DIRECTORY__/scenarios/fixtures/dev.yaml.example`도 함께 생성합니다. 실제 endpoint/데이터에 맞게 수정한 뒤 `.example`을 제거해 사용하세요.
 
 생성/수정: scenario YAML
 
@@ -532,7 +535,7 @@ __GENERATE_WORKFLOW_COMMAND__
 
 - endpoint 변경: `scenarios/smoke.yaml`의 `api.path`
 - header/body/query/multipart 추가: `scenarios/*.yaml`의 `request`
-- 반복 테스트 데이터 추가: entry scenario 상단 `vars:`와 request의 `{{vars.NAME}}`
+- 반복 테스트 데이터 추가: entry scenario 상단 `vars:` 또는 `fixtures:` YAML 파일과 request의 `{{vars.NAME}}`
 - 공통 로그인/seed 재사용: `scenarios/partials/*.yaml`을 만들고 scenario `steps`에서 `- include: ./partials/login.yaml`
 - 대상 API 변경: `config.yaml`의 `baseUrl`, `modules.<name>.openapi` 수정 후 `__CLI_COMMAND__ sync`와 `__CLI_COMMAND__ generate` 재실행
 - module 추가: `__CLI_COMMAND__ module add <name> --base-url <url> --sync`
@@ -588,7 +591,7 @@ This section is for AI agents. Use it as a compact checklist after reading the K
 
 - Use `__CATALOG_QUERY_COMMAND__` or read `__CATALOG_PATH__` to pick endpoints; `validate`, `test`, and `generate` read the OpenAPI snapshot, not the catalog.
 - Prefer `api.operationId`; use `api.method` and `api.path` when operationId is missing or unclear.
-- Put repeated literal test data in entry scenario `vars:` and reference it as `{{vars.NAME}}`.
+- Put repeated literal test data in entry scenario `vars:` or scenario fixture YAML files and reference it as `{{vars.NAME}}`.
 - Reuse common login/seed flows with `- include: ./partials/login.yaml`; include files stay under the entry scenario directory.
 - Use `api.module` only when a scenario crosses multiple configured OpenAPI modules; it requires `config.yaml` module snapshots.
 - Use `extract` for response values and reference them later as `{{variableName}}`; use `{{env.NAME}}` for runtime secrets.

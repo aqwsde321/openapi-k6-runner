@@ -106,7 +106,7 @@ openapi-k6 generate -s smoke
 ### 책임
 
 - YAML/JSON DSL 파일을 읽어 `Scenario` 객체로 변환한다.
-- entry scenario의 `vars:`와 `steps[].include`를 해석해 재사용 가능한 step 흐름을 펼친다.
+- entry scenario의 `vars:`, `fixtures:`, `steps[].include`를 해석해 재사용 가능한 step 흐름을 펼친다.
 - MVP 수준의 구조 검증을 수행한다.
 
 ### 입력
@@ -124,6 +124,7 @@ steps:
 - `name`은 문자열이어야 한다.
 - `steps`는 1개 이상이어야 한다.
 - `vars` key는 `{{vars.NAME}}`으로 참조 가능한 식별자여야 한다.
+- `fixtures` path는 entry scenario 디렉터리 안의 정적 상대 경로여야 하며, fixture YAML은 object여야 한다.
 - include path는 entry scenario 디렉터리 안의 정적 상대 경로여야 한다.
 - 각 step은 `id`와 `api`를 가져야 한다.
 - `api`는 `operationId` 또는 `method + path` 중 하나를 가져야 한다.
@@ -589,7 +590,7 @@ openapi-k6 validate -s smoke
 - `condition`은 F-09 지원 범위의 status expression이어야 한다.
 - `extract.from`은 F-08 지원 범위의 JSONPath여야 한다.
 - request 안의 `{{name}}` context template은 이전 step의 `extract.name`으로 이미 정의되어 있어야 한다.
-- request 안의 `{{vars.NAME}}` template은 entry scenario의 `vars.NAME`으로 정의되어 있어야 한다.
+- request 안의 `{{vars.NAME}}` template은 entry scenario의 `vars.NAME` 또는 `fixtures`로 로드된 값으로 정의되어 있어야 한다.
 - `{{env.NAME}}` template은 정적 검증에서 문법만 확인하고 허용한다.
 
 ### 완료 기준

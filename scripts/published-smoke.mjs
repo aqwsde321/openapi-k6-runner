@@ -97,6 +97,7 @@ async function runInitSmoke(projectDir, packageSpec, env) {
   await assertFileContains(path.join(projectDir, 'load-tests/config.yaml'), 'defaultModule: default');
   await assertFileContains(path.join(projectDir, 'load-tests/scenarios/smoke.yaml'), 'name: smoke');
   await assertFileContains(path.join(projectDir, 'load-tests/scenarios/partials/login.yaml.example'), '{{vars.loginId}}');
+  await assertFileContains(path.join(projectDir, 'load-tests/scenarios/fixtures/dev.yaml.example'), 'sku: ABC-001');
   await assertFileContains(path.join(projectDir, 'load-tests/README.md'), 'openapi-k6');
   await assertFileContains(path.join(projectDir, 'load-tests/run.sh'), 'k6 run');
 }
