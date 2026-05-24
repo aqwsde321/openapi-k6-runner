@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-24
+
 ### Added
 
 - Scenario YAML 상단 `vars:`와 `fixtures:` 및 `{{vars.NAME}}` template 참조를 추가해 SKU, tenant 같은 테스트 데이터를 scenario 단위로 관리할 수 있게 했습니다.
@@ -145,7 +147,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.3.0...v0.4.0
