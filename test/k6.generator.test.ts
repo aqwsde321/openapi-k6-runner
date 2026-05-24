@@ -226,8 +226,10 @@ describe('k6 generator', () => {
   it('compiles template values recursively without replacing missing values with empty strings', () => {
     expect(compileValueExpression('{{token}}')).toBe('context.token');
     expect(compileValueExpression('{{env.API_TOKEN}}')).toBe('__ENV.API_TOKEN');
+    expect(compileValueExpression('{{vars.sku}}')).toBe('VARS.sku');
     expect(compileValueExpression('Bearer {{token}}')).toBe('`Bearer ${context.token}`');
     expect(compileValueExpression('Bearer {{env.API_TOKEN}}')).toBe('`Bearer ${__ENV.API_TOKEN}`');
+    expect(compileValueExpression('SKU {{vars.sku}}')).toBe('`SKU ${VARS.sku}`');
     expect(compileValueExpression({
       headers: ['X-Trace-{{traceId}}'],
       body: { userId: '{{userId}}', password: '{{env.USER_PASSWORD}}' },
@@ -237,9 +239,10 @@ describe('k6 generator', () => {
   });
 
   it('collects template references with the same syntax as template compilation', () => {
-    expect(collectTemplateReferences('Bearer {{token}} / {{ env.API_TOKEN }}')).toEqual([
+    expect(collectTemplateReferences('Bearer {{token}} / {{ env.API_TOKEN }} / {{ vars.sku }}')).toEqual([
       { raw: 'token', type: 'context', name: 'token' },
       { raw: 'env.API_TOKEN', type: 'env', name: 'API_TOKEN' },
+      { raw: 'vars.sku', type: 'vars', name: 'sku' },
     ]);
     expect(collectTemplateReferences('plain text')).toEqual([]);
     expect(() => collectTemplateReferences('Bearer {{bad-name}}')).toThrowError(TemplateCompileError);
@@ -272,6 +275,40 @@ describe('k6 generator', () => {
 
     expect(script).toContain('const body0 = JSON.stringify({ "loginId": __ENV.LOGIN_ID, "password": __ENV.LOGIN_PASSWORD });');
     expect(script).toContain('const params0 = { headers: { "Content-Type": "application/json", "X-Client": __ENV.CLIENT_ID }, tags: tags0 };');
+    await expectValidJavaScript(workspace, script);
+  });
+
+  it('generates k6 vars references from scenario vars', async () => {
+    const script = generateK6Script(
+      {
+        name: 'vars-order',
+        vars: {
+          sku: 'ABC-001',
+          tenantId: 'tenant-main',
+        },
+        steps: [
+          {
+            id: 'create-order',
+            method: 'POST',
+            path: '/orders',
+            pathParameters: [],
+            request: {
+              headers: {
+                'X-Tenant': '{{vars.tenantId}}',
+              },
+              body: {
+                sku: '{{vars.sku}}',
+              },
+            },
+          },
+        ],
+      },
+      { baseUrl: 'https://api.test.local' },
+    );
+
+    expect(script).toContain('const VARS = {"sku":"ABC-001","tenantId":"tenant-main"};');
+    expect(script).toContain('const body0 = JSON.stringify({ "sku": VARS.sku });');
+    expect(script).toContain('const params0 = { headers: { "Content-Type": "application/json", "X-Tenant": VARS.tenantId }, tags: tags0 };');
     await expectValidJavaScript(workspace, script);
   });
 

@@ -18,6 +18,7 @@ const HTTP_CALLS: Record<string, string> = {
 
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 const ENV_TEMPLATE_PATTERN = /{{\s*env\.([A-Z_][A-Z0-9_]*)\s*}}/g;
+const VARS_TEMPLATE_PATTERN = /{{\s*vars\.([A-Za-z_$][A-Za-z0-9_$]*)\s*}}/g;
 
 export interface K6GeneratorOptions {
   baseUrl?: string;
@@ -36,6 +37,7 @@ export class K6GenerationError extends Error {
 export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions = {}): string {
   const baseUrlPlan = buildBaseUrlPlan(ast, options);
   const secretEnvNames = collectEnvReferenceNames(ast);
+  const needsVars = Object.keys(ast.vars ?? {}).length > 0 || collectVarsReferenceNames(ast).length > 0;
 
   const lines: string[] = [
     "import http from 'k6/http';",
@@ -53,6 +55,7 @@ export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions =
   lines.push(
     '',
     ...baseUrlPlan.declarations,
+    ...(needsVars ? [`const VARS = ${JSON.stringify(ast.vars ?? {})};`] : []),
     "const OPENAPI_K6_TRACE = __ENV.OPENAPI_K6_TRACE === '1';",
     ...(secretEnvNames.length === 0
       ? []
@@ -288,6 +291,38 @@ function collectEnvReferenceNames(ast: ASTScenario): string[] {
   }
 
   return [...names].sort();
+}
+
+function collectVarsReferenceNames(ast: ASTScenario): string[] {
+  const names = new Set<string>();
+
+  for (const step of ast.steps) {
+    collectVarsReferenceNamesFromValue(step.request, names);
+  }
+
+  return [...names].sort();
+}
+
+function collectVarsReferenceNamesFromValue(value: unknown, names: Set<string>): void {
+  if (typeof value === 'string') {
+    VARS_TEMPLATE_PATTERN.lastIndex = 0;
+
+    let match: RegExpExecArray | null;
+    while ((match = VARS_TEMPLATE_PATTERN.exec(value)) !== null) {
+      names.add(match[1]);
+    }
+
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectVarsReferenceNamesFromValue(item, names));
+    return;
+  }
+
+  if (isRecord(value)) {
+    Object.values(value).forEach((item) => collectVarsReferenceNamesFromValue(item, names));
+  }
 }
 
 function collectEnvReferenceNamesFromValue(value: unknown, names: Set<string>): void {

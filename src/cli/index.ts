@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command, CommanderError } from 'commander';
 import { parse as parseDotEnv } from 'dotenv';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createWriteStream, realpathSync, type Dirent, type WriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -172,6 +172,11 @@ export interface UpdateOptions {
   module?: string;
 }
 
+export interface DoctorOptions {
+  config?: string;
+  json?: boolean;
+}
+
 export interface GenerateResult {
   outputPath: string;
   scenarioPath: string;
@@ -290,6 +295,7 @@ export interface InitResult {
   configPath: string;
   runScriptPath: string;
   scenarioPath: string;
+  partialExamplePath: string;
   readmePath: string;
   metadataPath: string;
 }
@@ -302,6 +308,18 @@ export interface UpdateResult {
   runScriptPath: string;
   readmePath: string;
   metadataPath: string;
+}
+
+export interface DoctorCheck {
+  name: string;
+  status: 'pass' | 'warn' | 'fail';
+  message: string;
+}
+
+export interface DoctorResult {
+  configPath?: string;
+  checks: DoctorCheck[];
+  passed: boolean;
 }
 
 interface CatalogFilters {
@@ -2172,6 +2190,189 @@ export async function runUpdateCommand(
   });
 }
 
+export async function runDoctorCommand(
+  options: DoctorOptions,
+  context: CliContext = {},
+): Promise<DoctorResult> {
+  const cwd = resolveCwd(context);
+  const configPath = path.resolve(cwd, options.config ?? DEFAULT_CONFIG_PATH);
+  const checks: DoctorCheck[] = [];
+  let config: LoadTestConfig | undefined;
+
+  try {
+    config = await loadOptionalConfig(cwd, options.config, true);
+    if (config === undefined) {
+      throw new Error(`${DEFAULT_CONFIG_PATH} was not found. Run openapi-k6 init or pass --config.`);
+    }
+    checks.push({
+      name: 'config',
+      status: 'pass',
+      message: `${formatDisplayPath(cwd, config.path)} loaded`,
+    });
+  } catch (error) {
+    checks.push({
+      name: 'config',
+      status: 'fail',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  if (config !== undefined) {
+    checks.push(...await collectDoctorConfigChecks(cwd, config));
+    checks.push(collectDoctorScaffoldCheck(cwd, config, await readScaffoldWarnings(cwd, config)));
+  }
+
+  checks.push(collectDoctorK6Check(context));
+
+  return {
+    configPath,
+    checks,
+    passed: checks.every((check) => check.status !== 'fail'),
+  };
+}
+
+async function collectDoctorConfigChecks(cwd: string, config: LoadTestConfig): Promise<DoctorCheck[]> {
+  const checks: DoctorCheck[] = [];
+  const moduleNames = [...config.modules.keys()];
+  const collisions = findModuleBaseUrlEnvNameCollisions(moduleNames);
+
+  checks.push({
+    name: 'modules',
+    status: 'pass',
+    message: `${moduleNames.length} configured (${moduleNames.join(', ')})`,
+  });
+
+  if (collisions.length === 0) {
+    checks.push({
+      name: 'module-env',
+      status: 'pass',
+      message: 'module BASE_URL env names are unique',
+    });
+  } else {
+    checks.push(...collisions.map((collision) => ({
+      name: 'module-env',
+      status: 'fail' as const,
+      message: `modules ${collision.moduleNames.map((name) => JSON.stringify(name)).join(', ')} all map to ${collision.envName}`,
+    })));
+  }
+
+  for (const moduleConfig of config.modules.values()) {
+    checks.push(checkOptionalOpenApi(moduleConfig));
+    checks.push(await checkConfiguredFile(cwd, config, moduleConfig, 'snapshot'));
+    checks.push(await checkConfiguredFile(cwd, config, moduleConfig, 'catalog'));
+  }
+
+  return checks;
+}
+
+function checkOptionalOpenApi(moduleConfig: LoadTestModuleConfig): DoctorCheck {
+  if (!isConfiguredValue(moduleConfig.openapi)) {
+    return {
+      name: `modules.${moduleConfig.name}.openapi`,
+      status: 'warn',
+      message: 'not configured; sync needs modules.<name>.openapi or --openapi',
+    };
+  }
+
+  return {
+    name: `modules.${moduleConfig.name}.openapi`,
+    status: 'pass',
+    message: moduleConfig.openapi,
+  };
+}
+
+async function checkConfiguredFile(
+  cwd: string,
+  config: LoadTestConfig,
+  moduleConfig: LoadTestModuleConfig,
+  field: 'snapshot' | 'catalog',
+): Promise<DoctorCheck> {
+  const value = moduleConfig[field];
+  const name = `modules.${moduleConfig.name}.${field}`;
+
+  if (!isConfiguredValue(value)) {
+    return {
+      name,
+      status: 'fail',
+      message: `${name} is not configured`,
+    };
+  }
+
+  const filePath = resolveConfigFilePath(config, value);
+
+  try {
+    await fs.access(filePath);
+  } catch (error) {
+    if (isNodeErrorCode(error, 'ENOENT')) {
+      return {
+        name,
+        status: 'fail',
+        message: `${formatDisplayPath(cwd, filePath)} was not found`,
+      };
+    }
+
+    throw error;
+  }
+
+  return {
+    name,
+    status: 'pass',
+    message: formatDisplayPath(cwd, filePath),
+  };
+}
+
+function collectDoctorScaffoldCheck(
+  cwd: string,
+  config: LoadTestConfig,
+  warnings: string[],
+): DoctorCheck {
+  if (warnings.length === 0) {
+    return {
+      name: 'scaffold',
+      status: 'pass',
+      message: `${formatDisplayPath(cwd, path.join(resolveLoadTestDir(cwd, config), SCAFFOLD_METADATA_FILENAME))} is current`,
+    };
+  }
+
+  return {
+    name: 'scaffold',
+    status: 'warn',
+    message: `${warnings.join(' ')} Run ${formatScaffoldUpdateCommand(cwd, config)}`,
+  };
+}
+
+function collectDoctorK6Check(context: CliContext): DoctorCheck {
+  const result = spawnSync('k6', ['version'], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      ...(context.env ?? {}),
+    },
+  });
+
+  if (result.error !== undefined) {
+    return {
+      name: 'k6',
+      status: 'warn',
+      message: 'k6 was not found on PATH; install k6 before using openapi-k6 run or run.sh',
+    };
+  }
+
+  if (result.status !== 0) {
+    return {
+      name: 'k6',
+      status: 'warn',
+      message: `k6 version check exited with ${result.status ?? 'unknown'}`,
+    };
+  }
+
+  return {
+    name: 'k6',
+    status: 'pass',
+    message: (result.stdout || result.stderr).trim().split('\n')[0] || 'k6 found',
+  };
+}
+
 function writeRunValidationWarnings(stdout: WritableLike, warnings: string[]): void {
   if (warnings.length === 0) {
     return;
@@ -2464,6 +2665,7 @@ function writeInitSummary(
   writeLine(stdout, `${initStatusSymbol(stdout, 'success')} Created ${formatDisplayPath(cwd, result.directoryPath)}`);
   writeLine(stdout, `  config    ${formatDisplayPath(cwd, result.configPath)}`);
   writeLine(stdout, `  scenario  ${formatDisplayPath(cwd, result.scenarioPath)}`);
+  writeLine(stdout, `  partial   ${formatDisplayPath(cwd, result.partialExamplePath)}`);
   writeLine(stdout, `  runner    ${formatDisplayPath(cwd, result.runScriptPath)}`);
   writeLine(stdout, `  guide     ${formatDisplayPath(cwd, result.readmePath)}`);
   writeLine(stdout, `  metadata  ${formatDisplayPath(cwd, result.metadataPath)}`);
@@ -2489,6 +2691,29 @@ function writeUpdateSummary(
   writeLine(stdout, `  gitignore    ${formatDisplayPath(cwd, result.gitignorePath)}`);
   writeLine(stdout, `  metadata     ${formatDisplayPath(cwd, result.metadataPath)}`);
   writeLine(stdout, '  kept scenarios, snapshots, generated scripts, logs, and .env unchanged');
+}
+
+function writeDoctorOutput(
+  stdout: WritableLike,
+  result: DoctorResult,
+  cwd: string,
+  json: boolean | undefined,
+): void {
+  if (json === true) {
+    writeLine(stdout, JSON.stringify(result, null, 2));
+    return;
+  }
+
+  writeLine(stdout, `Doctor ${formatDisplayPath(cwd, result.configPath ?? DEFAULT_CONFIG_PATH)}`);
+
+  for (const check of result.checks) {
+    const status = check.status === 'pass'
+      ? 'success'
+      : check.status === 'fail'
+        ? 'failure'
+        : 'warning';
+    writeLine(stdout, `  ${initStatusSymbol(stdout, status)} ${check.name}: ${check.message}`);
+  }
 }
 
 function writeValidateSummary(stdout: WritableLike, result: ValidateResult, cwd: string): void {
@@ -3213,6 +3438,20 @@ export function createProgram(context: CliContext = {}): Command {
     .action(async (options: UpdateOptions) => {
       const result = await runUpdateCommand(options, context);
       writeUpdateSummary(stdout, result, resolveCwd(context));
+    });
+
+  program
+    .command('doctor')
+    .description('Check config, snapshots, catalogs, scaffold metadata, module env names, and k6 availability.')
+    .option('--config <path>', 'Load test config file path')
+    .option('--json', 'Print JSON output')
+    .action(async (options: DoctorOptions) => {
+      const result = await runDoctorCommand(options, context);
+      writeDoctorOutput(stdout, result, resolveCwd(context), options.json);
+
+      if (!result.passed) {
+        throw new CommanderError(1, 'openapi-k6.doctor.failed', 'Doctor checks failed');
+      }
     });
 
   program

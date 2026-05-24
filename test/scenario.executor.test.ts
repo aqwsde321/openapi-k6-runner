@@ -57,6 +57,10 @@ describe('scenario executor', () => {
       password: 'local-secret',
     }));
     expect(requests[1].headers.authorization).toBe('Bearer server-token');
+    expect(JSON.parse(requests[1].body)).toMatchObject({
+      sku: 'SKU-001',
+      tenantId: 'tenant-main',
+    });
     expect(requests[2].path).toBe('/orders/order%2F1?includeItems=true');
     expect(report).toContain('Result: PASS');
     expect(report).not.toContain('local-secret');
@@ -327,6 +331,10 @@ describe('scenario executor', () => {
 function loginOrderAst(): ASTScenario {
   return {
     name: 'login-order-flow',
+    vars: {
+      sku: 'SKU-001',
+      tenantId: 'tenant-main',
+    },
     steps: [
       {
         id: 'login',
@@ -354,7 +362,8 @@ function loginOrderAst(): ASTScenario {
             Authorization: 'Bearer {{token}}',
           },
           body: {
-            sku: 'SKU-001',
+            sku: '{{vars.sku}}',
+            tenantId: '{{vars.tenantId}}',
             quantity: 1,
           },
         },

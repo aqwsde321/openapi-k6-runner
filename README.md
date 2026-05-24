@@ -28,10 +28,12 @@ init -> sync -> catalog 검색 -> scenario YAML 수정 -> validate -> test -> ru
 | 기능 | 역할 |
 | --- | --- |
 | Scenario YAML | 로그인, 추출, 인증 요청 같은 API 흐름을 YAML로 표현합니다. |
+| Scenario vars | `vars:`로 SKU, tenant, 테스트 데이터 같은 반복 값을 관리하고 `{{vars.sku}}`로 참조합니다. |
 | 재사용 step include | 로그인/seed 같은 공통 step YAML을 여러 scenario에서 include해 반복을 줄입니다. |
 | 검증 관문 | k6 실행 전에 OpenAPI 정합성, 요청 구성, 추출, 설정 오류를 잡습니다. |
 | OpenAPI catalog | `catalog` 명령으로 scenario에 쓸 `operationId`, `method`, `path`를 찾습니다. |
 | 멀티모듈/멀티서버 | `module add`와 `api.module`로 서로 다른 OpenAPI/Swagger 서버를 하나의 scenario에서 연결합니다. |
+| Doctor 점검 | `doctor`로 config, snapshot, catalog, scaffold metadata, module env 충돌, k6 설치 여부를 확인합니다. |
 | `load-tests/` 작업 공간 | config, scenario, snapshot, 생성된 k6 스크립트, runner를 백엔드 프로젝트 안에서 관리합니다. |
 | AI 작업 프롬프트 | 루트 README에서 시작하고 생성 README로 이어지는 작업 지침을 제공합니다. |
 
@@ -75,10 +77,14 @@ npx --yes openapi-k6 catalog --tag auth
 
 그 다음 `load-tests/scenarios/smoke.yaml`을 API 흐름에 맞게 수정합니다. 전체 catalog 파일은 `load-tests/openapi/*.catalog.json`에 있습니다.
 
-반복되는 로그인, seed, cleanup 흐름은 별도 YAML로 분리한 뒤 scenario의 원하는 위치에서 include할 수 있습니다. include 경로는 entry scenario 파일 기준 상대 경로이며, entry scenario 디렉터리 안에 있어야 합니다.
+SKU, tenant, page size 같은 테스트 데이터는 entry scenario의 `vars:`에 두고 `{{vars.NAME}}`으로 참조합니다. 반복되는 로그인, seed, cleanup 흐름은 별도 YAML로 분리한 뒤 scenario의 원하는 위치에서 include할 수 있습니다. include 경로는 entry scenario 파일 기준 상대 경로이며, entry scenario 디렉터리 안에 있어야 합니다.
 
 ```yaml
 name: order-flow
+
+vars:
+  loginId: tester@example.com
+  sku: ABC-001
 
 steps:
   - include: ./partials/login.yaml
@@ -88,6 +94,8 @@ steps:
     request:
       headers:
         Authorization: "Bearer {{token}}"
+      body:
+        sku: "{{vars.sku}}"
 ```
 
 `partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다.
@@ -277,6 +285,7 @@ $ npx --yes openapi-k6 test -s login-and-read-profile
 | `load-tests/.openapi-k6.json` | scaffold 문서/runner 버전 확인용 metadata |
 | `load-tests/run.sh` | k6 실행 스크립트 |
 | `load-tests/scenarios/smoke.yaml` | 기본 scenario YAML |
+| `load-tests/scenarios/partials/login.yaml.example` | include용 로그인 partial 예시 |
 | `load-tests/openapi/*.openapi.json` | `sync`가 만든 OpenAPI snapshot |
 | `load-tests/openapi/*.catalog.json` | scenario 작성용 endpoint catalog |
 | `load-tests/generated/*.k6.js` | `generate`가 만든 k6 스크립트 |
@@ -303,6 +312,7 @@ npx --yes openapi-k6 update
 - OpenAPI 3.x 문서를 대상으로 합니다. Swagger/OpenAPI 2.0 문서는 지원하지 않습니다.
 - `condition`은 분기가 아니라 검증식입니다. k6에서는 `check`로 생성되며 다음 step 실행을 막지 않습니다.
 - `extract`는 응답 JSON에서 값을 읽어 다음 step의 `{{token}}` 같은 template 값으로 연결하며, 생성된 k6에서는 추출 실패를 `check` 실패로 표시합니다.
+- `vars:`는 entry scenario에 정의하는 literal 테스트 데이터입니다. include partial은 entry scenario의 `vars`를 사용할 수 있지만 자체 `vars`는 정의하지 않습니다.
 - `steps` 안에서 `- include: ./partials/login.yaml`로 공통 step 파일을 펼칠 수 있습니다. include는 local file만 지원하고 entry scenario 디렉터리 밖으로 나갈 수 없습니다.
 - `api.module`은 여러 OpenAPI module을 하나의 scenario에서 섞어 쓸 때 사용합니다. `--openapi` 단독 실행에서는 지원하지 않고 config의 `modules.<name>.snapshot`이 필요합니다.
 - `validate`는 지원하지 않는 `condition` 표현식, `extract.from` JSONPath, 아직 이전 step에서 추출되지 않은 `{{token}}` 같은 context template 참조를 API 호출 전에 실패로 처리합니다.
@@ -345,6 +355,7 @@ pnpm exec openapi-k6 --help
 | 정적 검증, 생성, k6 실행 | `npx --yes openapi-k6 run -s <name> --log -- --vus 1` |
 | k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <name>` |
 | k6 설치 후 실행 | `./load-tests/run.sh <name> --log` |
+| 작업 공간 점검 | `npx --yes openapi-k6 doctor` |
 | 기존 scaffold 안전 갱신 | `npx --yes openapi-k6 update` |
 | scaffold 파일 재생성 | `npx --yes openapi-k6 init --force` |
 
@@ -364,6 +375,7 @@ AI coding agent에게 아래 프롬프트를 붙여넣으세요. `load-tests/REA
 6. npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 생성해.
 7. npx --yes openapi-k6 catalog --query login처럼 적절한 검색어로 테스트할 endpoint 후보를 확인해. 필요하면 load-tests/openapi/*.catalog.json도 열어봐.
 8. 내가 원하는 API 흐름을 확인한 뒤 load-tests/scenarios/*.yaml을 작성하거나 수정해.
+   반복 데이터는 scenario 상단 vars:에 두고 {{vars.NAME}}으로 참조해.
    반복되는 로그인/seed 흐름은 load-tests/scenarios/partials/*.yaml로 분리하고 steps에서 - include: ./partials/login.yaml로 재사용해.
 9. npx --yes openapi-k6 validate -s <name>으로 YAML/OpenAPI 정합성을 먼저 확인해.
 10. npx --yes openapi-k6 test -s <name>으로 실제 API 흐름을 검증해.

@@ -22,6 +22,7 @@ export function buildAst(
 ): ASTScenario {
   return {
     name: scenario.name,
+    ...(scenario.vars === undefined ? {} : { vars: scenario.vars }),
     steps: scenario.steps.map((step) => buildAstStep(step, registrySource, options)),
   };
 }

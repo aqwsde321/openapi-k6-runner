@@ -25,10 +25,12 @@ describe('README usage guide', () => {
 
     expect(readme).toContain('## 핵심 기능');
     expect(readme).toContain('| Scenario YAML | 로그인, 추출, 인증 요청 같은 API 흐름을 YAML로 표현합니다. |');
+    expect(readme).toContain('| Scenario vars | `vars:`로 SKU, tenant, 테스트 데이터 같은 반복 값을 관리하고 `{{vars.sku}}`로 참조합니다. |');
     expect(readme).toContain('| 재사용 step include | 로그인/seed 같은 공통 step YAML을 여러 scenario에서 include해 반복을 줄입니다. |');
     expect(readme).toContain('| 검증 관문 | k6 실행 전에 OpenAPI 정합성, 요청 구성, 추출, 설정 오류를 잡습니다. |');
     expect(readme).toContain('| OpenAPI catalog | `catalog` 명령으로 scenario에 쓸 `operationId`, `method`, `path`를 찾습니다. |');
     expect(readme).toContain('| 멀티모듈/멀티서버 | `module add`와 `api.module`로 서로 다른 OpenAPI/Swagger 서버를 하나의 scenario에서 연결합니다. |');
+    expect(readme).toContain('| Doctor 점검 | `doctor`로 config, snapshot, catalog, scaffold metadata, module env 충돌, k6 설치 여부를 확인합니다. |');
     expect(readme).toContain('| `load-tests/` 작업 공간 | config, scenario, snapshot, 생성된 k6 스크립트, runner를 백엔드 프로젝트 안에서 관리합니다. |');
     expect(readme).toContain('| AI 작업 프롬프트 | 루트 README에서 시작하고 생성 README로 이어지는 작업 지침을 제공합니다. |');
 
@@ -69,8 +71,9 @@ describe('README usage guide', () => {
     expect(readme).toContain('`catalog` 명령으로 테스트할 endpoint의 `operationId`, `method`, `path`, request body 여부를 확인합니다.');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query login');
     expect(readme).toContain('그 다음 `load-tests/scenarios/smoke.yaml`을 API 흐름에 맞게 수정합니다.');
-    expect(readme).toContain('반복되는 로그인, seed, cleanup 흐름은 별도 YAML로 분리한 뒤 scenario의 원하는 위치에서 include할 수 있습니다.');
+    expect(readme).toContain('SKU, tenant, page size 같은 테스트 데이터는 entry scenario의 `vars:`에 두고 `{{vars.NAME}}`으로 참조합니다.');
     expect(readme).toContain('- include: ./partials/login.yaml');
+    expect(readme).toContain('sku: "{{vars.sku}}"');
     expect(readme).toContain('`partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다.');
     expect(readme).toContain('### 5. Scenario 정적 검증');
     expect(readme).toContain('npx --yes openapi-k6 validate -s smoke');
@@ -100,6 +103,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('보통 직접 수정하는 파일은 `load-tests/config.yaml`, `load-tests/.env`, `load-tests/scenarios/*.yaml`입니다.');
     expect(readme).toContain('OpenAPI snapshot과 생성된 k6 스크립트는 명령으로 다시 만듭니다.');
     expect(readme).toContain('load-tests/run.sh');
+    expect(readme).toContain('load-tests/scenarios/partials/login.yaml.example');
     expect(readme).toContain('기본 `load-tests/.gitignore`는 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.');
     expect(readme).toContain('기존 `load-tests/config.yaml`과 scenario를 보존한 채 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화하려면 `update`를 사용합니다.');
     expect(readme).toContain('`update`는 `load-tests/config.yaml`, `.env`, `scenarios/`, `openapi/`, `generated/`, `logs/`를 보존합니다.');
@@ -109,6 +113,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('OpenAPI 3.x 문서를 대상으로 합니다. Swagger/OpenAPI 2.0 문서는 지원하지 않습니다.');
     expect(readme).toContain('`condition`은 분기가 아니라 검증식입니다.');
     expect(readme).toContain('비밀값은 scenario YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조합니다.');
+    expect(readme).toContain('`vars:`는 entry scenario에 정의하는 literal 테스트 데이터입니다.');
     expect(readme).toContain('`steps` 안에서 `- include: ./partials/login.yaml`로 공통 step 파일을 펼칠 수 있습니다.');
     expect(readme).toContain('`validate`는 지원하지 않는 `condition` 표현식, `extract.from` JSONPath, 아직 이전 step에서 추출되지 않은 `{{token}}` 같은 context template 참조를 API 호출 전에 실패로 처리합니다.');
     expect(readme).toContain('`body`와 `multipart`는 같은 step에서 함께 쓰지 않습니다.');
@@ -122,6 +127,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('| 정적 검증, 생성, k6 실행 | `npx --yes openapi-k6 run -s <name> --log -- --vus 1` |');
     expect(readme).toContain('| k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <name>` |');
     expect(readme).toContain('| k6 설치 후 실행 | `./load-tests/run.sh <name> --log` |');
+    expect(readme).toContain('| 작업 공간 점검 | `npx --yes openapi-k6 doctor` |');
     expect(readme).toContain('| 기존 scaffold 안전 갱신 | `npx --yes openapi-k6 update` |');
     expect(readme).toContain('| scaffold 파일 재생성 | `npx --yes openapi-k6 init --force` |');
 
@@ -134,6 +140,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('init 후 생성된 load-tests/README.md를 읽고, 그 문서의 작업 순서와 규칙을 기준으로 진행해.');
     expect(readme).toContain('npx --yes openapi-k6 sync를 실행해서 OpenAPI snapshot과 catalog를 생성해.');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query login처럼 적절한 검색어로 테스트할 endpoint 후보를 확인해.');
+    expect(readme).toContain('반복 데이터는 scenario 상단 vars:에 두고 {{vars.NAME}}으로 참조해.');
     expect(readme).toContain('반복되는 로그인/seed 흐름은 load-tests/scenarios/partials/*.yaml로 분리하고 steps에서 - include: ./partials/login.yaml로 재사용해.');
     expect(readme).toContain('npx --yes openapi-k6 validate -s <name>으로 YAML/OpenAPI 정합성을 먼저 확인해.');
     expect(readme).toContain('npx --yes openapi-k6 test -s <name>으로 실제 API 흐름을 검증해.');

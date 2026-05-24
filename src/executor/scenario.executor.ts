@@ -8,7 +8,8 @@ import { compileJsonPathSegments } from '../utils/jsonpath.js';
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 const CONTEXT_REFERENCE = '[A-Za-z_$][A-Za-z0-9_$]*';
 const ENV_REFERENCE = 'env\\.[A-Z_][A-Z0-9_]*';
-const TEMPLATE_REFERENCE = `(?:${ENV_REFERENCE}|${CONTEXT_REFERENCE})`;
+const VARS_REFERENCE = 'vars\\.[A-Za-z_$][A-Za-z0-9_$]*';
+const TEMPLATE_REFERENCE = `(?:${ENV_REFERENCE}|${VARS_REFERENCE}|${CONTEXT_REFERENCE})`;
 const TEMPLATE_PATTERN = new RegExp(`{{\\s*(${TEMPLATE_REFERENCE})\\s*}}`, 'g');
 const FULL_TEMPLATE_PATTERN = new RegExp(`^{{\\s*(${TEMPLATE_REFERENCE})\\s*}}$`);
 const DEFAULT_RESPONSE_BODY_LIMIT = 2000;
@@ -108,6 +109,7 @@ export interface ExtractExecutionResult {
 interface RuntimeState {
   context: Record<string, unknown>;
   env: Record<string, string | undefined>;
+  vars: Record<string, unknown>;
   secretValues: Set<string>;
 }
 
@@ -142,6 +144,7 @@ export async function executeAstScenario(
   const state: RuntimeState = {
     context: {},
     env: options.env ?? process.env,
+    vars: ast.vars ?? {},
     secretValues: new Set(),
   };
   const fetchImpl = options.fetch ?? fetch;
@@ -698,6 +701,16 @@ function resolveTemplateReference(reference: string, state: RuntimeState): unkno
     }
 
     return value;
+  }
+
+  if (reference.startsWith('vars.')) {
+    const name = reference.slice('vars.'.length);
+
+    if (!Object.prototype.hasOwnProperty.call(state.vars, name)) {
+      throw new ScenarioExecutionError(`Missing vars.${name} for template "{{${reference}}}"`);
+    }
+
+    return state.vars[name];
   }
 
   if (!Object.prototype.hasOwnProperty.call(state.context, reference)) {

@@ -263,6 +263,74 @@ describe('scenario parser', () => {
     });
   });
 
+  it('parses top-level scenario vars', () => {
+    const scenario = parseScenarioSource([
+      'name: vars-flow',
+      'vars:',
+      '  sku: ABC-001',
+      '  tenantId: tenant-main',
+      '  quantity: 2',
+      'steps:',
+      '  - id: create-order',
+      '    api:',
+      '      operationId: createOrder',
+      '    request:',
+      '      body:',
+      '        sku: "{{vars.sku}}"',
+      '',
+    ].join('\n'));
+
+    expect(scenario.vars).toEqual({
+      sku: 'ABC-001',
+      tenantId: 'tenant-main',
+      quantity: 2,
+    });
+  });
+
+  it('fails when vars cannot be referenced by template syntax', () => {
+    expect(() =>
+      parseScenarioSource([
+        'name: invalid-vars',
+        'vars:',
+        '  order-id: order-1',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '',
+      ].join('\n')),
+    ).toThrowError('<inline>: vars.order-id must match ^[A-Za-z_$][A-Za-z0-9_$]*$ for {{vars.NAME}} references');
+  });
+
+  it('fails when an included scenario file defines vars', async () => {
+    const scenarioPath = path.join(workspace, 'smoke.yaml');
+    await writeFile(
+      path.join(workspace, 'login.yaml'),
+      [
+        'vars:',
+        '  sku: ABC-001',
+        'steps:',
+        '  - id: login',
+        '    api:',
+        '      operationId: loginUser',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      scenarioPath,
+      [
+        'name: included-vars',
+        'steps:',
+        '  - include: ./login.yaml',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(scenarioPath)).rejects.toThrowError('included scenario files must not define vars');
+  });
+
   it('parses multipart request fields and files', () => {
     const scenario = parseScenarioSource([
       'name: upload-product-image',

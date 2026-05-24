@@ -84,6 +84,7 @@ async function runHelpSmoke(workspace, packageSpec, env) {
   const help = await runCli(['--help'], workspace, packageSpec, env);
 
   assertIncludes(help.stdout, 'init', 'help output should include init command');
+  assertIncludes(help.stdout, 'doctor', 'help output should include doctor command');
   assertIncludes(help.stdout, 'validate', 'help output should include validate command');
   assertIncludes(help.stdout, 'generate', 'help output should include generate command');
   assertIncludes(help.stdout, 'run', 'help output should include run command');
@@ -95,6 +96,7 @@ async function runInitSmoke(projectDir, packageSpec, env) {
   await runCli(['init', '--no-input'], projectDir, packageSpec, env);
   await assertFileContains(path.join(projectDir, 'load-tests/config.yaml'), 'defaultModule: default');
   await assertFileContains(path.join(projectDir, 'load-tests/scenarios/smoke.yaml'), 'name: smoke');
+  await assertFileContains(path.join(projectDir, 'load-tests/scenarios/partials/login.yaml.example'), '{{vars.loginId}}');
   await assertFileContains(path.join(projectDir, 'load-tests/README.md'), 'openapi-k6');
   await assertFileContains(path.join(projectDir, 'load-tests/run.sh'), 'k6 run');
 }

@@ -39,13 +39,14 @@ export function validateScenarioAgainstOpenApi(
   const issues: string[] = [];
   const warnings: string[] = [];
   const availableContextNames = new Set<string>();
+  const availableVarsNames = new Set(Object.keys(scenario.vars ?? {}));
 
   for (const step of scenario.steps) {
     let operation: ApiOperation;
 
     validateCondition(step, issues);
     validateExtracts(step, issues);
-    validateRequestTemplates(step, availableContextNames, issues);
+    validateRequestTemplates(step, availableContextNames, availableVarsNames, issues);
 
     try {
       const { registry } = resolveStepRegistry(step, registrySource, options);
@@ -56,7 +57,7 @@ export function validateScenarioAgainstOpenApi(
       continue;
     }
 
-    validatePathParamTemplates(step, operation, availableContextNames, issues);
+    validatePathParamTemplates(step, operation, availableContextNames, availableVarsNames, issues);
     registerExtractNames(step, availableContextNames);
     validatePathParams(step, operation, issues, warnings);
     validateRequiredParameters(step, operation, 'query', issues);
@@ -108,6 +109,7 @@ function resolveStepRegistry(
 function validateRequestTemplates(
   step: Step,
   availableContextNames: Set<string>,
+  availableVarsNames: Set<string>,
   issues: string[],
 ): void {
   const request = step.request;
@@ -116,17 +118,18 @@ function validateRequestTemplates(
     return;
   }
 
-  validateTemplateValue(step, 'request.headers', request.headers, availableContextNames, issues);
-  validateTemplateValue(step, 'request.query', request.query, availableContextNames, issues);
-  validateTemplateValue(step, 'request.body', request.body, availableContextNames, issues);
-  validateTemplateValue(step, 'request.multipart.fields', request.multipart?.fields, availableContextNames, issues);
-  validateMultipartFileMetadataTemplates(step, availableContextNames, issues);
+  validateTemplateValue(step, 'request.headers', request.headers, availableContextNames, availableVarsNames, issues);
+  validateTemplateValue(step, 'request.query', request.query, availableContextNames, availableVarsNames, issues);
+  validateTemplateValue(step, 'request.body', request.body, availableContextNames, availableVarsNames, issues);
+  validateTemplateValue(step, 'request.multipart.fields', request.multipart?.fields, availableContextNames, availableVarsNames, issues);
+  validateMultipartFileMetadataTemplates(step, availableContextNames, availableVarsNames, issues);
 }
 
 function validatePathParamTemplates(
   step: Step,
   operation: ApiOperation,
   availableContextNames: Set<string>,
+  availableVarsNames: Set<string>,
   issues: string[],
 ): void {
   const pathParams = step.request?.pathParams;
@@ -141,6 +144,7 @@ function validatePathParamTemplates(
       `request.pathParams.${name}`,
       pathParams[name],
       availableContextNames,
+      availableVarsNames,
       issues,
     );
   }
@@ -149,6 +153,7 @@ function validatePathParamTemplates(
 function validateMultipartFileMetadataTemplates(
   step: Step,
   availableContextNames: Set<string>,
+  availableVarsNames: Set<string>,
   issues: string[],
 ): void {
   for (const [fieldName, file] of Object.entries(step.request?.multipart?.files ?? {})) {
@@ -159,6 +164,7 @@ function validateMultipartFileMetadataTemplates(
       appendTemplatePath(filePathLabel, 'filename'),
       file.filename,
       availableContextNames,
+      availableVarsNames,
       issues,
     );
     validateTemplateValue(
@@ -166,6 +172,7 @@ function validateMultipartFileMetadataTemplates(
       appendTemplatePath(filePathLabel, 'contentType'),
       file.contentType,
       availableContextNames,
+      availableVarsNames,
       issues,
     );
   }
@@ -176,6 +183,7 @@ function validateTemplateValue(
   pathLabel: string,
   value: unknown,
   availableContextNames: Set<string>,
+  availableVarsNames: Set<string>,
   issues: string[],
 ): void {
   if (value === undefined || value === null || typeof value === 'number' || typeof value === 'boolean') {
@@ -187,6 +195,8 @@ function validateTemplateValue(
       for (const reference of collectTemplateReferences(value)) {
         if (reference.type === 'context' && !availableContextNames.has(reference.name)) {
           issues.push(`step "${step.id}": ${pathLabel} references unknown context.${reference.name}`);
+        } else if (reference.type === 'vars' && !availableVarsNames.has(reference.name)) {
+          issues.push(`step "${step.id}": ${pathLabel} references unknown vars.${reference.name}`);
         }
       }
     } catch (error) {
@@ -199,13 +209,13 @@ function validateTemplateValue(
 
   if (Array.isArray(value)) {
     value.forEach((item, index) =>
-      validateTemplateValue(step, `${pathLabel}[${index}]`, item, availableContextNames, issues));
+      validateTemplateValue(step, `${pathLabel}[${index}]`, item, availableContextNames, availableVarsNames, issues));
     return;
   }
 
   if (isRecord(value)) {
     for (const [key, item] of Object.entries(value)) {
-      validateTemplateValue(step, appendTemplatePath(pathLabel, key), item, availableContextNames, issues);
+      validateTemplateValue(step, appendTemplatePath(pathLabel, key), item, availableContextNames, availableVarsNames, issues);
     }
   }
 }

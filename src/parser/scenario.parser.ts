@@ -9,6 +9,8 @@ interface ParsedStepEntry {
   stepPath: string;
 }
 
+const TEMPLATE_REFERENCE_NAME_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
 interface ScenarioFileParseContext {
   entryDir: string;
   stack: string[];
@@ -23,7 +25,7 @@ export class ScenarioParseError extends Error {
 
 export async function parseScenarioFile(filePath: string): Promise<Scenario> {
   const resolvedPath = path.resolve(filePath);
-  const scenario = await parseScenarioFileInternal(
+  const parsed = await parseScenarioFileInternal(
     resolvedPath,
     {
       entryDir: path.dirname(resolvedPath),
@@ -32,13 +34,14 @@ export async function parseScenarioFile(filePath: string): Promise<Scenario> {
     true,
   );
 
-  if (scenario.name === undefined) {
+  if (parsed.name === undefined) {
     throw new ScenarioParseError(`${resolvedPath}: name must be a string`);
   }
 
   return {
-    name: scenario.name,
-    steps: finalizeSteps(scenario.steps),
+    name: parsed.name,
+    ...(parsed.vars === undefined ? {} : { vars: parsed.vars }),
+    steps: finalizeSteps(parsed.steps),
   };
 }
 
@@ -58,6 +61,9 @@ export function parseScenarioSource(source: string, sourcePath = '<inline>'): Sc
 export function parseScenarioDocument(document: unknown, sourcePath = '<inline>'): Scenario {
   const root = expectRecord(document, `${sourcePath}: scenario must be an object`);
   const name = expectString(root.name, `${sourcePath}: name must be a string`);
+  const vars = root.vars === undefined
+    ? undefined
+    : parseVars(root.vars, `${sourcePath}: vars`);
 
   if (!name.trim()) {
     throw new ScenarioParseError(`${sourcePath}: name must not be empty`);
@@ -75,14 +81,18 @@ export function parseScenarioDocument(document: unknown, sourcePath = '<inline>'
     };
   }));
 
-  return { name, steps };
+  return {
+    name,
+    ...(vars === undefined ? {} : { vars }),
+    steps,
+  };
 }
 
 async function parseScenarioFileInternal(
   filePath: string,
   context: ScenarioFileParseContext,
   requireName: boolean,
-): Promise<{ name?: string; steps: ParsedStepEntry[] }> {
+): Promise<{ name?: string; vars?: Record<string, unknown>; steps: ParsedStepEntry[] }> {
   let source: string;
   let document: unknown;
 
@@ -110,10 +120,12 @@ async function parseScenarioFileInternal(
 
   const root = expectRecord(document, `${filePath}: scenario must be an object`);
   const name = parseScenarioName(root.name, filePath, requireName);
+  const vars = parseScenarioVars(root.vars, filePath, requireName);
   const steps = await parseFileStepEntries(root.steps, filePath, context);
 
   return {
     ...(name === undefined ? {} : { name }),
+    ...(vars === undefined ? {} : { vars }),
     steps,
   };
 }
@@ -130,6 +142,38 @@ function parseScenarioName(value: unknown, sourcePath: string, requireName: bool
   }
 
   return name;
+}
+
+function parseScenarioVars(
+  value: unknown,
+  sourcePath: string,
+  isEntryScenario: boolean,
+): Record<string, unknown> | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isEntryScenario) {
+    throw new ScenarioParseError(`${sourcePath}: included scenario files must not define vars; define vars in the entry scenario`);
+  }
+
+  return parseVars(value, `${sourcePath}: vars`);
+}
+
+function parseVars(value: unknown, pathLabel: string): Record<string, unknown> {
+  const vars = expectRecord(value, `${pathLabel} must be an object`);
+
+  for (const key of Object.keys(vars)) {
+    if (!key.trim()) {
+      throw new ScenarioParseError(`${pathLabel}: variable name must not be empty`);
+    }
+
+    if (!TEMPLATE_REFERENCE_NAME_PATTERN.test(key)) {
+      throw new ScenarioParseError(`${pathLabel}.${key} must match ${TEMPLATE_REFERENCE_NAME_PATTERN.source} for {{vars.NAME}} references`);
+    }
+  }
+
+  return { ...vars };
 }
 
 async function parseFileStepEntries(

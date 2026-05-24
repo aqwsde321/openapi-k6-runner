@@ -279,6 +279,7 @@ describe('openapi-k6 CLI', () => {
     const runScriptStat = await stat(runScriptPath);
     const runScriptSyntax = spawnSync('bash', ['-n', runScriptPath], { encoding: 'utf8' });
     const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
+    const partialExample = await readFile(path.join(workspace, 'load-tests/scenarios/partials/login.yaml.example'), 'utf8');
     const readme = await readFile(path.join(workspace, 'load-tests/README.md'), 'utf8');
     const metadata = JSON.parse(
       await readFile(path.join(workspace, 'load-tests/.openapi-k6.json'), 'utf8'),
@@ -353,6 +354,10 @@ describe('openapi-k6 CLI', () => {
     expect(runScriptSyntax.stderr).toBe('');
     expect(runScriptSyntax.status).toBe(0);
     expect(scenario).toContain('path: /__dev/error-codes');
+    expect(partialExample).toContain('Rename this file to login.yaml and include it from a scenario');
+    expect(partialExample).toContain('username: "{{vars.loginId}}"');
+    expect(partialExample).toContain('password: "{{env.LOGIN_PASSWORD}}"');
+    expect(partialExample).toContain('token:');
     expect(readme).toContain('npx --yes openapi-k6 sync');
     expect(readme).toContain('npx --yes openapi-k6 run -s smoke --log');
     expect(readme).toContain('npx --yes openapi-k6 generate \\');
@@ -392,6 +397,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npm install -D openapi-k6');
     expect(readme).toContain('pnpm exec openapi-k6 ...');
     expect(readme).toContain('이 폴더는 백엔드 프로젝트 안에서 OpenAPI snapshot, scenario YAML, scenario validate/test, 생성된 k6 스크립트를 관리합니다.');
+    expect(readme).toContain('partials/login.yaml.example');
     expect(readme).toContain('핵심 흐름은 OpenAPI catalog에서 API를 고르고, `validate`로 YAML/OpenAPI 정합성을 먼저 확인한 뒤');
     expect(readme).toContain('다음 단계로 넘어가는 기준은 간단합니다. `npx --yes openapi-k6 validate`와 `npx --yes openapi-k6 test`가 통과한 scenario만 generate/run 합니다.');
     expect(readme).toContain('`npx --yes openapi-k6 validate`로 YAML/OpenAPI 정합성을 확인하고, `npx --yes openapi-k6 test`가 통과한 scenario만 `run`하거나 `generate`/`run.sh`로 실행합니다.');
@@ -419,9 +425,11 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('`catalog` 명령으로 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.');
     expect(readme).toContain('전체 catalog 파일은 `load-tests/openapi/pharma.catalog.json`에 있습니다.');
     expect(readme).toContain('기본 smoke 테스트는 `load-tests/scenarios/smoke.yaml`를 수정합니다.');
-    expect(readme).toContain('반복되는 로그인, seed, cleanup 흐름은 별도 YAML로 분리한 뒤 scenario의 원하는 위치에서 include할 수 있습니다.');
+    expect(readme).toContain('SKU, tenant, page size 같은 테스트 데이터는 entry scenario의 `vars:`에 두고 `{{vars.NAME}}`으로 참조합니다.');
     expect(readme).toContain('- include: ./partials/login.yaml');
+    expect(readme).toContain('sku: "{{vars.sku}}"');
     expect(readme).toContain('`partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다.');
+    expect(readme).toContain('`init`은 `load-tests/scenarios/partials/login.yaml.example`도 함께 생성합니다.');
     expect(readme).toContain('npx --yes openapi-k6 validate -s smoke');
     expect(readme).toContain('npx --yes openapi-k6 test -s smoke');
     expect(readme).toContain('`npx --yes openapi-k6 validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다.');
@@ -434,7 +442,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('## 3. 비밀 값 사용');
     expect(readme).toContain('## 4. 자주 하는 수정');
     expect(readme).toContain('## 5. 제거 방법');
+    expect(readme).toContain('- 반복 테스트 데이터 추가: entry scenario 상단 `vars:`와 request의 `{{vars.NAME}}`');
     expect(readme).toContain('- 공통 로그인/seed 재사용: `scenarios/partials/*.yaml`을 만들고 scenario `steps`에서 `- include: ./partials/login.yaml`');
+    expect(readme).toContain('- 작업 공간 점검: `npx --yes openapi-k6 doctor`');
     expect(readme).toContain('Authorization: "Bearer {{token}}"');
     expect(readme).toContain('password: "{{env.LOGIN_PASSWORD}}"');
     expect(readme).toContain('여러 API를 이어야 할 때는 이전 step의 `extract`로 응답 값을 저장하고');
@@ -464,6 +474,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Do not write secrets in YAML. Use `{{env.NAME}}` and store real values only in `load-tests/.env`.');
     expect(readme).toContain('### Scenario Notes');
     expect(readme).toContain('Use `npx --yes openapi-k6 catalog --query login` or read `load-tests/openapi/pharma.catalog.json` to pick endpoints; `validate`, `test`, and `generate` read the OpenAPI snapshot, not the catalog.');
+    expect(readme).toContain('Put repeated literal test data in entry scenario `vars:` and reference it as `{{vars.NAME}}`.');
     expect(readme).toContain('Reuse common login/seed flows with `- include: ./partials/login.yaml`; include files stay under the entry scenario directory.');
     expect(readme).toContain('Do not use `request.body` and `request.multipart` in the same step.');
     expect(readme).toContain('Config-relative paths resolve from the directory containing `config.yaml`.');
@@ -1340,6 +1351,95 @@ describe('openapi-k6 CLI', () => {
     expect(generated).toBe('export default function () {}\n');
     expect(snapshot).toBe('{}\n');
     expect(log).toBe('old log\n');
+  });
+
+  it('checks workspace health with doctor', async () => {
+    await runCli(
+      [
+        'init',
+        '--module',
+        'app',
+        '--base-url',
+        'https://api.test.local',
+        '--openapi',
+        'https://api.test.local/v3/api-docs',
+        '--no-input',
+      ],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await writeFile(path.join(workspace, 'load-tests/openapi/app.openapi.json'), '{}\n', 'utf8');
+    await writeFile(path.join(workspace, 'load-tests/openapi/app.catalog.json'), '{}\n', 'utf8');
+
+    const binDir = path.join(workspace, 'bin');
+    await writeFakeK6(binDir, ['echo "k6 v0.49.0"']);
+
+    const stdout = createCapture();
+    await runCli(
+      ['doctor'],
+      {
+        cwd: workspace,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        env: { PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}` },
+      },
+    );
+
+    expect(stdout.output()).toContain('Doctor load-tests/config.yaml');
+    expect(stdout.output()).toContain('config: load-tests/config.yaml loaded');
+    expect(stdout.output()).toContain('modules.app.snapshot: load-tests/openapi/app.openapi.json');
+    expect(stdout.output()).toContain('modules.app.catalog: load-tests/openapi/app.catalog.json');
+    expect(stdout.output()).toContain('scaffold: load-tests/.openapi-k6.json is current');
+    expect(stdout.output()).toContain('k6: k6 v0.49.0');
+  });
+
+  it('reports doctor failures as JSON', async () => {
+    await writeConfig([
+      'defaultModule: bos-api',
+      'modules:',
+      '  bos-api:',
+      '    snapshot: openapi/bos-api.openapi.json',
+      '    catalog: openapi/bos-api.catalog.json',
+      '  bos_api:',
+      '    snapshot: TODO',
+      '    catalog: openapi/bos_api.catalog.json',
+      '',
+    ]);
+
+    const stdout = createCapture();
+    await expect(
+      runCli(
+        ['doctor', '--json'],
+        {
+          cwd: workspace,
+          stdout: stdout.stream,
+          stderr: createSink(),
+          env: { PATH: '' },
+        },
+      ),
+    ).rejects.toThrow('Doctor checks failed');
+
+    const output = JSON.parse(stdout.output()) as {
+      passed: boolean;
+      checks: Array<{ name: string; status: string; message: string }>;
+    };
+
+    expect(output.passed).toBe(false);
+    expect(output.checks).toContainEqual(expect.objectContaining({
+      name: 'module-env',
+      status: 'fail',
+      message: 'modules "bos-api", "bos_api" all map to BASE_URL_BOS_API',
+    }));
+    expect(output.checks).toContainEqual(expect.objectContaining({
+      name: 'modules.bos-api.snapshot',
+      status: 'fail',
+      message: expect.stringContaining('load-tests/openapi/bos-api.openapi.json was not found'),
+    }));
+    expect(output.checks).toContainEqual(expect.objectContaining({
+      name: 'modules.bos_api.snapshot',
+      status: 'fail',
+      message: 'modules.bos_api.snapshot is not configured',
+    }));
   });
 
   it('keeps an explicit module in default-directory update README commands', async () => {
@@ -2595,7 +2695,7 @@ describe('openapi-k6 CLI', () => {
         '      operationId: loginUser',
         '    request:',
         '      body:',
-        '        username: "{{env.LOGIN_ID}}"',
+        '        username: "{{vars.loginId}}"',
         '    extract:',
         '      token:',
         '        from: $.token',
@@ -2607,6 +2707,8 @@ describe('openapi-k6 CLI', () => {
       path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
       [
         'name: smoke',
+        'vars:',
+        '  loginId: tester@example.com',
         'steps:',
         '  - include: ./partials/login.yaml',
         '  - id: get-me',
@@ -2645,6 +2747,8 @@ describe('openapi-k6 CLI', () => {
 
     expect(output).toContain('group("login POST /login", () => {');
     expect(output).toContain('group("get-me GET /me", () => {');
+    expect(output).toContain('const VARS = {"loginId":"tester@example.com"};');
+    expect(output).toContain('"username": VARS.loginId');
     expect(output).toContain('"Authorization": `Bearer ${context.token}`');
   });
 
@@ -2770,6 +2874,8 @@ describe('openapi-k6 CLI', () => {
       path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
       [
         'name: smoke',
+        'vars:',
+        '  knownSku: ABC-001',
         'steps:',
         '  - id: get-order',
         '    api:',
@@ -2791,6 +2897,8 @@ describe('openapi-k6 CLI', () => {
         '      body:',
         '        id: "{{itmeId}}"',
         '        token: "{{env.API_TOKEN}}"',
+        '        sku: "{{vars.knownSku}}"',
+        '        missingSku: "{{vars.missingSku}}"',
         '  - id: same-step-reference',
         '    api:',
         '      operationId: getOrder',
@@ -2862,6 +2970,7 @@ describe('openapi-k6 CLI', () => {
     ).rejects.toThrow([
       'Scenario validation failed:',
       '  - step "typo-reference": request.body.id references unknown context.itmeId',
+      '  - step "typo-reference": request.body.missingSku references unknown vars.missingSku',
       '  - step "same-step-reference": request.pathParams.orderId references unknown context.selfId',
       '  - step "future-reference": request.body.id references unknown context.futureId',
       '  - step "future-reference": request.body.items[0].id references unknown context.missingItemId',

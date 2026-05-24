@@ -1,6 +1,7 @@
 const CONTEXT_REFERENCE = '[A-Za-z_$][A-Za-z0-9_$]*';
 const ENV_REFERENCE = 'env\\.[A-Z_][A-Z0-9_]*';
-const TEMPLATE_REFERENCE = `(?:${ENV_REFERENCE}|${CONTEXT_REFERENCE})`;
+const VARS_REFERENCE = 'vars\\.[A-Za-z_$][A-Za-z0-9_$]*';
+const TEMPLATE_REFERENCE = `(?:${ENV_REFERENCE}|${VARS_REFERENCE}|${CONTEXT_REFERENCE})`;
 const TEMPLATE_PATTERN = new RegExp(`{{\\s*(${TEMPLATE_REFERENCE})\\s*}}`, 'g');
 const FULL_TEMPLATE_PATTERN = new RegExp(`^{{\\s*(${TEMPLATE_REFERENCE})\\s*}}$`);
 
@@ -13,7 +14,7 @@ export class TemplateCompileError extends Error {
 
 export interface TemplateReference {
   raw: string;
-  type: 'context' | 'env';
+  type: 'context' | 'env' | 'vars';
   name: string;
 }
 
@@ -112,6 +113,10 @@ function compileTemplateReference(reference: string): string {
     return `__ENV.${reference.slice('env.'.length)}`;
   }
 
+  if (reference.startsWith('vars.')) {
+    return `VARS.${reference.slice('vars.'.length)}`;
+  }
+
   return `context.${reference}`;
 }
 
@@ -132,6 +137,14 @@ function parseTemplateReference(reference: string): TemplateReference {
       raw: reference,
       type: 'env',
       name: reference.slice('env.'.length),
+    };
+  }
+
+  if (reference.startsWith('vars.')) {
+    return {
+      raw: reference,
+      type: 'vars',
+      name: reference.slice('vars.'.length),
     };
   }
 

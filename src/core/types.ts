@@ -1,5 +1,6 @@
 export interface Scenario {
   name: string;
+  vars?: Record<string, unknown>;
   steps: Step[];
 }
 
@@ -77,6 +78,7 @@ export interface ApiCatalogOperation {
 
 export interface ASTScenario {
   name: string;
+  vars?: Record<string, unknown>;
   steps: ASTStep[];
 }
 

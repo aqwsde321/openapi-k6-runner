@@ -19,6 +19,7 @@ export interface InitLoadTestsResult {
   gitignorePath: string;
   runScriptPath: string;
   scenarioPath: string;
+  partialExamplePath: string;
   readmePath: string;
   metadataPath: string;
 }
@@ -67,6 +68,7 @@ export async function initLoadTests(
   const gitignorePath = path.join(directoryPath, '.gitignore');
   const runScriptPath = path.join(directoryPath, 'run.sh');
   const scenarioPath = path.join(directoryPath, 'scenarios/smoke.yaml');
+  const partialExamplePath = path.join(directoryPath, 'scenarios/partials/login.yaml.example');
   const readmePath = path.join(directoryPath, 'README.md');
   const metadataPath = path.join(directoryPath, SCAFFOLD_METADATA_FILENAME);
   const smokePath = normalizeEndpointPath(options.smokePath ?? '/health');
@@ -85,7 +87,7 @@ export async function initLoadTests(
   }
 
   await fs.mkdir(path.join(directoryPath, 'openapi'), { recursive: true });
-  await fs.mkdir(path.join(directoryPath, 'scenarios'), { recursive: true });
+  await fs.mkdir(path.join(directoryPath, 'scenarios/partials'), { recursive: true });
   await fs.mkdir(path.join(directoryPath, 'generated'), { recursive: true });
 
   const openapi = normalizeOpenApiForConfig(options.cwd, directoryPath, options.openapi);
@@ -96,6 +98,7 @@ export async function initLoadTests(
   await writeTextFile(runScriptPath, renderRunScript(), options.force);
   await fs.chmod(runScriptPath, 0o755);
   await writeTextFile(scenarioPath, renderSmokeScenario(smokePath), options.force);
+  await writeTextFile(partialExamplePath, renderLoginPartialExample(), options.force);
   await writeTextFile(readmePath, renderReadme(moduleName, directory), options.force);
   await writeTextFile(metadataPath, renderScaffoldMetadata(), options.force);
 
@@ -106,6 +109,7 @@ export async function initLoadTests(
     gitignorePath,
     runScriptPath,
     scenarioPath,
+    partialExamplePath,
     readmePath,
     metadataPath,
   };
@@ -316,6 +320,31 @@ function renderSmokeScenario(smokePath: string): string {
     '    api:',
     '      method: GET',
     `      path: ${smokePath}`,
+    '    condition: status == 200',
+    '',
+  ].join('\n');
+}
+
+function renderLoginPartialExample(): string {
+  return [
+    '# Rename this file to login.yaml and include it from a scenario:',
+    '#',
+    '# steps:',
+    '#   - include: ./partials/login.yaml',
+    '#',
+    '# Define vars such as loginId in the entry scenario.',
+    '',
+    'steps:',
+    '  - id: login',
+    '    api:',
+    '      operationId: loginUser',
+    '    request:',
+    '      body:',
+    '        username: "{{vars.loginId}}"',
+    '        password: "{{env.LOGIN_PASSWORD}}"',
+    '    extract:',
+    '      token:',
+    '        from: $.token',
     '    condition: status == 200',
     '',
   ].join('\n');
