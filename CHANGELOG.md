@@ -9,6 +9,7 @@
 ### Added
 
 - `validate`, `generate`, `test`, `run`에 `--var-file`과 `--var` 옵션을 추가해 같은 scenario를 환경별 테스트 데이터로 실행할 수 있게 했습니다.
+- `openapi-k6 ui` 명령을 추가해 브라우저에서 scenario 목록, module/server 상태, validate/test CLI 출력을 확인할 수 있게 했습니다.
 
 ## [0.6.0] - 2026-05-24
 

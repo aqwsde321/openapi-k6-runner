@@ -35,6 +35,7 @@ k6 실행 전에는 `validate`와 `test`를 먼저 통과시키는 흐름을 권
 | Scenario vars/fixtures | `vars:`와 fixture 파일로 SKU, tenant, 테스트 데이터 같은 반복 값을 관리하고 `{{vars.sku}}`로 참조합니다. |
 | 재사용 step include | 로그인/seed 같은 공통 step YAML을 여러 scenario에서 include해 반복을 줄입니다. |
 | 검증 관문 | k6 실행 전에 OpenAPI 정합성, 요청 구성, 추출, 설정 오류를 잡습니다. |
+| 로컬 UI | 작성한 scenario 목록을 보고 서버 상태 확인, validate/test 실행, CLI 로그 확인을 브라우저에서 합니다. |
 | OpenAPI catalog | `catalog` 명령으로 scenario에 쓸 `operationId`, `method`, `path`를 찾습니다. |
 | 멀티모듈/멀티서버 | `module add`와 `api.module`로 서로 다른 OpenAPI/Swagger 서버를 하나의 scenario에서 연결합니다. |
 | Doctor 점검 | `doctor`로 config, snapshot, catalog, scaffold metadata, module env 충돌, k6 설치 여부를 확인합니다. |
@@ -291,6 +292,15 @@ summary: ✓ PASS
 여기서 `url`, `status`, `checks`, `extract`, 마지막 `summary`를 확인합니다.
 실패하면 해당 step 아래에 error와 response body 일부가 표시되고, 비밀 값은 마스킹됩니다.
 
+시나리오 이름을 매번 입력하기 번거로우면 로컬 UI를 켭니다.
+
+```bash
+npx --yes openapi-k6 ui
+```
+
+UI에서는 scenario 목록을 클릭해 step/module/env 참조를 보고, 서버와 snapshot 상태를 확인한 뒤 `Validate` 또는 `Test` 버튼으로 같은 CLI 검증을 실행할 수 있습니다.
+오른쪽 출력 영역에는 터미널에서 보던 CLI 로그가 그대로 표시됩니다.
+
 ### 7. k6 실행
 
 ```bash
@@ -523,6 +533,7 @@ pnpm exec openapi-k6 --help
 | 기본 OpenAPI module 변경 | `npx --yes openapi-k6 module set-default auth` |
 | OpenAPI module 제거 | `npx --yes openapi-k6 module remove auth` |
 | scenario용 endpoint 검색 | `npx --yes openapi-k6 catalog --query login` |
+| 로컬 UI로 scenario 선택/검증 | `npx --yes openapi-k6 ui` |
 | scenario 정적 검증 | `npx --yes openapi-k6 validate -s <name>` |
 | scenario 실행 검증 | `npx --yes openapi-k6 test -s <name>` |
 | 환경별 vars override | `npx --yes openapi-k6 test -s <name> --var-file <fixture.yaml> --var sku=ABC-001` |

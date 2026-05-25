@@ -609,6 +609,7 @@ function renderReadme(
 
   const syncCommand = cliCommand + ' sync' + configOption + moduleOption;
   const catalogQueryCommand = cliCommand + ' catalog' + configOption + moduleOption + ' --query login';
+  const uiCommand = cliCommand + ' ui' + configOption + moduleOption;
   const updateCommand = cliCommand + ' update' + configOption + moduleOption;
   const validateNameCommand = usesDefaultDirectory
     ? cliCommand + ' validate' + moduleOption + ' -s <name>'
@@ -699,6 +700,7 @@ function renderReadme(
     TEST_NAME_COMMAND: testNameCommand,
     TEST_SMOKE_COMMAND: testSmokeCommand,
     TEST_WORKFLOW_COMMAND: testWorkflowCommand,
+    UI_COMMAND: uiCommand,
     UPDATE_COMMAND: updateCommand,
     VALIDATE_NAME_COMMAND: validateNameCommand,
     VALIDATE_SMOKE_COMMAND: validateSmokeCommand,

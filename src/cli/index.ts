@@ -4,6 +4,8 @@ import { parse as parseDotEnv } from 'dotenv';
 import { spawn, spawnSync } from 'node:child_process';
 import { createWriteStream, realpathSync, type Dirent, type WriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +24,7 @@ import {
   createModuleBaseUrlEnvName,
   findModuleBaseUrlEnvNameCollisions,
 } from '../core/module-env.js';
+import { collectTemplateReferences } from '../core/template.js';
 import type { ApiCatalog, ApiCatalogOperation, ApiRegistry, Scenario } from '../core/types.js';
 import {
   executeAstScenario,
@@ -126,6 +129,13 @@ export interface RunOptions {
   k6Args?: string[];
   varFile?: string[];
   var?: string[];
+}
+
+export interface UiOptions {
+  config?: string;
+  module?: string;
+  host?: string;
+  port?: string;
 }
 
 export interface CatalogOptions {
@@ -243,6 +253,13 @@ export interface RunResult {
   reportPath?: string;
   exitCode: number | null;
   signal: NodeJS.Signals | null;
+}
+
+export interface UiResult {
+  host: string;
+  port: number;
+  url: string;
+  close: () => Promise<void>;
 }
 
 export interface CatalogResult {
@@ -2305,6 +2322,1547 @@ export async function runTestCommand(
   };
 }
 
+export async function runUiCommand(
+  options: UiOptions,
+  context: CliContext = {},
+): Promise<UiResult> {
+  const cwd = resolveCwd(context);
+  const stdout = context.stdout ?? process.stdout;
+  const config = await loadOptionalConfig(cwd, options.config, true);
+
+  if (config === undefined) {
+    throw new Error(`${DEFAULT_CONFIG_PATH} was not found. Run openapi-k6 init or pass --config.`);
+  }
+
+  if (options.module !== undefined) {
+    resolveConfigModule(config, options.module);
+  }
+
+  const host = normalizeUiHost(options.host);
+  const port = parseUiPort(options.port);
+  const state: UiState = {
+    cwd,
+    options,
+    context,
+    config,
+    runs: new Map(),
+    nextRunId: 1,
+  };
+  const server = createServer((request, response) => {
+    void handleUiRequest(state, request, response).catch((error: unknown) => {
+      writeUiJson(response, 500, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  });
+
+  const resolvedPort = await listenUiServer(server, host, port, options.port !== undefined);
+  const url = `http://${host}:${resolvedPort}`;
+  writeLine(stdout, `openapi-k6 ui listening on ${url}`);
+
+  return {
+    host,
+    port: resolvedPort,
+    url,
+    close: () => closeUiServer(server),
+  };
+}
+
+type UiRunStatus = 'running' | 'passed' | 'failed';
+type UiSnapshotStatus = 'present' | 'missing' | 'error';
+
+interface UiState {
+  cwd: string;
+  options: UiOptions;
+  context: CliContext;
+  config: LoadTestConfig;
+  runs: Map<string, UiRunRecord>;
+  nextRunId: number;
+}
+
+interface UiRunRecord {
+  id: string;
+  command: 'validate' | 'test';
+  scenario: string;
+  status: UiRunStatus;
+  exitCode?: number;
+  chunks: UiRunChunk[];
+  clients: Set<ServerResponse>;
+}
+
+interface UiRunChunk {
+  stream: 'stdout' | 'stderr';
+  chunk: string;
+}
+
+async function handleUiRequest(
+  state: UiState,
+  request: IncomingMessage,
+  response: ServerResponse,
+): Promise<void> {
+  const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
+
+  if (request.method === 'GET' && (requestUrl.pathname === '/' || requestUrl.pathname === '/index.html')) {
+    writeUiHtml(response);
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname === '/api/scenarios') {
+    writeUiJson(response, 200, await listUiScenarios(state));
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname === '/api/scenario') {
+    const scenario = requestUrl.searchParams.get('scenario') ?? '';
+    writeUiJson(response, 200, await readUiScenarioDetail(state, scenario));
+    return;
+  }
+
+  if (request.method === 'POST' && requestUrl.pathname === '/api/run') {
+    const body = await readUiJsonBody(request);
+    writeUiJson(response, 200, await startUiRun(state, body));
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname.startsWith('/api/runs/') && requestUrl.pathname.endsWith('/events')) {
+    const runId = requestUrl.pathname.slice('/api/runs/'.length, -'/events'.length);
+    streamUiRunEvents(state, runId, response);
+    return;
+  }
+
+  if (request.method === 'POST' && requestUrl.pathname === '/api/check-servers') {
+    writeUiJson(response, 200, await checkUiServers(state));
+    return;
+  }
+
+  writeUiJson(response, 404, { error: 'Not found' });
+}
+
+async function listUiScenarios(state: UiState): Promise<{
+  configPath: string;
+  scenarioDir: string;
+  defaultModule?: string;
+  moduleCount: number;
+  scenarios: Array<{
+    id: string;
+    name: string;
+    path: string;
+    stepCount?: number;
+    modules?: string[];
+    env?: string[];
+    vars?: string[];
+    error?: string;
+  }>;
+}> {
+  const scenarioDir = path.join(resolveLoadTestDir(state.cwd, state.config), 'scenarios');
+  const files = await listUiScenarioFiles(scenarioDir);
+  const scenarios = [];
+
+  for (const filePath of files) {
+    try {
+      const scenario = await parseScenarioFile(filePath);
+      const analysis = analyzeUiScenario(scenario);
+      scenarios.push({
+        id: formatUiScenarioOption(state.cwd, scenarioDir, filePath),
+        name: scenario.name,
+        path: formatDisplayPath(state.cwd, filePath),
+        stepCount: scenario.steps.length,
+        modules: analysis.modules,
+        env: analysis.env,
+        vars: analysis.vars,
+      });
+    } catch (error) {
+      scenarios.push({
+        id: formatDisplayPath(state.cwd, filePath),
+        name: resolveScenarioName(filePath),
+        path: formatDisplayPath(state.cwd, filePath),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return {
+    configPath: formatDisplayPath(state.cwd, state.config.path),
+    scenarioDir: formatDisplayPath(state.cwd, scenarioDir),
+    ...(state.config.defaultModule === undefined ? {} : { defaultModule: state.config.defaultModule }),
+    moduleCount: state.config.modules.size,
+    scenarios,
+  };
+}
+
+async function readUiScenarioDetail(
+  state: UiState,
+  scenarioOption: string,
+): Promise<{
+  id: string;
+  name: string;
+  path: string;
+  stepCount: number;
+  modules: string[];
+  env: string[];
+  vars: string[];
+  includes: string[];
+  fixtures: string[];
+  steps: Array<{
+    id: string;
+    module?: string;
+    operationId?: string;
+    method?: string;
+    path?: string;
+    condition?: string;
+    extract?: string[];
+  }>;
+}> {
+  const scenarioPath = resolveUiScenarioPath(state, scenarioOption);
+  const scenario = await parseScenarioFile(scenarioPath);
+  const analysis = analyzeUiScenario(scenario);
+
+  return {
+    id: formatUiScenarioOption(state.cwd, path.join(resolveLoadTestDir(state.cwd, state.config), 'scenarios'), scenarioPath),
+    name: scenario.name,
+    path: formatDisplayPath(state.cwd, scenarioPath),
+    stepCount: scenario.steps.length,
+    modules: analysis.modules,
+    env: analysis.env,
+    vars: analysis.vars,
+    includes: await readScenarioIncludes(scenarioPath),
+    fixtures: await readTopLevelStringArray(scenarioPath, 'fixtures'),
+    steps: scenario.steps.map((step) => ({
+      id: step.id,
+      ...(step.api.module === undefined ? {} : { module: step.api.module }),
+      ...(step.api.operationId === undefined ? {} : { operationId: step.api.operationId }),
+      ...(step.api.method === undefined ? {} : { method: step.api.method }),
+      ...(step.api.path === undefined ? {} : { path: step.api.path }),
+      ...(step.condition === undefined ? {} : { condition: step.condition }),
+      ...(step.extract === undefined ? {} : { extract: Object.keys(step.extract) }),
+    })),
+  };
+}
+
+function analyzeUiScenario(scenario: Scenario): {
+  modules: string[];
+  env: string[];
+  vars: string[];
+} {
+  const modules = new Set<string>();
+  const env = new Set<string>();
+  const vars = new Set<string>();
+
+  for (const step of scenario.steps) {
+    if (step.api.module !== undefined) {
+      modules.add(step.api.module);
+    }
+
+    collectUiTemplateReferences(step.request, env, vars);
+  }
+
+  collectUiTemplateReferences(scenario.vars, env, vars);
+
+  return {
+    modules: [...modules].sort(),
+    env: [...env].sort(),
+    vars: [...vars].sort(),
+  };
+}
+
+function collectUiTemplateReferences(value: unknown, env: Set<string>, vars: Set<string>): void {
+  if (typeof value === 'string') {
+    try {
+      for (const reference of collectTemplateReferences(value)) {
+        if (reference.type === 'env') {
+          env.add(reference.name);
+        } else if (reference.type === 'vars') {
+          vars.add(reference.name);
+        }
+      }
+    } catch {
+      return;
+    }
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      collectUiTemplateReferences(item, env, vars);
+    }
+    return;
+  }
+
+  if (value && typeof value === 'object') {
+    for (const item of Object.values(value)) {
+      collectUiTemplateReferences(item, env, vars);
+    }
+  }
+}
+
+async function startUiRun(
+  state: UiState,
+  body: unknown,
+): Promise<{ runId: string; status: UiRunStatus }> {
+  const payload = parseUiRunPayload(body);
+  const scenario = validateUiScenarioOption(state, payload.scenario);
+  const runId = String(state.nextRunId++);
+  const run: UiRunRecord = {
+    id: runId,
+    command: payload.command,
+    scenario,
+    status: 'running',
+    chunks: [],
+    clients: new Set(),
+  };
+
+  state.runs.set(runId, run);
+  void runUiCliCommand(state, run, payload);
+  return { runId, status: run.status };
+}
+
+function parseUiRunPayload(value: unknown): {
+  command: 'validate' | 'test';
+  scenario: string;
+  varFile: string[];
+  vars: string[];
+} {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('request body must be an object');
+  }
+
+  const record = value as Record<string, unknown>;
+  const command = record.command;
+  const scenario = record.scenario;
+
+  if (command !== 'validate' && command !== 'test') {
+    throw new Error('command must be "validate" or "test"');
+  }
+
+  if (typeof scenario !== 'string' || scenario.trim() === '') {
+    throw new Error('scenario must be a non-empty string');
+  }
+
+  return {
+    command,
+    scenario,
+    varFile: parseUiStringArray(record.varFile, 'varFile'),
+    vars: parseUiStringArray(record.vars, 'vars'),
+  };
+}
+
+async function runUiCliCommand(
+  state: UiState,
+  run: UiRunRecord,
+  payload: { command: 'validate' | 'test'; scenario: string; varFile: string[]; vars: string[] },
+): Promise<void> {
+  const args = [
+    payload.command,
+    '--scenario',
+    payload.scenario,
+    '--config',
+    formatDisplayPath(state.cwd, state.config.path),
+    ...(state.options.module === undefined ? [] : ['--module', state.options.module]),
+    ...payload.varFile.flatMap((value) => ['--var-file', value]),
+    ...payload.vars.flatMap((value) => ['--var', value]),
+    ...(payload.command === 'test' ? ['--no-color'] : []),
+  ];
+
+  appendUiRunChunk(run, 'stdout', `$ openapi-k6 ${args.map(shellQuote).join(' ')}\n`);
+
+  try {
+    await runCli(args, {
+      ...state.context,
+      cwd: state.cwd,
+      stdout: createUiRunWritable(run, 'stdout'),
+      stderr: createUiRunWritable(run, 'stderr'),
+      env: state.context.env,
+      fetch: state.context.fetch,
+    });
+    finishUiRun(run, 'passed', 0);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    appendUiRunChunk(run, 'stderr', `${message}\n`);
+    const hint = createUiFailureHint(message);
+
+    if (hint !== undefined) {
+      appendUiRunChunk(run, 'stderr', `\n${hint}\n`);
+    }
+
+    finishUiRun(run, 'failed', error instanceof CommanderError ? error.exitCode : 1);
+  }
+}
+
+function createUiFailureHint(message: string): string | undefined {
+  const normalized = message.toLowerCase();
+
+  if (
+    (normalized.includes('enoent') || normalized.includes('no such file')) &&
+    normalized.includes('/openapi/') &&
+    normalized.includes('.openapi.')
+  ) {
+    return 'Next: OpenAPI snapshot이 없습니다. 먼저 openapi-k6 sync를 실행하세요.';
+  }
+
+  if (normalized.includes('snapshot') && normalized.includes('todo')) {
+    return 'Next: load-tests/config.yaml의 snapshot 설정을 채우고 openapi-k6 sync를 실행하세요.';
+  }
+
+  if (
+    normalized.includes('fetch failed') ||
+    normalized.includes('econnrefused') ||
+    normalized.includes('enotfound') ||
+    normalized.includes('timed out')
+  ) {
+    return 'Next: 대상 백엔드 서버가 떠 있는지 확인하고 Target의 baseUrl을 점검하세요.';
+  }
+
+  return undefined;
+}
+
+function createUiRunWritable(run: UiRunRecord, stream: 'stdout' | 'stderr'): WritableLike {
+  return {
+    write(chunk: string | Uint8Array): unknown {
+      appendUiRunChunk(run, stream, typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
+      return true;
+    },
+    isTTY: false,
+  };
+}
+
+function appendUiRunChunk(run: UiRunRecord, stream: 'stdout' | 'stderr', chunk: string): void {
+  const event = { stream, chunk };
+  run.chunks.push(event);
+  writeUiRunEvent(run, 'chunk', event);
+}
+
+function finishUiRun(run: UiRunRecord, status: 'passed' | 'failed', exitCode: number): void {
+  run.status = status;
+  run.exitCode = exitCode;
+  writeUiRunEvent(run, 'done', {
+    status,
+    exitCode,
+  });
+
+  for (const client of run.clients) {
+    client.end();
+  }
+
+  run.clients.clear();
+}
+
+function streamUiRunEvents(state: UiState, runId: string, response: ServerResponse): void {
+  const run = state.runs.get(runId);
+
+  if (run === undefined) {
+    writeUiJson(response, 404, { error: `run ${JSON.stringify(runId)} was not found` });
+    return;
+  }
+
+  response.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+  });
+
+  for (const chunk of run.chunks) {
+    writeSseEvent(response, 'chunk', chunk);
+  }
+
+  if (run.status !== 'running') {
+    writeSseEvent(response, 'done', {
+      status: run.status,
+      exitCode: run.exitCode ?? 1,
+    });
+    response.end();
+    return;
+  }
+
+  run.clients.add(response);
+  response.on('close', () => {
+    run.clients.delete(response);
+  });
+}
+
+function writeUiRunEvent(run: UiRunRecord, name: string, data: unknown): void {
+  for (const client of run.clients) {
+    writeSseEvent(client, name, data);
+  }
+}
+
+async function checkUiServers(state: UiState): Promise<{
+  checkedAt: string;
+  modules: Array<{
+    name: string;
+    baseUrl?: string;
+    source?: string;
+    status: 'unknown' | 'reachable' | 'failed';
+    httpStatus?: number;
+    durationMs?: number;
+    error?: string;
+    snapshot: {
+      path?: string;
+      status: UiSnapshotStatus;
+      error?: string;
+    };
+  }>;
+}> {
+  const loadTestDir = resolveLoadTestDir(state.cwd, state.config);
+  const runtimeEnv = {
+    ...(await loadLoadTestEnv(loadTestDir)),
+    ...(state.context.env ?? process.env),
+  };
+  const modules = [];
+
+  for (const moduleConfig of state.config.modules.values()) {
+    modules.push(await checkUiModuleServer(state, moduleConfig, runtimeEnv));
+  }
+
+  return {
+    checkedAt: new Date().toISOString(),
+    modules,
+  };
+}
+
+async function checkUiModuleServer(
+  state: UiState,
+  moduleConfig: LoadTestModuleConfig,
+  runtimeEnv: Record<string, string | undefined>,
+): Promise<{
+  name: string;
+  baseUrl?: string;
+  source?: string;
+  status: 'unknown' | 'reachable' | 'failed';
+  httpStatus?: number;
+  durationMs?: number;
+  error?: string;
+  snapshot: {
+    path?: string;
+    status: UiSnapshotStatus;
+    error?: string;
+  };
+}> {
+  const snapshot = await checkUiSnapshot(state, moduleConfig);
+  const resolved = await resolveUiModuleBaseUrl(state, moduleConfig, runtimeEnv);
+
+  if (resolved.baseUrl === undefined) {
+    return {
+      name: moduleConfig.name,
+      status: 'unknown',
+      error: 'baseUrl is not configured',
+      snapshot,
+    };
+  }
+
+  const startedAt = Date.now();
+
+  try {
+    const response = await fetchUiReachability(state.context.fetch ?? fetch, resolved.baseUrl);
+    return {
+      name: moduleConfig.name,
+      baseUrl: resolved.baseUrl,
+      source: resolved.source,
+      status: 'reachable',
+      httpStatus: response.status,
+      durationMs: Date.now() - startedAt,
+      snapshot,
+    };
+  } catch (error) {
+    return {
+      name: moduleConfig.name,
+      baseUrl: resolved.baseUrl,
+      source: resolved.source,
+      status: 'failed',
+      durationMs: Date.now() - startedAt,
+      error: formatUiError(error),
+      snapshot,
+    };
+  }
+}
+
+async function checkUiSnapshot(
+  state: UiState,
+  moduleConfig: LoadTestModuleConfig,
+): Promise<{ path?: string; status: UiSnapshotStatus; error?: string }> {
+  if (!isConfiguredValue(moduleConfig.snapshot)) {
+    return {
+      status: 'missing',
+      error: 'snapshot is not configured',
+    };
+  }
+
+  const snapshotPath = resolveConfigFilePath(state.config, moduleConfig.snapshot);
+  const displayPath = formatDisplayPath(state.cwd, snapshotPath);
+
+  try {
+    await fs.access(snapshotPath);
+    return {
+      path: displayPath,
+      status: 'present',
+    };
+  } catch (error) {
+    if (isNodeErrorCode(error, 'ENOENT')) {
+      return {
+        path: displayPath,
+        status: 'missing',
+        error: 'run openapi-k6 sync',
+      };
+    }
+
+    return {
+      path: displayPath,
+      status: 'error',
+      error: formatUiError(error),
+    };
+  }
+}
+
+function formatUiError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const cause = error instanceof Error && 'cause' in error
+    ? (error as Error & { cause?: unknown }).cause
+    : undefined;
+
+  if (cause instanceof Error && cause.message && cause.message !== message) {
+    return `${message}: ${cause.message}`;
+  }
+
+  if (cause && typeof cause === 'object' && 'code' in cause && typeof cause.code === 'string') {
+    return `${message}: ${cause.code}`;
+  }
+
+  return message;
+}
+
+async function resolveUiModuleBaseUrl(
+  state: UiState,
+  moduleConfig: LoadTestModuleConfig,
+  runtimeEnv: Record<string, string | undefined>,
+): Promise<{ baseUrl?: string; source?: string }> {
+  const moduleEnvName = createModuleBaseUrlEnvName(moduleConfig.name);
+  const moduleEnv = normalizeConfiguredValue(runtimeEnv[moduleEnvName]);
+
+  if (moduleEnv !== undefined) {
+    return { baseUrl: moduleEnv, source: moduleEnvName };
+  }
+
+  const rootEnv = normalizeConfiguredValue(runtimeEnv.BASE_URL);
+
+  if (rootEnv !== undefined) {
+    return { baseUrl: rootEnv, source: 'BASE_URL' };
+  }
+
+  const moduleBaseUrl = normalizeConfiguredValue(moduleConfig.baseUrl);
+
+  if (moduleBaseUrl !== undefined) {
+    return { baseUrl: moduleBaseUrl, source: `modules.${moduleConfig.name}.baseUrl` };
+  }
+
+  const rootBaseUrl = normalizeConfiguredValue(state.config.baseUrl);
+
+  if (rootBaseUrl !== undefined) {
+    return { baseUrl: rootBaseUrl, source: 'baseUrl' };
+  }
+
+  if (isConfiguredValue(moduleConfig.snapshot)) {
+    try {
+      const registry = await parseOpenApiFile(resolveConfigFilePath(state.config, moduleConfig.snapshot));
+
+      if (registry.defaultServerUrl !== undefined) {
+        return { baseUrl: registry.defaultServerUrl, source: `modules.${moduleConfig.name}.snapshot servers[0].url` };
+      }
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
+}
+
+async function fetchUiReachability(fetchImpl: typeof fetch, baseUrl: string): Promise<Response> {
+  const targetUrl = new URL(baseUrl);
+  const head = await fetchWithTimeout(fetchImpl, targetUrl, 'HEAD');
+
+  if (head.ok || head.status > 0) {
+    return head;
+  }
+
+  return fetchWithTimeout(fetchImpl, targetUrl, 'GET');
+}
+
+async function fetchWithTimeout(fetchImpl: typeof fetch, url: URL, method: 'GET' | 'HEAD'): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3000);
+
+  try {
+    return await fetchImpl(url, {
+      method,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function listUiScenarioFiles(directoryPath: string): Promise<string[]> {
+  let entries: Dirent[];
+
+  try {
+    entries = await fs.readdir(directoryPath, { withFileTypes: true });
+  } catch (error) {
+    if (isNodeErrorCode(error, 'ENOENT')) {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const entryPath = path.join(directoryPath, entry.name);
+
+    if (entry.isDirectory()) {
+      if (entry.name !== 'partials' && entry.name !== 'fixtures') {
+        files.push(...await listUiScenarioFiles(entryPath));
+      }
+    } else if (entry.isFile() && isScenarioFile(entry.name) && !entry.name.endsWith('.example')) {
+      files.push(entryPath);
+    }
+  }
+
+  return files.sort((left, right) => left.localeCompare(right));
+}
+
+function formatUiScenarioOption(cwd: string, scenarioDir: string, filePath: string): string {
+  const relative = path.relative(scenarioDir, filePath);
+  const topLevelName = resolveScenarioName(relative);
+
+  if (!relative.includes(path.sep) && isScenarioName(topLevelName)) {
+    return topLevelName;
+  }
+
+  return formatDisplayPath(cwd, filePath);
+}
+
+function validateUiScenarioOption(state: UiState, value: string): string {
+  resolveUiScenarioPath(state, value);
+  return value;
+}
+
+function resolveUiScenarioPath(state: UiState, value: string): string {
+  const scenarioDir = path.join(resolveLoadTestDir(state.cwd, state.config), 'scenarios');
+  const scenarioPath = resolveScenarioPath(state.cwd, state.config, value);
+  const relative = path.relative(scenarioDir, scenarioPath);
+
+  if (
+    relative === '' ||
+    relative.startsWith('..') ||
+    path.isAbsolute(relative) ||
+    relative.split(path.sep).includes('partials') ||
+    relative.split(path.sep).includes('fixtures')
+  ) {
+    throw new Error(`scenario must be inside ${formatDisplayPath(state.cwd, scenarioDir)}`);
+  }
+
+  return scenarioPath;
+}
+
+async function readTopLevelStringArray(filePath: string, key: string): Promise<string[]> {
+  const raw = await fs.readFile(filePath, 'utf8');
+  const parsed = parseYaml(raw);
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return [];
+  }
+
+  const value = (parsed as Record<string, unknown>)[key];
+
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+async function readScenarioIncludes(filePath: string): Promise<string[]> {
+  const raw = await fs.readFile(filePath, 'utf8');
+  const parsed = parseYaml(raw);
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return [];
+  }
+
+  const steps = (parsed as Record<string, unknown>).steps;
+
+  if (!Array.isArray(steps)) {
+    return [];
+  }
+
+  return steps.flatMap((step) => {
+    if (!step || typeof step !== 'object' || Array.isArray(step)) {
+      return [];
+    }
+
+    const include = (step as Record<string, unknown>).include;
+    return typeof include === 'string' ? [include] : [];
+  });
+}
+
+async function readUiJsonBody(request: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  let totalLength = 0;
+
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalLength += buffer.length;
+
+    if (totalLength > 1024 * 1024) {
+      throw new Error('request body is too large');
+    }
+
+    chunks.push(buffer);
+  }
+
+  if (chunks.length === 0) {
+    return {};
+  }
+
+  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
+}
+
+function parseUiStringArray(value: unknown, label: string): string[] {
+  if (value === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
+    throw new Error(`${label} must be an array of strings`);
+  }
+
+  return value;
+}
+
+function writeUiHtml(response: ServerResponse): void {
+  response.writeHead(200, {
+    'content-type': 'text/html; charset=utf-8',
+    'cache-control': 'no-cache',
+  });
+  response.end(UI_HTML);
+}
+
+function writeUiJson(response: ServerResponse, statusCode: number, data: unknown): void {
+  if (response.headersSent) {
+    response.end();
+    return;
+  }
+
+  response.writeHead(statusCode, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-cache',
+  });
+  response.end(JSON.stringify(data));
+}
+
+function writeSseEvent(response: ServerResponse, event: string, data: unknown): void {
+  response.write(`event: ${event}\n`);
+  response.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+function normalizeUiHost(value: string | undefined): string {
+  const host = value?.trim() ?? '127.0.0.1';
+
+  if (!host) {
+    throw new Error('--host must not be empty');
+  }
+
+  return host;
+}
+
+function parseUiPort(value: string | undefined): number {
+  if (value === undefined) {
+    return 3766;
+  }
+
+  const port = Number(value);
+
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new Error('--port must be an integer between 0 and 65535');
+  }
+
+  return port;
+}
+
+async function listenUiServer(
+  server: Server,
+  host: string,
+  port: number,
+  explicitPort: boolean,
+): Promise<number> {
+  const maxAttempts = explicitPort || port === 0 ? 1 : 10;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const candidatePort = port === 0 ? 0 : port + attempt;
+
+    try {
+      return await listenUiServerOnce(server, host, candidatePort);
+    } catch (error) {
+      if (explicitPort || !isNodeErrorCode(error, 'EADDRINUSE')) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error(`No available port found starting at ${port}`);
+}
+
+function listenUiServerOnce(server: Server, host: string, port: number): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.off('listening', onListening);
+      reject(error);
+    };
+    const onListening = () => {
+      server.off('error', onError);
+      const address = server.address() as AddressInfo;
+      resolve(address.port);
+    };
+
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(port, host);
+  });
+}
+
+function closeUiServer(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+const UI_HTML = String.raw`<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>openapi-k6 UI</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --panel-2: #f0f3f8;
+      --line: #d9dee8;
+      --text: #17202f;
+      --muted: #667085;
+      --accent: #0f766e;
+      --accent-2: #155eef;
+      --danger: #b42318;
+      --ok-bg: #e7f8ef;
+      --ok: #067647;
+      --bad-bg: #fff0ee;
+      --bad: #b42318;
+      --warn-bg: #fff7e6;
+      --warn: #a15c07;
+      --focus: rgba(21, 94, 239, 0.18);
+      --hover: #f7f9fc;
+      --shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+      --terminal: #101828;
+      --terminal-line: #243047;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 72px;
+      padding: 12px 22px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.9);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      backdrop-filter: blur(10px);
+    }
+    h1 { margin: 0; font-size: 18px; letter-spacing: 0; }
+    .subtitle { color: var(--muted); font-size: 13px; }
+    .brand { min-width: 220px; }
+    .header-meta {
+      justify-content: flex-end;
+      max-width: 820px;
+    }
+    main {
+      display: grid;
+      grid-template-columns: minmax(260px, 320px) minmax(420px, 1fr) minmax(420px, 0.95fr);
+      gap: 16px;
+      padding: 16px;
+      height: calc(100vh - 72px);
+    }
+    .panel {
+      min-height: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .panel-head {
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: #fbfcfe;
+    }
+    .panel-title { margin: 0; font-size: 14px; font-weight: 700; }
+    .panel-body { padding: 14px; overflow: auto; min-height: 0; }
+    input, button {
+      font: inherit;
+      border-radius: 6px;
+    }
+    input {
+      width: 100%;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+    }
+    button {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      padding: 8px 11px;
+      cursor: pointer;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    button:hover:not(:disabled) {
+      background: var(--hover);
+      border-color: #b8c0cc;
+    }
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+    button.primary:hover:not(:disabled) { background: #0b665f; }
+    button.blue {
+      border-color: var(--accent-2);
+      background: var(--accent-2);
+      color: #fff;
+    }
+    button.blue:hover:not(:disabled) { background: #104bc5; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    button:focus-visible,
+    input:focus-visible,
+    summary:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 2px;
+    }
+    .scenario-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .scenario-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fff;
+      text-align: left;
+      transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+    }
+    .scenario-item:hover { background: var(--hover); }
+    .scenario-item.active {
+      border-color: var(--accent);
+      background: #f8fdfa;
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+    .scenario-name { font-weight: 750; }
+    .scenario-path, .muted { color: var(--muted); font-size: 12px; }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .stack { display: flex; flex-direction: column; gap: 12px; }
+    .section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfcfe;
+    }
+    #scenarioSummary.section {
+      border: 0;
+      border-radius: 0;
+      padding: 2px 2px 8px;
+      background: transparent;
+    }
+    .section h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+    }
+    details.section {
+      padding: 0;
+    }
+    details.section summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 12px;
+      font-size: 13px;
+      font-weight: 750;
+    }
+    details.section summary:hover {
+      background: var(--hover);
+    }
+    details.section summary::-webkit-details-marker { display: none; }
+    details.section summary::after {
+      content: "Show";
+      float: right;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    details.section[open] summary {
+      border-bottom: 1px solid var(--line);
+    }
+    details.section[open] summary::after {
+      content: "Hide";
+    }
+    .section-content {
+      padding: 12px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      font-size: 12px;
+      color: #344054;
+      font-weight: 650;
+    }
+    .pill.ok { background: var(--ok-bg); color: var(--ok); }
+    .pill.bad { background: var(--bad-bg); color: var(--bad); }
+    .pill.warn { background: var(--warn-bg); color: var(--warn); }
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      min-width: 220px;
+    }
+    .hint.warn { color: var(--warn); }
+    .hint.bad { color: var(--bad); }
+    .steps {
+      display: grid;
+      gap: 8px;
+    }
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+    }
+    .step-title { font-weight: 750; }
+    .actions {
+      display: flex;
+      align-items: flex-start;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+    .actions > .button-row {
+      display: grid;
+      grid-template-columns: repeat(3, max-content);
+      gap: 8px;
+    }
+    .terminal {
+      margin: 0;
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 14px;
+      background: var(--terminal);
+      color: #f3f7ff;
+      font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      white-space: pre-wrap;
+      border-top: 1px solid var(--terminal-line);
+      tab-size: 2;
+    }
+    .server-grid { display: grid; gap: 8px; }
+    .server {
+      display: grid;
+      grid-template-columns: 90px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px;
+    }
+    .server-lines {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .server-lines div {
+      overflow-wrap: anywhere;
+    }
+    .empty {
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      text-align: center;
+    }
+    @media (max-width: 1100px) {
+      main {
+        height: auto;
+        grid-template-columns: 1fr;
+      }
+      header { align-items: flex-start; flex-direction: column; gap: 10px; }
+      .header-meta { justify-content: flex-start; }
+      .terminal { min-height: 360px; }
+    }
+    @media (max-height: 560px) and (min-width: 1101px) {
+      main {
+        height: auto;
+        min-height: calc(100vh - 72px);
+      }
+      .panel { min-height: 300px; }
+      .terminal { min-height: 220px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <h1>openapi-k6 UI</h1>
+      <div class="subtitle">Scenario validate/test runner</div>
+    </div>
+    <div class="row header-meta">
+      <span id="configPath" class="pill">loading</span>
+      <button id="refreshBtn">Refresh</button>
+    </div>
+  </header>
+  <main>
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">Scenarios</h2>
+        <span id="scenarioCount" class="pill">0</span>
+      </div>
+      <div class="panel-body">
+        <input id="searchInput" placeholder="Search scenarios">
+        <div id="scenarioList" class="scenario-list"></div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title" id="detailTitle">Scenario</h2>
+        <span id="detailStatus" class="pill">not run</span>
+      </div>
+      <div class="panel-body stack">
+        <div id="scenarioSummary" class="section">
+          <div class="empty">Choose a scenario from the left.</div>
+        </div>
+        <details class="section">
+          <summary>Target status</summary>
+          <div class="section-content">
+            <div class="row" style="margin-bottom: 8px;">
+              <button id="checkServersBtn">Check servers</button>
+              <span id="serverCheckedAt" class="muted"></span>
+            </div>
+            <div id="serverList" class="server-grid"></div>
+          </div>
+        </details>
+        <details class="section">
+          <summary>Scenario details</summary>
+          <div id="detailBody" class="section-content empty">Choose a scenario from the left.</div>
+        </details>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head">
+        <h2 class="panel-title">Run Output</h2>
+        <span id="runStatus" class="pill">idle</span>
+      </div>
+      <div class="actions">
+        <div class="button-row">
+          <button id="validateBtn" class="blue" disabled>Validate</button>
+          <button id="testBtn" class="primary" disabled>Test</button>
+          <button id="clearBtn">Clear</button>
+        </div>
+        <span id="runHint" class="hint">Select a scenario to start.</span>
+      </div>
+      <pre id="output" class="terminal">Select a scenario and run validate/test.</pre>
+    </section>
+  </main>
+  <script>
+    const state = {
+      scenarios: [],
+      selected: null,
+      detail: null,
+      lastRun: new Map(),
+      serverSummary: { checked: false, failedServers: 0, missingSnapshots: 0 }
+    };
+
+    const els = {
+      configPath: document.getElementById('configPath'),
+      scenarioCount: document.getElementById('scenarioCount'),
+      scenarioList: document.getElementById('scenarioList'),
+      searchInput: document.getElementById('searchInput'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      detailTitle: document.getElementById('detailTitle'),
+      detailStatus: document.getElementById('detailStatus'),
+      scenarioSummary: document.getElementById('scenarioSummary'),
+      detailBody: document.getElementById('detailBody'),
+      checkServersBtn: document.getElementById('checkServersBtn'),
+      serverCheckedAt: document.getElementById('serverCheckedAt'),
+      serverList: document.getElementById('serverList'),
+      validateBtn: document.getElementById('validateBtn'),
+      testBtn: document.getElementById('testBtn'),
+      clearBtn: document.getElementById('clearBtn'),
+      output: document.getElementById('output'),
+      runStatus: document.getElementById('runStatus'),
+      runHint: document.getElementById('runHint')
+    };
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function statusTone(value) {
+      const normalized = String(value).toLowerCase();
+      if (normalized.includes('passed') || normalized.includes('reachable') || normalized.includes('ready') || normalized.includes('present')) return ' ok';
+      if (normalized.includes('failed') || normalized.includes('missing') || normalized.includes('error')) return ' bad';
+      if (normalized.includes('running') || normalized.includes('checking') || normalized.includes('warning') || normalized.includes('unknown')) return ' warn';
+      return '';
+    }
+
+    function setStatus(el, value) {
+      el.textContent = value;
+      el.className = 'pill' + statusTone(value);
+    }
+
+    function setHint(message, tone) {
+      els.runHint.textContent = message;
+      els.runHint.className = 'hint' + (tone ? ' ' + tone : '');
+    }
+
+    function updateRunHint() {
+      if (!state.selected) {
+        setHint('Select a scenario to start.', '');
+      } else if (state.serverSummary.missingSnapshots > 0) {
+        setHint('Snapshot missing. Run openapi-k6 sync before validate/test.', 'bad');
+      } else if (state.serverSummary.failedServers > 0) {
+        setHint('Some servers are unreachable. Validate can run; test may fail.', 'warn');
+      } else if (state.serverSummary.checked) {
+        setHint('Ready for validate/test.', '');
+      } else {
+        setHint('Check servers before test if the backend status is unclear.', 'warn');
+      }
+
+      els.validateBtn.title = state.serverSummary.missingSnapshots > 0
+        ? 'OpenAPI snapshot is missing. Run openapi-k6 sync first.'
+        : '';
+      els.testBtn.title = state.serverSummary.failedServers > 0
+        ? 'One or more target servers are unreachable.'
+        : els.validateBtn.title;
+    }
+
+    async function fetchJson(url, options) {
+      const response = await fetch(url, options);
+      const json = await response.json();
+      if (!response.ok) {
+        throw new Error(json.error || response.statusText);
+      }
+      return json;
+    }
+
+    async function loadScenarios() {
+      const data = await fetchJson('/api/scenarios');
+      state.scenarios = data.scenarios;
+      els.configPath.textContent = data.configPath;
+      renderScenarioList();
+      if (!state.selected && state.scenarios.length > 0) {
+        await selectScenario(state.scenarios[0].id);
+      }
+      updateRunHint();
+    }
+
+    function renderScenarioList() {
+      const query = els.searchInput.value.trim().toLowerCase();
+      const items = state.scenarios.filter((scenario) => {
+        return !query || scenario.name.toLowerCase().includes(query) || scenario.path.toLowerCase().includes(query);
+      });
+      els.scenarioCount.textContent = String(items.length);
+      els.scenarioList.innerHTML = items.map((scenario) => {
+        const status = state.lastRun.get(scenario.id) || (scenario.error ? 'failed' : 'not run');
+        return '<button class="scenario-item ' + (state.selected === scenario.id ? 'active' : '') + '" data-id="' + escapeHtml(scenario.id) + '">' +
+          '<div class="row" style="justify-content: space-between;"><span class="scenario-name">' + escapeHtml(scenario.name) + '</span><span class="pill ' + (status === 'passed' ? 'ok' : status === 'failed' ? 'bad' : '') + '">' + escapeHtml(status) + '</span></div>' +
+          '<div class="scenario-path">' + escapeHtml(scenario.path) + '</div>' +
+          '<div class="muted">' + (scenario.stepCount === undefined ? 'parse error' : scenario.stepCount + ' steps') + '</div>' +
+          '</button>';
+      }).join('');
+
+      for (const item of els.scenarioList.querySelectorAll('.scenario-item')) {
+        item.addEventListener('click', () => selectScenario(item.getAttribute('data-id')));
+      }
+    }
+
+    async function selectScenario(id) {
+      state.selected = id;
+      renderScenarioList();
+      try {
+        state.detail = await fetchJson('/api/scenario?scenario=' + encodeURIComponent(id));
+        renderDetail();
+        els.validateBtn.disabled = false;
+        els.testBtn.disabled = false;
+      } catch (error) {
+        state.detail = null;
+        els.detailTitle.textContent = 'Scenario error';
+        els.scenarioSummary.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
+        els.detailBody.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
+        els.validateBtn.disabled = true;
+        els.testBtn.disabled = true;
+      }
+      updateRunHint();
+    }
+
+    function renderDetail() {
+      const detail = state.detail;
+      els.detailTitle.textContent = detail.name;
+      setStatus(els.detailStatus, state.lastRun.get(detail.id) || 'not run');
+      const referencePills = []
+        .concat(detail.modules.map((item) => '<span class="pill">module ' + escapeHtml(item) + '</span>'))
+        .concat(detail.env.map((item) => '<span class="pill">env.' + escapeHtml(item) + '</span>'))
+        .concat(detail.vars.map((item) => '<span class="pill">vars.' + escapeHtml(item) + '</span>'));
+      els.scenarioSummary.innerHTML =
+        '<div class="stack" style="gap: 8px;">' +
+          '<div><strong>' + escapeHtml(detail.name) + '</strong></div>' +
+          '<div class="muted">' + escapeHtml(detail.path) + '</div>' +
+          '<div class="row"><span class="pill">' + detail.stepCount + (detail.stepCount === 1 ? ' step' : ' steps') + '</span></div>' +
+        '</div>';
+      const steps = detail.steps.map((step) => {
+        const api = step.operationId || ((step.method || '') + ' ' + (step.path || '')).trim();
+        const extract = step.extract && step.extract.length ? '<div class="muted">extract: ' + escapeHtml(step.extract.join(', ')) + '</div>' : '';
+        return '<div class="step"><div class="step-title">' + escapeHtml(step.id) + '</div><div class="muted">' + escapeHtml(api || 'api') + '</div>' + extract + '</div>';
+      }).join('');
+      const references = referencePills.length
+        ? '<div><h3>References</h3><div class="row">' + referencePills.join('') + '</div></div>'
+        : '<div class="muted">No env/vars/module references detected.</div>';
+      els.detailBody.className = 'section-content stack';
+      els.detailBody.innerHTML = references + '<div><h3>Steps</h3><div class="steps">' + steps + '</div></div>';
+    }
+
+    async function checkServers() {
+      setStatus(els.runStatus, 'checking');
+      els.serverList.innerHTML = '<div class="empty">Checking servers...</div>';
+      try {
+        const result = await fetchJson('/api/check-servers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+        els.serverCheckedAt.textContent = new Date(result.checkedAt).toLocaleTimeString();
+        state.serverSummary = summarizeServerResult(result);
+        els.serverList.innerHTML = result.modules.map((module) => {
+          const snapshot = module.snapshot || { status: 'missing', error: 'snapshot unknown' };
+          const serverMeta = formatServerMeta(module);
+          const snapshotMeta = formatSnapshotMeta(snapshot);
+          return '<div class="server"><strong>' + escapeHtml(module.name) + '</strong><div class="server-lines"><div>' + escapeHtml(module.baseUrl || 'baseUrl not configured') + '</div><div class="muted">' + escapeHtml(serverMeta) + '</div><div class="muted">' + escapeHtml(snapshotMeta) + '</div></div><span class="pill' + statusTone(module.status) + '">' + escapeHtml(module.status) + '</span></div>';
+        }).join('');
+      } catch (error) {
+        state.serverSummary = { checked: false, failedServers: 0, missingSnapshots: 0 };
+        els.serverList.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
+      } finally {
+        setStatus(els.runStatus, 'idle');
+        updateRunHint();
+      }
+    }
+
+    function summarizeServerResult(result) {
+      return {
+        checked: true,
+        failedServers: result.modules.filter((module) => module.status === 'failed' || module.status === 'unknown').length,
+        missingSnapshots: result.modules.filter((module) => !module.snapshot || module.snapshot.status !== 'present').length
+      };
+    }
+
+    function formatServerMeta(module) {
+      const parts = [];
+      if (module.source) parts.push(module.source);
+      if (module.httpStatus) parts.push('HTTP ' + module.httpStatus);
+      if (typeof module.durationMs === 'number') parts.push(module.durationMs + 'ms');
+      if (module.error) parts.push(module.error);
+      return parts.join(' · ') || 'baseUrl not configured';
+    }
+
+    function formatSnapshotMeta(snapshot) {
+      const parts = ['snapshot: ' + snapshot.status];
+      if (snapshot.path) parts.push(snapshot.path);
+      if (snapshot.error) parts.push(snapshot.error);
+      return parts.join(' · ');
+    }
+
+    async function runCommand(command) {
+      if (!state.selected) return;
+      setStatus(els.runStatus, 'running');
+      els.output.textContent = '';
+      const result = await fetchJson('/api/run', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ command: command, scenario: state.selected })
+      });
+      const events = new EventSource('/api/runs/' + encodeURIComponent(result.runId) + '/events');
+      events.addEventListener('chunk', (event) => {
+        const data = JSON.parse(event.data);
+        els.output.textContent += data.chunk;
+        els.output.scrollTop = els.output.scrollHeight;
+      });
+      events.addEventListener('done', (event) => {
+        const data = JSON.parse(event.data);
+        state.lastRun.set(state.selected, data.status);
+        setStatus(els.runStatus, data.status);
+        setStatus(els.detailStatus, data.status);
+        renderScenarioList();
+        updateRunHint();
+        events.close();
+      });
+      events.onerror = () => {
+        events.close();
+      };
+    }
+
+    els.refreshBtn.addEventListener('click', loadScenarios);
+    els.searchInput.addEventListener('input', renderScenarioList);
+    els.checkServersBtn.addEventListener('click', checkServers);
+    els.validateBtn.addEventListener('click', () => runCommand('validate'));
+    els.testBtn.addEventListener('click', () => runCommand('test'));
+    els.clearBtn.addEventListener('click', () => { els.output.textContent = ''; setStatus(els.runStatus, 'idle'); });
+
+    loadScenarios().then(checkServers).catch((error) => {
+      els.scenarioList.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
+    });
+  </script>
+</body>
+</html>`;
+
 export async function runInitCommand(
   options: InitOptions,
   context: CliContext = {},
@@ -3614,6 +5172,17 @@ export function createProgram(context: CliContext = {}): Command {
       if (!result.passed) {
         throw new CommanderError(1, 'openapi-k6.doctor.failed', 'Doctor checks failed');
       }
+    });
+
+  program
+    .command('ui')
+    .description('Start a local web UI for selecting scenarios and running validate/test.')
+    .option('--config <path>', 'Load test config file path')
+    .option('-m, --module <name>', 'Module name from config')
+    .option('--host <host>', 'Host to bind (defaults to 127.0.0.1)')
+    .option('--port <port>', 'Port to bind (defaults to 3766 and tries nearby ports)')
+    .action(async (options: UiOptions) => {
+      await runUiCommand(options, context);
     });
 
   program

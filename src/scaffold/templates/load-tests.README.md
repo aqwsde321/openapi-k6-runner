@@ -52,6 +52,7 @@ __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말�
 - 기본 `.gitignore`는 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.
 - 생성물은 직접 고치지 않습니다. OpenAPI snapshot은 `sync`, `generated/*.k6.js`는 `generate`로 다시 만듭니다.
 - `__CLI_COMMAND__ validate`로 YAML/OpenAPI 정합성을 확인하고, `__CLI_COMMAND__ test`가 통과한 scenario만 `run`하거나 `generate`/`run.sh`로 실행합니다.
+- scenario가 많으면 `__UI_COMMAND__`로 목록, 서버 상태, validate/test 출력을 브라우저에서 확인할 수 있습니다.
 - 비밀 값은 YAML에 쓰지 말고 `.env`에 둔 뒤 `{{env.NAME}}`으로 참조합니다.
 
 ### 빠른 시작
@@ -84,6 +85,12 @@ __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말�
 
    ```bash
    __TEST_SMOKE_COMMAND__
+   ```
+
+   시나리오 이름을 매번 입력하기 번거로우면 로컬 UI를 켭니다.
+
+   ```bash
+   __UI_COMMAND__
    ```
 
 6. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.
@@ -488,6 +495,15 @@ __TEST_SMOKE_COMMAND__
 `__ENV_PATH__`가 있으면 `{{env.NAME}}` template 값과 `BASE_URL`을 읽습니다. 현재 shell 환경변수가 같은 이름으로 있으면 shell 값이 우선합니다.
 `{{env.NAME}}`으로 참조한 값은 scenario test 출력과 생성된 k6 실패 로그에서 masking됩니다.
 
+시나리오가 많으면 로컬 UI에서 고르고 실행할 수 있습니다.
+
+```bash
+__UI_COMMAND__
+```
+
+UI에서는 scenario 목록을 클릭해 step/module/env 참조를 보고, 서버와 snapshot 상태를 확인한 뒤 `Validate` 또는 `Test` 버튼으로 같은 CLI 검증을 실행합니다.
+출력 영역에는 터미널에서 보던 CLI 로그가 그대로 표시됩니다.
+
 #### 2-5. CLI에서 k6 실행
 
 `__CLI_COMMAND__ run`은 scenario를 정적 검증하고, k6 스크립트를 다시 생성한 뒤 `k6 run`을 실행합니다.
@@ -703,6 +719,7 @@ __GENERATE_WORKFLOW_COMMAND__
 - 기본 module 변경: `__CLI_COMMAND__ module set-default <name>`
 - module 제거: `__CLI_COMMAND__ module remove <name>`
 - 작업 공간 점검: `__CLI_COMMAND__ doctor`
+- scenario 목록을 보고 클릭 실행: `__UI_COMMAND__`
 
 ### 5. 제거 방법
 

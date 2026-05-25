@@ -2,10 +2,12 @@ import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'n
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { PassThrough, Writable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { runCli } from '../src/cli/index.js';
+import { runCli, runUiCommand } from '../src/cli/index.js';
 import { CURRENT_SCAFFOLD_VERSION } from '../src/scaffold/load-test.init.js';
 
 function createSink(): Writable {
@@ -37,6 +39,28 @@ function createInput(): PassThrough & { isTTY?: boolean } {
   const stream = new PassThrough() as PassThrough & { isTTY?: boolean };
   stream.isTTY = true;
   return stream;
+}
+
+function listenTestServer(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+}
+
+function closeTestServer(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    });
+  });
 }
 
 function createOpenApiResponse(): Response {
@@ -364,6 +388,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 sync');
     expect(readme).toContain('npx --yes openapi-k6 run -s smoke --log');
     expect(readme).toContain('npx --yes openapi-k6 generate \\');
+    expect(readme).toContain('npx --yes openapi-k6 ui');
     expect(readme).toContain('  -s smoke');
     expect(readme).toContain('run.sh');
     expect(readme).toContain('./load-tests/run.sh smoke');
@@ -390,6 +415,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('3. scenario에 쓸 endpoint 후보를 검색합니다.');
     expect(readme).toContain('4. `load-tests/scenarios/smoke.yaml` 예시를 수정하거나 새 scenario YAML을 만든 뒤 YAML/OpenAPI 정합성을 확인합니다.');
     expect(readme).toContain('5. 실제 API 흐름을 검증합니다.');
+    expect(readme).toContain('시나리오 이름을 매번 입력하기 번거로우면 로컬 UI를 켭니다.');
     expect(readme).toContain('6. 검증을 통과한 scenario만 k6로 생성하고 실행합니다.');
     expect(readme).toContain('AI에게 맡기는 경우에는 위 프롬프트를 사용하세요.');
     expect(readme).toContain('직접 수정하는 파일은 `config.yaml`, `.env`, `scenarios/*.yaml`입니다.');
@@ -407,6 +433,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('핵심 흐름은 OpenAPI catalog에서 API를 고르고, `validate`와 `test`를 통과한 scenario만 k6 부하 테스트로 넘기는 것입니다.');
     expect(readme).toContain('다음 단계로 넘어가는 기준은 간단합니다. `npx --yes openapi-k6 validate`와 `npx --yes openapi-k6 test`가 통과한 scenario만 generate/run 합니다.');
     expect(readme).toContain('`npx --yes openapi-k6 validate`로 YAML/OpenAPI 정합성을 확인하고, `npx --yes openapi-k6 test`가 통과한 scenario만 `run`하거나 `generate`/`run.sh`로 실행합니다.');
+    expect(readme).toContain('scenario가 많으면 `npx --yes openapi-k6 ui`로 목록, 서버 상태, validate/test 출력을 브라우저에서 확인할 수 있습니다.');
     expect(readme).toContain('### 1. 최소 설정');
     expect(readme).toContain('### 2. OpenAPI -> Scenario Validate -> Scenario Test -> k6 흐름');
     expect(readme).toContain('| 순서 | 사용자가 준비하는 것 | 실행 명령 | 생성/갱신되는 것 |');
@@ -498,6 +525,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('k6 스크립트 생성 전 gate입니다.');
     expect(readme).toContain('출력에서 우선 볼 값은 step별 `url`, `status`, `checks`, `extract`, 마지막 `summary`입니다.');
     expect(readme).toContain('색상은 터미널에서만 켜지며 `--no-color` 옵션이나 `NO_COLOR=1` 환경변수로 끌 수 있습니다.');
+    expect(readme).toContain('UI에서는 scenario 목록을 클릭해 step/module/env 참조를 보고, 서버와 snapshot 상태를 확인한 뒤 `Validate` 또는 `Test` 버튼으로 같은 CLI 검증을 실행합니다.');
+    expect(readme).toContain('출력 영역에는 터미널에서 보던 CLI 로그가 그대로 표시됩니다.');
     expect(readme).toContain('`condition`은 분기 조건이 아니라 검증식입니다. k6 생성 시 `check`로 들어가며 다음 step 실행을 막는 용도로 쓰지 않습니다.');
     expect(readme).toContain('생성/갱신: `load-tests/generated/smoke.k6.js`');
     expect(readme).toContain('### 3. 비밀 값 사용');
@@ -508,6 +537,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('- 환경별 테스트 데이터 override: `--var-file load-tests/scenarios/fixtures/stage.yaml` 또는 `--var sku=ABC-001`');
     expect(readme).toContain('- 공통 로그인/seed 재사용: `scenarios/partials/*.yaml`을 만들고 scenario `steps`에서 `- include: ./partials/login.yaml`');
     expect(readme).toContain('- 작업 공간 점검: `npx --yes openapi-k6 doctor`');
+    expect(readme).toContain('- scenario 목록을 보고 클릭 실행: `npx --yes openapi-k6 ui`');
     expect(readme).toContain('Authorization: "Bearer {{token}}"');
     expect(readme).toContain('password: "{{env.LOGIN_PASSWORD}}"');
     expect(readme).toContain('여러 API를 이어야 할 때는 이전 step의 `extract`로 응답 값을 저장합니다.');
@@ -1220,6 +1250,7 @@ describe('openapi-k6 CLI', () => {
 
     expect(readme).toContain('# perf-tests');
     expect(readme).toContain('npx --yes openapi-k6 sync --config perf-tests/config.yaml --module pharma');
+    expect(readme).toContain('npx --yes openapi-k6 ui --config perf-tests/config.yaml --module pharma');
     expect(readme).toContain('npx --yes openapi-k6 update --config perf-tests/config.yaml --module pharma');
     expect(readme).toContain('--config perf-tests/config.yaml');
     expect(readme).toContain('--scenario perf-tests/scenarios/smoke.yaml');
@@ -1246,6 +1277,7 @@ describe('openapi-k6 CLI', () => {
 
     expect(updatedReadme).toContain('npx --yes openapi-k6 update --config perf-tests/config.yaml --module pharma');
     expect(updatedReadme).toContain('npx --yes openapi-k6 sync --config perf-tests/config.yaml --module pharma');
+    expect(updatedReadme).toContain('npx --yes openapi-k6 ui --config perf-tests/config.yaml --module pharma');
   });
 
   it('shell-quotes scaffold README commands when the directory contains spaces', async () => {
@@ -1263,6 +1295,7 @@ describe('openapi-k6 CLI', () => {
     const readme = await readFile(path.join(workspace, 'perf tests/README.md'), 'utf8');
 
     expect(readme).toContain("npx --yes openapi-k6 sync --config 'perf tests/config.yaml' --module pharma");
+    expect(readme).toContain("npx --yes openapi-k6 ui --config 'perf tests/config.yaml' --module pharma");
     expect(readme).toContain("npx --yes openapi-k6 update --config 'perf tests/config.yaml' --module pharma");
     expect(readme).toContain("--config 'perf tests/config.yaml'");
     expect(readme).toContain("--scenario 'perf tests/scenarios/smoke.yaml'");
@@ -1280,6 +1313,7 @@ describe('openapi-k6 CLI', () => {
     const updatedReadme = await readFile(path.join(workspace, 'perf tests/README.md'), 'utf8');
 
     expect(updatedReadme).toContain("npx --yes openapi-k6 update --config 'perf tests/config.yaml' --module pharma");
+    expect(updatedReadme).toContain("npx --yes openapi-k6 ui --config 'perf tests/config.yaml' --module pharma");
   });
 
   it('overwrites scaffold-managed files with --force without deleting local artifacts', async () => {
@@ -1466,6 +1500,173 @@ describe('openapi-k6 CLI', () => {
     expect(stdout.output()).toContain('modules.app.catalog: load-tests/openapi/app.catalog.json');
     expect(stdout.output()).toContain('scaffold: load-tests/.openapi-k6.json is current');
     expect(stdout.output()).toContain('k6: k6 v0.49.0');
+  });
+
+  it('serves a local UI for listing scenarios and streaming validate output', async () => {
+    await writeRunFixtures();
+    await mkdir(path.join(workspace, 'load-tests/scenarios/partials'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/partials/login.yaml'),
+      'steps:\n  - id: login\n    api:\n      operationId: getHealth\n',
+      'utf8',
+    );
+
+    const ui = await runUiCommand(
+      { port: '0' },
+      { cwd: workspace, stdout: createSink(), stderr: createSink(), env: {} },
+    );
+
+    try {
+      const html = await (await fetch(ui.url)).text();
+      const scenarios = await (await fetch(`${ui.url}/api/scenarios`)).json() as {
+        defaultModule?: string;
+        moduleCount: number;
+        scenarios: Array<{ id: string; name: string; path: string; stepCount?: number }>;
+      };
+      const detail = await (await fetch(`${ui.url}/api/scenario?scenario=smoke`)).json() as {
+        name: string;
+        steps: Array<{ id: string; operationId?: string }>;
+      };
+      const run = await (await fetch(`${ui.url}/api/run`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ command: 'validate', scenario: 'smoke' }),
+      })).json() as { runId: string };
+      const events = await (await fetch(`${ui.url}/api/runs/${run.runId}/events`)).text();
+
+      expect(html).toContain('openapi-k6 UI');
+      expect(scenarios.defaultModule).toBe('app');
+      expect(scenarios.moduleCount).toBe(1);
+      expect(scenarios.scenarios).toEqual([
+        expect.objectContaining({ id: 'smoke', name: 'smoke', stepCount: 1 }),
+      ]);
+      expect(scenarios.scenarios.some((scenario) => scenario.path.includes('partials/login.yaml'))).toBe(false);
+      expect(detail).toMatchObject({
+        name: 'smoke',
+        steps: [expect.objectContaining({ id: 'health', operationId: 'getHealth' })],
+      });
+      expect(events).toContain('$ openapi-k6 validate');
+      expect(events).toContain('Validated load-tests/scenarios/smoke.yaml');
+      expect(events).toContain('"status":"passed"');
+    } finally {
+      await ui.close();
+    }
+  });
+
+  it('checks configured module base URLs from the UI server', async () => {
+    await writeRunFixtures();
+    const targetServer = createServer((_request, response) => {
+      response.writeHead(404);
+      response.end();
+    });
+    await listenTestServer(targetServer);
+    const targetAddress = targetServer.address() as AddressInfo;
+    const targetBaseUrl = `http://127.0.0.1:${targetAddress.port}`;
+    await writeConfig([
+      `baseUrl: ${targetBaseUrl}`,
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    const ui = await runUiCommand(
+      { port: '0' },
+      {
+        cwd: workspace,
+        stdout: createSink(),
+        stderr: createSink(),
+        env: { BASE_URL: undefined, BASE_URL_APP: undefined },
+      },
+    );
+
+    try {
+      const result = await (await fetch(`${ui.url}/api/check-servers`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })).json() as {
+        modules: Array<{
+          name: string;
+          baseUrl?: string;
+          status: string;
+          httpStatus?: number;
+          source?: string;
+          snapshot?: { path?: string; status: string; error?: string };
+        }>;
+      };
+
+      expect(result.modules).toEqual([
+        expect.objectContaining({
+          name: 'app',
+          baseUrl: targetBaseUrl,
+          source: 'baseUrl',
+          status: 'reachable',
+          httpStatus: 404,
+          snapshot: expect.objectContaining({
+            path: 'load-tests/openapi/app.openapi.yaml',
+            status: 'present',
+          }),
+        }),
+      ]);
+    } finally {
+      await ui.close();
+      await closeTestServer(targetServer);
+    }
+  });
+
+  it('surfaces UI readiness problems with actionable validation hints', async () => {
+    await writeRunFixtures();
+    await writeConfig([
+      'baseUrl: http://127.0.0.1:8080',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/missing.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    const ui = await runUiCommand(
+      { port: '0' },
+      {
+        cwd: workspace,
+        stdout: createSink(),
+        stderr: createSink(),
+        env: { BASE_URL: '/', BASE_URL_APP: undefined },
+      },
+    );
+
+    try {
+      const serverStatus = await (await fetch(`${ui.url}/api/check-servers`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })).json() as {
+        modules: Array<{ status: string; source?: string; error?: string; snapshot?: { status: string; error?: string } }>;
+      };
+      const run = await (await fetch(`${ui.url}/api/run`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ command: 'validate', scenario: 'smoke' }),
+      })).json() as { runId: string };
+      const events = await (await fetch(`${ui.url}/api/runs/${run.runId}/events`)).text();
+
+      expect(serverStatus.modules[0]).toEqual(expect.objectContaining({
+        status: 'failed',
+        source: 'BASE_URL',
+        error: expect.stringContaining('Invalid URL'),
+        snapshot: expect.objectContaining({
+          status: 'missing',
+          error: 'run openapi-k6 sync',
+        }),
+      }));
+      expect(events).toContain('Error opening file');
+      expect(events).toContain('Next: OpenAPI snapshot이 없습니다. 먼저 openapi-k6 sync를 실행하세요.');
+      expect(events).toContain('"status":"failed"');
+    } finally {
+      await ui.close();
+    }
   });
 
   it('reports doctor failures as JSON', async () => {
