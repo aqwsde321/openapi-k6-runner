@@ -2,9 +2,14 @@
 
 이 폴더는 백엔드 프로젝트 안에서 OpenAPI snapshot, scenario YAML, scenario validate/test, 생성된 k6 스크립트를 관리합니다.
 
-핵심 흐름은 OpenAPI catalog에서 API를 고르고, `validate`로 YAML/OpenAPI 정합성을 먼저 확인한 뒤, scenario test를 통과한 scenario만 k6 부하 테스트로 넘기는 것입니다.
+핵심 흐름은 OpenAPI catalog에서 API를 고르고, `validate`와 `test`를 통과한 scenario만 k6 부하 테스트로 넘기는 것입니다.
 
-사람은 빠른 시작을 먼저 보면 됩니다. AI coding agent는 아래 프롬프트와 접힌 상세 지침까지 읽고 작업합니다.
+## 진행 방식 선택
+
+| 방식 | 시작 방법 |
+| --- | --- |
+| AI에게 맡기기 | 아래 `AI에게 작업 맡기기` 프롬프트를 복사해서 agent에 전달합니다. |
+| 직접 실행하기 | `사람이 직접 실행할 때`의 빠른 시작을 순서대로 실행합니다. |
 
 ## AI에게 작업 맡기기
 
@@ -14,16 +19,19 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
 이 백엔드 프로젝트에 openapi-k6 시나리오 테스트와 k6 부하 테스트 준비를 적용해줘.
 
 1. 먼저 __DIRECTORY__/README.md를 읽어.
-2. 아래 명령은 백엔드 프로젝트 루트에서 실행해.
+2. 모든 명령은 백엔드 프로젝트 루트에서 실행해.
 3. __CONFIG_PATH__에 TODO가 남아 있으면 이 백엔드 프로젝트에 맞게 채워.
 4. __SYNC_COMMAND__를 실행해서 OpenAPI snapshot과 catalog를 만들어.
 5. __CATALOG_QUERY_COMMAND__ 명령으로 테스트할 endpoint 후보를 확인해. 필요하면 __CATALOG_PATH__도 열어봐.
 6. 내가 원하는 API 흐름을 확인한 뒤 __DIRECTORY__/scenarios/*.yaml을 작성하거나 수정해.
+   처음에는 id, api.operationId, request, extract, condition만 채워.
+   같은 값이나 같은 step이 반복될 때만 vars, fixtures, include를 사용해.
+   include 파일에는 vars:나 fixtures:를 두지 말고, 변수는 실행하는 scenario 파일에서 관리해.
 7. __VALIDATE_NAME_COMMAND__ 형식으로 YAML/OpenAPI 정합성을 먼저 확인해.
 8. __TEST_NAME_COMMAND__ 형식으로 실제 API 흐름을 검증해.
-9. scenario test가 통과하기 전에는 k6 script를 생성하거나 실행하지 마.
-10. 통과한 scenario만 __RUN_NAME_COMMAND__ --log 형식으로 짧게 실행해.
-11. 스크립트만 필요하면 __GENERATE_NAME_COMMAND__ 형식으로 k6 script를 생성해.
+9. scenario test가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 마.
+10. 통과한 scenario만 __RUN_NAME_COMMAND__ --log -- --vus 1 --iterations 1 형식으로 짧게 실행해.
+11. 스크립트만 필요하면 __GENERATE_NAME_COMMAND__ 형식으로 k6 스크립트를 생성해.
 12. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 예상 확인 포인트를 알려줘.
 
 __DIRECTORY__/README.md, __RUN_SCRIPT_PATH__, __DIRECTORY__/.env.example, __DIRECTORY__/.gitignore, __DIRECTORY__/.openapi-k6.json은 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.
@@ -31,11 +39,11 @@ __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말�
 비밀 값은 scenario YAML에 직접 쓰지 말고 {{env.NAME}}으로 참조해. 실제 값은 __ENV_PATH__에만 둬.
 ```
 
-사람은 아래 빠른 시작만 따라가면 됩니다. 세부 규칙과 예시는 접힌 상세 섹션에 있습니다.
+아래에는 사람이 직접 실행할 때 필요한 요약과 빠른 시작이 있습니다.
 
 ## 사람이 직접 실행할 때
 
-아래는 사람이 직접 명령을 실행할 때 보는 요약입니다. AI에게 맡기는 경우에는 위 프롬프트를 사용하세요.
+명령을 직접 실행할 때 보는 요약입니다. AI에게 맡기는 경우에는 위 프롬프트를 사용하세요.
 
 ### 꼭 알아야 하는 것
 
@@ -66,7 +74,7 @@ __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말�
 
    `login`은 원하는 검색어로 바꿔 실행합니다.
 
-4. `__SCENARIO_PATH__`를 수정한 뒤 YAML/OpenAPI 정합성을 확인합니다.
+4. `__SCENARIO_PATH__` 예시를 수정하거나 새 scenario YAML을 만든 뒤 YAML/OpenAPI 정합성을 확인합니다.
 
    ```bash
    __VALIDATE_SMOKE_COMMAND__
@@ -89,7 +97,7 @@ __SNAPSHOT_PATH__과 __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말�
 <details>
 <summary>상세 사용 가이드 보기</summary>
 
-## 0. openapi-k6 실행 방식
+### 0. openapi-k6 실행 방식
 
 이 README는 `__CLI_COMMAND__ init`으로 생성되었습니다. npm 배포 버전은 설치 없이 `npx`로 실행하는 것을 기본으로 합니다.
 
@@ -99,7 +107,7 @@ __CLI_COMMAND__ --help
 
 아래 예시는 모두 `__CLI_COMMAND__` 기준입니다. 같은 버전을 반복해서 쓰고 싶으면 `npm install -D openapi-k6` 후 `pnpm exec openapi-k6 ...`처럼 프로젝트 devDependency로 고정해도 됩니다.
 
-## 생성된 구조
+### 생성된 구조
 
 ```text
 __DIRECTORY__/
@@ -121,14 +129,32 @@ __DIRECTORY__/
     └── smoke.k6.js
 ```
 
-## 1. 최소 설정
+### 1. 최소 설정
 
-대화형 `init`은 `baseUrl`만 입력받고 `<baseUrl>/v3/api-docs`를 먼저 확인합니다.
-실패하면 `/api-docs`, `/openapi.json`, `/swagger.json`, `/swagger/v1/swagger.json` 같은 흔한 OpenAPI 경로를 자동으로 시도합니다.
-그래도 찾지 못할 때만 OpenAPI spec URL 또는 파일 경로를 따로 묻습니다.
+대화형 `init`은 먼저 API 기본 주소를 입력받습니다.
 
-OpenAPI URL을 찾았으면 `config.yaml`의 `baseUrl`과 `openapi`가 이미 채워져 있습니다.
-자동 탐색이 실패하면 CLI 안내에 따라 직접 URL/파일 경로를 입력하거나 `skip`으로 넘어간 뒤 config를 나중에 수정할 수 있습니다.
+```bash
+__CLI_COMMAND__ init
+```
+
+프롬프트가 나오면 API 기본 주소를 입력합니다.
+
+```text
+API base URL [http://localhost:8080]: https://api.example.com
+```
+
+`API base URL`에는 Swagger UI 주소가 아니라 실제 API 요청의 기본 주소를 입력합니다.
+예를 들어 API가 `https://api.example.com/orders`라면 `https://api.example.com`을 입력합니다.
+
+OpenAPI 문서를 자동으로 찾지 못하면 CLI가 한 번 더 묻습니다.
+
+```text
+OpenAPI spec URL/file path or "skip" [https://api.example.com/v3/api-docs]:
+```
+
+이때는 OpenAPI JSON/YAML URL이나 파일 경로를 입력합니다. 지금 모르면 `skip`으로 넘어간 뒤 `config.yaml`을 직접 채웁니다.
+
+`config.yaml`에 TODO가 남아 있으면 실제 API 정보로 채웁니다.
 
 ```yaml
 baseUrl: https://api.example.com
@@ -146,21 +172,47 @@ modules:
 - `snapshot`: `sync`가 저장하고 `generate`가 읽을 OpenAPI snapshot
 - `catalog`: scenario 작성 시 참고할 endpoint 목록
 
-여러 module을 하나의 scenario에서 섞어야 하면 step마다 `api.module`을 지정합니다.
-
-인증 서버와 업무 서버처럼 Swagger/OpenAPI 주소가 서로 다른 백엔드를 하나의 scenario에서 이어야 할 때도 같은 방식입니다. 새 module은 `config.yaml`을 직접 편집하지 않고 CLI로 추가할 수 있습니다.
+`init` 직후 config는 단일 서버용 기본 module만 들어 있습니다.
+인증 서버와 업무 서버처럼 Swagger/OpenAPI 주소가 서로 다른 백엔드를 하나의 scenario에서 이어야 하면 module을 추가합니다.
+init 때 등록한 서버는 그대로 두고, 추가로 필요한 서버만 CLI로 추가합니다.
 
 ```bash
 __CLI_COMMAND__ module add auth --base-url https://auth-api.example.com --sync
-__CLI_COMMAND__ module add bos --base-url https://bos-api.example.com --sync
 __CLI_COMMAND__ module list
-__CLI_COMMAND__ module set-default auth
-__CLI_COMMAND__ module remove auth
 ```
 
-`--openapi`를 생략하면 `--base-url` 기준으로 `/v3/api-docs`, `/api-docs`, `/openapi.json` 같은 흔한 경로를 자동 탐색합니다. 사내 Swagger 경로가 다르면 `--openapi <url-or-path>`를 명시하면 됩니다.
+`--sync`를 붙이면 module 설정 저장과 동시에 해당 서버의 snapshot/catalog를 만듭니다.
+OpenAPI 문서 주소가 자동 탐색되지 않으면 `--openapi`를 같이 넘깁니다.
 
-`module remove`는 config 항목만 제거하고 snapshot/catalog 파일은 삭제하지 않습니다. 현재 `defaultModule`이거나 scenario에서 참조 중인 module은 기본적으로 삭제를 막고, 의도한 경우에만 `--force`로 제거합니다.
+```bash
+__CLI_COMMAND__ module add auth \
+  --base-url https://auth-api.example.com \
+  --openapi https://auth-api.example.com/v3/api-docs \
+  --sync
+```
+
+추가 후 config는 이런 모양이 됩니다.
+
+```yaml
+modules:
+  __MODULE_NAME__:
+    openapi: https://api.example.com/v3/api-docs
+    snapshot: __SNAPSHOT_CONFIG_VALUE__
+    catalog: __CATALOG_CONFIG_VALUE__
+
+  auth:
+    baseUrl: https://auth-api.example.com
+    openapi: https://auth-api.example.com/v3/api-docs
+    snapshot: openapi/auth.openapi.json
+    catalog: openapi/auth.catalog.json
+```
+
+root `baseUrl`과 `defaultModule`은 `api.module`이 없는 step의 fallback으로 두면 됩니다.
+서버가 여러 개면 scenario step에 사용할 module을 명시합니다.
+
+`module remove`는 config 항목만 제거하고 snapshot/catalog 파일은 삭제하지 않습니다.
+현재 `defaultModule`이거나 scenario에서 참조 중인 module은 기본적으로 삭제를 막습니다.
+의도한 경우에만 `--force`로 제거합니다.
 
 자동화나 UI adapter가 현재 module 구성을 읽어야 하면 `--json`을 사용합니다.
 
@@ -182,8 +234,7 @@ steps:
 
   - id: create-order
     api:
-      module: bos
-      operationId: createOrder
+      operationId: createOrder # api.module이 없으면 default module 사용
     request:
       headers:
         Authorization: "Bearer {{token}}"
@@ -194,7 +245,7 @@ steps:
 
 외부 파일이나 URL을 가리키는 `$ref`는 snapshot 내부 참조로 묶어 저장하므로, 이후 `generate`는 원격 원본 없이 snapshot 파일만으로 실행할 수 있습니다.
 
-## 2. OpenAPI -> Scenario Validate -> Scenario Test -> k6 흐름
+### 2. OpenAPI -> Scenario Validate -> Scenario Test -> k6 흐름
 
 빠른 시작의 같은 흐름을 파일 기준으로 풀어쓴 표입니다. 각 단계의 생성/갱신 파일은 오른쪽에 표시했습니다.
 
@@ -202,7 +253,7 @@ steps:
 | --- | --- | --- | --- |
 | 1 | `config.yaml`의 `baseUrl`, `modules.__MODULE_NAME__.openapi` 확인 또는 TODO 채우기 | - | - |
 | 2 | - | `__SYNC_COMMAND__` | `__SNAPSHOT_PATH__`, `__CATALOG_PATH__` |
-| 3 | catalog에서 endpoint 후보 검색 후 scenario 작성/수정 | `__CATALOG_QUERY_COMMAND__` | `__SCENARIO_TEMPLATE_PATH__` |
+| 3 | catalog에서 endpoint 후보 검색 후 scenario 작성 | `__CATALOG_QUERY_COMMAND__` | `__SCENARIO_TEMPLATE_PATH__` |
 | 4 | `{{env.NAME}}`을 쓰는 경우 `__ENV_PATH__` 작성 | `__VALIDATE_NAME_COMMAND__` | scenario YAML/OpenAPI 정합성 검증 결과 |
 | 5 | scenario validate 통과 확인 | `__TEST_NAME_COMMAND__` | scenario test 결과, step별 API 검증 결과 |
 | 6 | scenario test 통과 확인 | `__RUN_NAME_COMMAND__ --log` | validate/generate/k6 실행, `__OUTPUT_TEMPLATE_PATH__`, `__DIRECTORY__/logs/<name>.log` |
@@ -210,7 +261,7 @@ steps:
 
 아래 예시는 scaffold가 생성한 `smoke` scenario 기준입니다.
 
-### 2-1. OpenAPI snapshot/catalog 생성
+#### 2-1. OpenAPI snapshot/catalog 생성
 
 ```bash
 __SYNC_COMMAND__
@@ -218,24 +269,117 @@ __SYNC_COMMAND__
 
 생성/갱신: `__SNAPSHOT_PATH__`, `__CATALOG_PATH__`
 
-### 2-2. Scenario YAML 작성
+#### 2-2. Scenario YAML 작성
 
-`catalog` 명령으로 테스트할 endpoint의 `operationId`, `method`, `path`, `parameters`, `hasRequestBody`, `requestBodyContentTypes`를 확인합니다.
+이 단계의 목표는 catalog에서 API를 고르고, 그 값을 scenario YAML에 옮기는 것입니다.
+step 하나가 API 요청 하나입니다.
+
+##### A. Endpoint 찾기
 
 ```bash
 __CATALOG_QUERY_COMMAND__
 ```
 
+처음에는 `--query`로 찾고, 결과가 많으면 `--tag`나 `--method POST`로 좁히면 됩니다.
+출력에서 우선 볼 값은 `operationId`, `body`, `parameters`입니다.
+
+- `operationId`: scenario의 `api.operationId`에 넣습니다.
+- `body: yes`: `request.body` 또는 `request.multipart`가 필요한 API입니다.
+- `parameters`: 나오면 `request.pathParams`, `request.query`, `request.headers` 중 맞는 위치에 값을 넣습니다.
+
+<details>
+<summary>catalog 검색과 출력 읽는 법</summary>
+
+`--query`는 검색어로 찾기, `--tag`는 OpenAPI tag로 좁히기입니다.
+
+- `--query login`: catalog 전체에서 `login`이라는 글자가 들어간 API를 찾습니다. API 이름을 대략 알 때 씁니다.
+- `--tag auth`: OpenAPI에서 `auth` tag로 묶인 API만 봅니다. 백엔드가 tag를 잘 정리해둔 경우에 씁니다.
+
 `login`은 원하는 검색어로 바꿔 실행합니다.
 전체 catalog 파일은 `__CATALOG_PATH__`에 있습니다.
 
-기본 smoke 테스트는 `__SCENARIO_PATH__`를 수정합니다. 새 테스트는 `__SCENARIO_TEMPLATE_PATH__` 파일을 만듭니다.
+출력 예시:
 
-SKU, tenant, page size 같은 테스트 데이터는 entry scenario의 `vars:`에 두고 `{{vars.NAME}}`으로 참조합니다. 환경별 데이터가 많으면 entry scenario의 `fixtures:`에 YAML fixture를 추가합니다. fixture 경로는 entry scenario 파일 기준 상대 경로이며, fixture 값은 먼저 로드되고 scenario의 `vars:`가 같은 이름을 덮어씁니다. 반복되는 로그인, seed, cleanup 흐름은 별도 YAML로 분리한 뒤 scenario의 원하는 위치에서 include할 수 있습니다. include 경로도 entry scenario 파일 기준 상대 경로이며, entry scenario 디렉터리 안에 있어야 합니다.
+```text
+Catalog: __CATALOG_PATH__
+Query: login
+Operations: 1
+
+POST   /auth/login
+  operationId: loginUser
+  tags: auth
+  body: yes (application/json)
+```
+
+- `method`와 `path`: `operationId`가 없거나 애매할 때 `api.method`, `api.path`로 쓸 수 있습니다.
+
+`operationId`는 openapi-k6가 새로 만드는 이름이 아닙니다.
+백엔드 OpenAPI 문서에 있는 `operationId`를 `sync`가 `__CATALOG_PATH__`에 복사합니다.
+OpenAPI에 `operationId`가 없으면 catalog에도 안 나오므로 `api.method`와 `api.path`를 씁니다.
+
+같은 module 안에서 `operationId`가 중복되면 `validate`, `generate`, `test`, `run`이 실패합니다.
+서로 다른 module의 같은 `operationId`는 `api.module`로 구분해서 사용할 수 있습니다.
+
+</details>
+
+##### B. Scenario 파일 선택
+
+`__SCENARIO_PATH__`는 `init`이 만든 기본 예시 scenario입니다.
+처음 동작 확인은 이 파일을 수정해도 되고, 실제 업무 흐름은 `__SCENARIO_TEMPLATE_PATH__`처럼 새 파일로 만들어도 됩니다.
+
+##### C. 최소 YAML 작성
+
+처음에는 아래 필드만 채우면 됩니다.
+
+- `id`: 사람이 읽을 step 이름
+- `api.operationId`: catalog에서 고른 `operationId`
+- `request`: headers, query, pathParams, body 같은 요청 값
+- `extract`: 다음 step에서 쓸 응답 값
+- `condition`: 기대하는 응답 조건
 
 ```yaml
-name: order-flow
+name: smoke
 
+steps:
+  - id: login
+    api:
+      operationId: loginUser # catalog에서 고른 operationId
+    request:
+      body:
+        username: "{{env.LOGIN_ID}}"
+        password: "{{env.LOGIN_PASSWORD}}"
+    extract:
+      token:
+        from: $.token # 응답 JSON에서 token을 저장
+    condition: status == 200
+
+  - id: get-me
+    api:
+      operationId: getMe
+    request:
+      headers:
+        Authorization: "Bearer {{token}}" # 앞 step에서 추출한 token 사용
+    condition: status == 200
+```
+
+##### D. 선택: 데이터와 공통 step
+
+처음 scenario는 이 섹션을 건너뛰어도 됩니다.
+같은 값이나 같은 step이 반복될 때만 사용합니다.
+
+| 필요할 때 | 사용 | 예 |
+| --- | --- | --- |
+| 같은 값을 여러 step에서 재사용 | `vars:` | `{{vars.sku}}` |
+| stage/prod 값을 분리 | `fixtures:` 또는 `--var-file` | `fixtures/stage.yaml` |
+| 로그인/seed step 재사용 | `include` | `- include: ./partials/login.yaml` |
+
+fixture와 include 경로는 실행하는 scenario 파일 기준 상대 경로이며, 그 scenario 디렉터리 밖으로 나갈 수 없습니다.
+
+<details>
+<summary>예시와 우선순위</summary>
+
+```yaml
+# __SCENARIO_TEMPLATE_PATH__
 fixtures:
   - ./fixtures/dev.yaml
 
@@ -248,16 +392,17 @@ steps:
     api:
       operationId: createOrder
     request:
-      headers:
-        Authorization: "Bearer {{token}}"
       body:
         sku: "{{vars.sku}}"
 ```
 
-`partials/login.yaml`은 `name` 없이 `steps`만 둘 수 있고, 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다. `fixtures/dev.yaml`은 `loginId: tester@example.com`처럼 변수 이름을 key로 두는 YAML object입니다.
-`init`은 `__DIRECTORY__/scenarios/partials/login.yaml.example`과 `__DIRECTORY__/scenarios/fixtures/dev.yaml.example`도 함께 생성합니다. 실제 endpoint/데이터에 맞게 수정한 뒤 `.example`을 제거해 사용하세요.
+partial 파일은 `steps`만 두면 됩니다. 포함된 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다.
+include 파일에는 `vars:`나 `fixtures:`를 두지 않고, 변수는 실행하는 scenario 파일에서 관리합니다.
+`fixtures/dev.yaml`은 `loginId: tester@example.com`처럼 변수 이름을 key로 두는 YAML object입니다.
+`init`은 `__DIRECTORY__/scenarios/partials/login.yaml.example`과 `__DIRECTORY__/scenarios/fixtures/dev.yaml.example`도 함께 생성합니다.
+실제 endpoint/데이터에 맞게 수정한 뒤 `.example`을 제거해 사용하세요.
 
-같은 scenario를 stage/prod 데이터로 짧게 재사용할 때는 실행 명령에 `--var-file`이나 `--var`를 붙입니다. 우선순위는 scenario `fixtures:` < scenario `vars:` < CLI `--var-file` < CLI `--var`입니다.
+값 우선순위는 scenario `fixtures:` < scenario `vars:` < CLI `--var-file` < CLI `--var`입니다.
 
 ```bash
 __VALIDATE_SMOKE_COMMAND__ --var-file __DIRECTORY__/scenarios/fixtures/stage.yaml
@@ -265,12 +410,14 @@ __TEST_SMOKE_COMMAND__ --var sku=ABC-001
 __RUN_SMOKE_CLI_COMMAND__ --var-file __DIRECTORY__/scenarios/fixtures/stage.yaml -- --vus 1
 ```
 
+</details>
+
 생성/수정: scenario YAML
 
-### 2-3. Scenario 정적 검증
+#### 2-3. Scenario 정적 검증
 
 `__CLI_COMMAND__ validate`는 백엔드에 요청하지 않고 scenario YAML을 OpenAPI snapshot과 대조합니다.
-AI가 작성한 YAML은 먼저 이 명령으로 `operationId`, `method/path`, 필수 path/query/header/body 누락, `{{token}}` 같은 context template 참조, `condition`, `extract.from` 문법을 확인합니다.
+AI가 작성한 YAML은 먼저 이 명령으로 `operationId`, `method/path`, 필수 request 값, context template, `condition`, `extract.from` 문법을 확인합니다.
 
 ```bash
 __VALIDATE_SMOKE_COMMAND__
@@ -287,7 +434,7 @@ __VALIDATE_SMOKE_COMMAND__
 - `{{token}}` 같은 context template 값이 이전 step의 `extract`에서 나온 값인지
 - `condition` 표현식과 `extract.from` JSONPath가 지원 범위 안에 있는지
 
-### 2-4. Scenario 실행 검증
+#### 2-4. Scenario 실행 검증
 
 `__CLI_COMMAND__ test`는 scenario YAML을 Node.js에서 1회 실행해 URL, status, condition, extract를 확인합니다.
 k6 스크립트 생성 전 gate입니다.
@@ -332,6 +479,7 @@ __TEST_SMOKE_COMMAND__
 ```
 
 실패하면 마지막 `summary`가 `✗ FAIL`이 되고, 실패한 step 아래에 status, error, response body 일부를 바로 보여줍니다. 비밀 값은 출력에서 마스킹됩니다.
+출력에서 우선 볼 값은 step별 `url`, `status`, `checks`, `extract`, 마지막 `summary`입니다.
 `condition`이 없는 step도 HTTP 4xx/5xx 응답은 실패로 처리합니다. 오류 응답을 기대하는 scenario는 `condition: status == 404`처럼 기대 status를 명시합니다.
 `condition`은 분기 조건이 아니라 검증식입니다. k6 생성 시 `check`로 들어가며 다음 step 실행을 막는 용도로 쓰지 않습니다.
 터미널에서 직접 실행하면 API 응답을 기다리는 동안 `state` 줄에 경과 시간이 갱신됩니다. CI나 파일 로그에서는 한 줄 로그만 남깁니다.
@@ -340,7 +488,7 @@ __TEST_SMOKE_COMMAND__
 `__ENV_PATH__`가 있으면 `{{env.NAME}}` template 값과 `BASE_URL`을 읽습니다. 현재 shell 환경변수가 같은 이름으로 있으면 shell 값이 우선합니다.
 `{{env.NAME}}`으로 참조한 값은 scenario test 출력과 생성된 k6 실패 로그에서 masking됩니다.
 
-### 2-5. CLI에서 k6 실행
+#### 2-5. CLI에서 k6 실행
 
 `__CLI_COMMAND__ run`은 scenario를 정적 검증하고, k6 스크립트를 다시 생성한 뒤 `k6 run`을 실행합니다.
 k6 옵션은 `--` 뒤에 붙입니다.
@@ -368,7 +516,7 @@ __RUN_SMOKE_CLI_REPORT_COMMAND__
 __RUN_SMOKE_CLI_TRACE_REPORT_COMMAND__
 ```
 
-### 2-6. k6 스크립트만 생성
+#### 2-6. k6 스크립트만 생성
 
 ```bash
 __GENERATE_SMOKE_COMMAND__
@@ -376,7 +524,7 @@ __GENERATE_SMOKE_COMMAND__
 
 생성/갱신: `__OUTPUT_PATH__`
 
-### 2-7. run.sh로 생성된 k6 실행
+#### 2-7. run.sh로 생성된 k6 실행
 
 ```bash
 __RUN_SMOKE_COMMAND__
@@ -424,7 +572,9 @@ __RUN_SMOKE_TRACE_REPORT_COMMAND__
 API base URL은 `__CLI_COMMAND__ generate` 실행 시점의 `config.yaml` `baseUrl` 값이 생성된 k6 스크립트에 기본값으로 들어갑니다.
 `config.yaml`을 수정한 뒤에는 스크립트를 다시 생성해야 반영됩니다.
 실행 시점에 `BASE_URL` 환경 변수를 넘기면 스크립트에 들어간 기본값보다 우선합니다.
-multi-module scenario는 `BASE_URL_<MODULE>` 환경 변수를 먼저 읽습니다. 예를 들어 `auth`는 `BASE_URL_AUTH`, `bos-api`는 `BASE_URL_BOS_API`를 사용하고, 없으면 기존 `BASE_URL`과 config 기본값을 순서대로 사용합니다.
+multi-module scenario는 `BASE_URL_<MODULE>` 환경 변수를 먼저 읽습니다.
+예를 들어 `auth`는 `BASE_URL_AUTH`, `bos-api`는 `BASE_URL_BOS_API`를 사용합니다.
+없으면 기존 `BASE_URL`과 config 기본값을 순서대로 사용합니다.
 서로 다른 서버를 대상으로 실행할 때는 module별 값을 따로 넘기면 됩니다.
 
 ```bash
@@ -432,7 +582,7 @@ __BASE_URL_RUN_COMMAND__
 BASE_URL_AUTH=https://auth-api.example.com BASE_URL_BOS=https://bos-api.example.com __RUN_SMOKE_COMMAND__
 ```
 
-## 3. 비밀 값 사용
+### 3. 비밀 값 사용
 
 시나리오에서 `{{env.NAME}}`을 사용한다면 `__DIRECTORY__/.env.example`을 `__ENV_PATH__`로 복사한 뒤 비밀 값을 채웁니다.
 
@@ -448,7 +598,7 @@ __RUN_SMOKE_COMMAND__
 `__DIRECTORY__/.gitignore`는 기본적으로 `scenarios/**`만 git 추적 대상에 남기고 scaffold/config/생성물은 제외합니다. 실제 비밀 값은 commit하지 않습니다.
 이미 git에 올라간 `__DIRECTORY__/` 파일은 ignore 규칙만으로 빠지지 않으므로 필요하면 `git rm -r --cached __DIRECTORY__`로 추적에서만 제거합니다.
 
-## Scenario 작성법
+### Scenario 작성법
 
 Scenario YAML은 `__DIRECTORY__/scenarios/*.yaml`에 작성합니다.
 먼저 `__CATALOG_QUERY_COMMAND__`로 테스트할 endpoint 후보를 찾습니다. 전체 catalog 파일은 `__CATALOG_PATH__`입니다.
@@ -463,7 +613,8 @@ Scenario YAML은 `__DIRECTORY__/scenarios/*.yaml`에 작성합니다.
 
 `body`와 `multipart`는 같은 step에서 함께 쓰지 않습니다.
 
-여러 API를 이어야 할 때는 이전 step의 `extract`로 응답 값을 저장하고, 다음 step의 `request.headers`, `request.query`, `request.pathParams`, `request.body`에서 `{{token}}`처럼 참조합니다.
+여러 API를 이어야 할 때는 이전 step의 `extract`로 응답 값을 저장합니다.
+다음 step의 `request.headers`, `request.query`, `request.pathParams`, `request.body`에서 `{{token}}`처럼 참조합니다.
 
 응답 값을 다음 API에 연결하는 예시:
 
@@ -539,9 +690,9 @@ __GENERATE_WORKFLOW_COMMAND__
 
 생성 파일: `__WORKFLOW_OUTPUT_PATH__`
 
-## 4. 자주 하는 수정
+### 4. 자주 하는 수정
 
-- endpoint 변경: `scenarios/smoke.yaml`의 `api.path`
+- endpoint 변경: `scenarios/*.yaml`의 `api.path`
 - header/body/query/multipart 추가: `scenarios/*.yaml`의 `request`
 - 반복 테스트 데이터 추가: entry scenario 상단 `vars:` 또는 `fixtures:` YAML 파일과 request의 `{{vars.NAME}}`
 - 환경별 테스트 데이터 override: `--var-file __DIRECTORY__/scenarios/fixtures/stage.yaml` 또는 `--var sku=ABC-001`
@@ -553,7 +704,7 @@ __GENERATE_WORKFLOW_COMMAND__
 - module 제거: `__CLI_COMMAND__ module remove <name>`
 - 작업 공간 점검: `__CLI_COMMAND__ doctor`
 
-## 5. 제거 방법
+### 5. 제거 방법
 
 `update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.
 오래된 scaffold에서 `validate`, `test`, `generate`, `run`을 실행하면 최신 README/runner를 받을 수 있도록 `Scaffold update available` notice와 `__UPDATE_COMMAND__` 명령이 표시됩니다.
@@ -600,9 +751,9 @@ This section is for AI agents. Use it as a compact checklist after reading the K
 
 - Use `__CATALOG_QUERY_COMMAND__` or read `__CATALOG_PATH__` to pick endpoints; `validate`, `test`, and `generate` read the OpenAPI snapshot, not the catalog.
 - Prefer `api.operationId`; use `api.method` and `api.path` when operationId is missing or unclear.
-- Put repeated literal test data in entry scenario `vars:` or scenario fixture YAML files and reference it as `{{vars.NAME}}`.
-- For environment-specific smoke data, pass `--var-file` or `--var` to `validate`, `generate`, `test`, or `run`.
-- Reuse common login/seed flows with `- include: ./partials/login.yaml`; include files stay under the entry scenario directory.
+- Start with plain steps first; use `vars`, `fixtures`, or `include` only when values or steps repeat.
+- For environment-specific data, use scenario `fixtures:` or pass `--var-file`/`--var` to `validate`, `generate`, `test`, or `run`.
+- Reuse common login/seed flows with `- include: ./partials/login.yaml`; include files stay under the entry scenario directory and must not define `vars:` or `fixtures:`.
 - Use `api.module` only when a scenario crosses multiple configured OpenAPI modules; it requires `config.yaml` module snapshots.
 - Use `extract` for response values and reference them later as `{{variableName}}`; use `{{env.NAME}}` for runtime secrets.
 - `validate` rejects context templates that are not produced by an earlier step `extract`.
