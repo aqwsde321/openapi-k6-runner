@@ -41,6 +41,11 @@ import {
   updateLoadTests,
 } from '../scaffold/load-test.init.js';
 import { validateScenarioAgainstOpenApi } from '../validator/scenario.validator.js';
+import {
+  createAnsiHtmlState,
+  renderAnsiChunkToHtml,
+  type AnsiHtmlState,
+} from './ansi-html.js';
 import { createScenarioConsoleReporter } from './test.reporter.js';
 
 type WritableLike = {
@@ -2388,11 +2393,13 @@ interface UiRunRecord {
   exitCode?: number;
   chunks: UiRunChunk[];
   clients: Set<ServerResponse>;
+  ansiHtmlState: AnsiHtmlState;
 }
 
 interface UiRunChunk {
   stream: 'stdout' | 'stderr';
   chunk: string;
+  html: string;
 }
 
 async function handleUiRequest(
@@ -2609,6 +2616,7 @@ async function startUiRun(
     status: 'running',
     chunks: [],
     clients: new Set(),
+    ansiHtmlState: createAnsiHtmlState(),
   };
 
   state.runs.set(runId, run);
@@ -2660,19 +2668,24 @@ async function runUiCliCommand(
     ...(state.options.module === undefined ? [] : ['--module', state.options.module]),
     ...payload.varFile.flatMap((value) => ['--var-file', value]),
     ...payload.vars.flatMap((value) => ['--var', value]),
-    ...(payload.command === 'test' ? ['--no-color'] : []),
   ];
 
-  appendUiRunChunk(run, 'stdout', `$ openapi-k6 ${args.map(shellQuote).join(' ')}\n`);
+  appendUiRunChunk(run, 'stdout', `\u001b[90m$ openapi-k6 ${args.map(shellQuote).join(' ')}\u001b[0m\n`);
+  const stdout = createUiRunWritable(run, 'stdout');
+  const stderr = createUiRunWritable(run, 'stderr');
+  const testReporter = payload.command === 'test'
+    ? createUiScenarioReporter(stdout, state.context.testReporter)
+    : state.context.testReporter;
 
   try {
     await runCli(args, {
       ...state.context,
       cwd: state.cwd,
-      stdout: createUiRunWritable(run, 'stdout'),
-      stderr: createUiRunWritable(run, 'stderr'),
+      stdout,
+      stderr,
       env: state.context.env,
       fetch: state.context.fetch,
+      testReporter,
     });
     finishUiRun(run, 'passed', 0);
   } catch (error) {
@@ -2726,9 +2739,55 @@ function createUiRunWritable(run: UiRunRecord, stream: 'stdout' | 'stderr'): Wri
 }
 
 function appendUiRunChunk(run: UiRunRecord, stream: 'stdout' | 'stderr', chunk: string): void {
-  const event = { stream, chunk };
+  const event = {
+    stream,
+    chunk,
+    html: renderAnsiChunkToHtml(chunk, run.ansiHtmlState),
+  };
   run.chunks.push(event);
   writeUiRunEvent(run, 'chunk', event);
+}
+
+function createUiScenarioReporter(
+  stdout: WritableLike,
+  injectedReporter: ScenarioExecutionReporter | undefined,
+): ScenarioExecutionReporter {
+  const uiReporter = createScenarioConsoleReporter(stdout, {
+    color: true,
+    live: false,
+  });
+
+  return injectedReporter === undefined
+    ? uiReporter
+    : teeScenarioReporters(uiReporter, injectedReporter);
+}
+
+function teeScenarioReporters(
+  left: ScenarioExecutionReporter,
+  right: ScenarioExecutionReporter,
+): ScenarioExecutionReporter {
+  return {
+    async onScenarioStart(event) {
+      await left.onScenarioStart?.(event);
+      await right.onScenarioStart?.(event);
+    },
+    async onStepStart(event) {
+      await left.onStepStart?.(event);
+      await right.onStepStart?.(event);
+    },
+    async onStepRequest(event) {
+      await left.onStepRequest?.(event);
+      await right.onStepRequest?.(event);
+    },
+    async onStepEnd(event) {
+      await left.onStepEnd?.(event);
+      await right.onStepEnd?.(event);
+    },
+    async onScenarioEnd(result) {
+      await left.onScenarioEnd?.(result);
+      await right.onScenarioEnd?.(result);
+    },
+  };
 }
 
 function finishUiRun(run: UiRunRecord, status: 'passed' | 'failed', exitCode: number): void {
@@ -3505,6 +3564,13 @@ const UI_HTML = String.raw`<!doctype html>
       border-top: 1px solid var(--terminal-line);
       tab-size: 2;
     }
+    .terminal .ansi-bold { font-weight: 800; }
+    .terminal .ansi-dim { opacity: 0.68; }
+    .terminal .ansi-grey { color: #98a2b3; }
+    .terminal .ansi-cyan { color: #67e8f9; }
+    .terminal .ansi-green { color: #86efac; }
+    .terminal .ansi-yellow { color: #fde68a; }
+    .terminal .ansi-red { color: #fda4af; }
     .server-grid { display: grid; gap: 8px; }
     .server {
       display: grid;
@@ -3648,6 +3714,15 @@ const UI_HTML = String.raw`<!doctype html>
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+    }
+
+    function resetOutput() {
+      els.output.innerHTML = '';
+    }
+
+    function appendOutputChunk(chunk) {
+      els.output.insertAdjacentHTML('beforeend', chunk.html !== undefined ? chunk.html : escapeHtml(chunk.chunk || ''));
+      els.output.scrollTop = els.output.scrollHeight;
     }
 
     function statusTone(value) {
@@ -3823,7 +3898,7 @@ const UI_HTML = String.raw`<!doctype html>
     async function runCommand(command) {
       if (!state.selected) return;
       setStatus(els.runStatus, 'running');
-      els.output.textContent = '';
+      resetOutput();
       const result = await fetchJson('/api/run', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -3832,8 +3907,7 @@ const UI_HTML = String.raw`<!doctype html>
       const events = new EventSource('/api/runs/' + encodeURIComponent(result.runId) + '/events');
       events.addEventListener('chunk', (event) => {
         const data = JSON.parse(event.data);
-        els.output.textContent += data.chunk;
-        els.output.scrollTop = els.output.scrollHeight;
+        appendOutputChunk(data);
       });
       events.addEventListener('done', (event) => {
         const data = JSON.parse(event.data);
@@ -3854,7 +3928,7 @@ const UI_HTML = String.raw`<!doctype html>
     els.checkServersBtn.addEventListener('click', checkServers);
     els.validateBtn.addEventListener('click', () => runCommand('validate'));
     els.testBtn.addEventListener('click', () => runCommand('test'));
-    els.clearBtn.addEventListener('click', () => { els.output.textContent = ''; setStatus(els.runStatus, 'idle'); });
+    els.clearBtn.addEventListener('click', () => { resetOutput(); setStatus(els.runStatus, 'idle'); });
 
     loadScenarios().then(checkServers).catch((error) => {
       els.scenarioList.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';

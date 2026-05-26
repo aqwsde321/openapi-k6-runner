@@ -1510,10 +1510,22 @@ describe('openapi-k6 CLI', () => {
       'steps:\n  - id: login\n    api:\n      operationId: getHealth\n',
       'utf8',
     );
+    const reportedScenarios: string[] = [];
 
     const ui = await runUiCommand(
       { port: '0' },
-      { cwd: workspace, stdout: createSink(), stderr: createSink(), env: {} },
+      {
+        cwd: workspace,
+        stdout: createSink(),
+        stderr: createSink(),
+        env: {},
+        fetch: async () => new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' }),
+        testReporter: {
+          onScenarioEnd(result) {
+            reportedScenarios.push(result.scenario);
+          },
+        },
+      },
     );
 
     try {
@@ -1533,8 +1545,15 @@ describe('openapi-k6 CLI', () => {
         body: JSON.stringify({ command: 'validate', scenario: 'smoke' }),
       })).json() as { runId: string };
       const events = await (await fetch(`${ui.url}/api/runs/${run.runId}/events`)).text();
+      const testRun = await (await fetch(`${ui.url}/api/run`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ command: 'test', scenario: 'smoke' }),
+      })).json() as { runId: string };
+      const testEvents = await (await fetch(`${ui.url}/api/runs/${testRun.runId}/events`)).text();
 
       expect(html).toContain('openapi-k6 UI');
+      expect(html).toContain('ansi-green');
       expect(scenarios.defaultModule).toBe('app');
       expect(scenarios.moduleCount).toBe(1);
       expect(scenarios.scenarios).toEqual([
@@ -1548,6 +1567,12 @@ describe('openapi-k6 CLI', () => {
       expect(events).toContain('$ openapi-k6 validate');
       expect(events).toContain('Validated load-tests/scenarios/smoke.yaml');
       expect(events).toContain('"status":"passed"');
+      expect(testEvents).toContain('$ openapi-k6 test');
+      expect(testEvents).not.toContain('--no-color');
+      expect(testEvents).toContain('\\u001b[32m');
+      expect(testEvents).toContain('<span class=\\"ansi-green\\">');
+      expect(testEvents).toContain('"status":"passed"');
+      expect(reportedScenarios).toEqual(['smoke']);
     } finally {
       await ui.close();
     }
