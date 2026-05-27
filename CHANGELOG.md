@@ -6,10 +6,20 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-27
+
 ### Added
 
 - `validate`, `generate`, `test`, `run`에 `--var-file`과 `--var` 옵션을 추가해 같은 scenario를 환경별 테스트 데이터로 실행할 수 있게 했습니다.
 - `openapi-k6 ui` 명령을 추가해 브라우저에서 scenario 목록, module/server 상태, validate/test CLI 출력을 확인할 수 있게 했습니다.
+
+### Changed
+
+- README와 scaffold README의 빠른 시작, scenario 작성, AI 작업 가이드를 실제 CLI 흐름에 맞게 정리했습니다.
+
+### Fixed
+
+- UI의 test 출력이 `--no-color`로 고정되지 않도록 하고, ANSI 색상을 브라우저 출력 영역에 안전하게 렌더링하도록 수정했습니다.
 
 ## [0.6.0] - 2026-05-24
 
@@ -152,7 +162,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.4.0...v0.5.0
