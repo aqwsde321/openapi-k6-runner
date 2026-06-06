@@ -1,5 +1,8 @@
 # openapi-k6
 
+[![npm version](https://img.shields.io/npm/v/openapi-k6?label=npm)](https://www.npmjs.com/package/openapi-k6)
+[![Publish](https://github.com/aqwsde321/openapi-k6-runner/actions/workflows/publish.yml/badge.svg)](https://github.com/aqwsde321/openapi-k6-runner/actions/workflows/publish.yml)
+
 OpenAPI에서 API 흐름을 **Scenario YAML**로 만들고, k6 실행 전에 검증한 뒤, 통과한 시나리오만 부하 테스트로 넘기는 CLI입니다.
 
 `openapi-k6`의 중심은 k6 파일 생성보다 scenario 작성과 검증입니다.
