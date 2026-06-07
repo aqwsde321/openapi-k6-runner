@@ -5146,6 +5146,14 @@ function writeCatalogAiGuide(stdout: WritableLike, result: CatalogResult, cwd: s
   writeLine(stdout, '  - Fill request body values from the OpenAPI schema or real API contract before test.');
   writeLine(stdout, '  - Add extract only after checking the real response JSON path.');
 
+  if (result.operations.length > 1) {
+    writeLine(stdout, '');
+    writeLine(stdout, 'Multiple operations matched.');
+    writeLine(stdout, '  - Do not pick one arbitrarily.');
+    writeLine(stdout, '  - Narrow with a more specific --query, --tag, --method, or operationId keyword.');
+    writeLine(stdout, '  - If the user intent is ambiguous, ask which operation to use before writing scenario YAML.');
+  }
+
   for (const [index, operation] of result.operations.entries()) {
     writeLine(stdout, '');
     writeLine(stdout, `Operation ${index + 1}: ${operation.operationId ?? `${operation.method} ${operation.path}`}`);

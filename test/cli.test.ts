@@ -2048,6 +2048,34 @@ describe('openapi-k6 CLI', () => {
     expect(output).not.toContain('createOrder');
   });
 
+  it('tells AI agents to narrow the search when catalog --ai has multiple matches', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    await writeCatalog('openapi/app.catalog.json', createCatalogOperations());
+    const stdout = createCapture();
+
+    await runCli(
+      ['catalog', '--query', 'order', '--ai'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const output = stdout.output();
+
+    expect(output).toContain('Operations: 2');
+    expect(output).toContain('Multiple operations matched.');
+    expect(output).toContain('Do not pick one arbitrarily.');
+    expect(output).toContain('Narrow with a more specific --query, --tag, --method, or operationId keyword.');
+    expect(output).toContain('ask which operation to use before writing scenario YAML.');
+    expect(output).toContain('Operation 1: getOrder');
+    expect(output).toContain('Operation 2: createOrder');
+  });
+
   it('syncs before printing AI-friendly catalog guidance when --sync is used', async () => {
     await writeGenerateFixtures(workspace);
     await writeConfig([
