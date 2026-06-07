@@ -21,14 +21,19 @@ export interface ScenarioValidationOptions {
 
 export class ScenarioValidationError extends Error {
   readonly issues: string[];
+  readonly hints: string[];
 
   constructor(issues: string[]) {
+    const hints = createScenarioValidationHints(issues);
+
     super([
       'Scenario validation failed:',
       ...issues.map((issue) => `  - ${issue}`),
+      ...formatScenarioValidationHints(hints),
     ].join('\n'));
     this.name = 'ScenarioValidationError';
     this.issues = issues;
+    this.hints = hints;
   }
 }
 
@@ -69,6 +74,7 @@ export function validateScenarioAgainstOpenApi(
     validateRequestPayloadSupport(step, operation, issues);
     validateRequestBodyContentTypes(step, operation, issues);
     validateRequiredRequestBody(step, operation, issues);
+    validateRequiredRequestBodyFields(step, operation, issues);
   }
 
   if (issues.length > 0) {
@@ -486,8 +492,192 @@ function validateRequiredRequestBody(
   }
 }
 
+function validateRequiredRequestBodyFields(
+  step: Step,
+  operation: ApiOperation,
+  issues: string[],
+): void {
+  const requiredFieldNames = readRequiredJsonRequestBodyFieldNames(operation.requestBody);
+  const request = step.request;
+
+  if (requiredFieldNames.length === 0 || request?.body === undefined || request.multipart !== undefined) {
+    return;
+  }
+
+  const body = request.body;
+
+  for (const name of requiredFieldNames) {
+    if (!isRecord(body) || body[name] === undefined || body[name] === null) {
+      issues.push(`step "${step.id}": missing request.body.${name} required by ${operation.method} ${operation.path}`);
+    }
+  }
+}
+
 function isRequiredRequestBody(requestBody: unknown): boolean {
   return isRecord(requestBody) && requestBody.required === true;
+}
+
+function readRequiredJsonRequestBodyFieldNames(requestBody: unknown): string[] {
+  if (!isRecord(requestBody) || !isRecord(requestBody.content)) {
+    return [];
+  }
+
+  const fieldNames: string[] = [];
+  const seen = new Set<string>();
+
+  for (const [contentType, mediaType] of Object.entries(requestBody.content)) {
+    const normalizedContentType = normalizeOptionalString(contentType)?.toLowerCase();
+
+    if (normalizedContentType === undefined || !isJsonContentType(normalizedContentType) || !isRecord(mediaType)) {
+      continue;
+    }
+
+    for (const name of readRequiredObjectSchemaFieldNames(mediaType.schema)) {
+      if (!seen.has(name)) {
+        fieldNames.push(name);
+        seen.add(name);
+      }
+    }
+  }
+
+  return fieldNames;
+}
+
+function readRequiredObjectSchemaFieldNames(schema: unknown): string[] {
+  if (!isRecord(schema)) {
+    return [];
+  }
+
+  const fieldNames = readDirectRequiredObjectSchemaFieldNames(schema);
+
+  if (Array.isArray(schema.allOf)) {
+    for (const item of schema.allOf) {
+      fieldNames.push(...readRequiredObjectSchemaFieldNames(item));
+    }
+  }
+
+  return [...new Set(fieldNames)];
+}
+
+function readDirectRequiredObjectSchemaFieldNames(schema: Record<string, unknown>): string[] {
+  const type = normalizeOptionalString(schema.type)?.toLowerCase();
+  const properties = isRecord(schema.properties) ? schema.properties : undefined;
+
+  if (type !== undefined && type !== 'object' && properties === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(schema.required)) {
+    return [];
+  }
+
+  return schema.required.flatMap((name) => {
+    const normalized = normalizeOptionalString(name);
+    return normalized === undefined ? [] : [normalized];
+  });
+}
+
+function createScenarioValidationHints(issues: string[]): string[] {
+  const hints: string[] = [];
+  const seen = new Set<string>();
+  const addHint = (hint: string): void => {
+    if (!seen.has(hint)) {
+      hints.push(hint);
+      seen.add(hint);
+    }
+  };
+
+  for (const issue of issues) {
+    if (issue.includes(' still contains placeholder ')) {
+      addHint('Replace every <...> placeholder with a real value, {{env.NAME}}, {{vars.NAME}}, or an earlier extract before validate/test.');
+    }
+
+    if (issue.includes(' references unknown context.')) {
+      addHint('Context values can only reference extract names from earlier steps; fix the extract name or move this step after the extracting step.');
+    }
+
+    if (issue.includes(' references unknown vars.')) {
+      addHint('Define missing vars under scenario vars:, pass --var name=value, or load them with --var-file.');
+    }
+
+    if (issue.includes(' has invalid template:')) {
+      addHint('Use template names like {{token}}, {{env.NAME}}, or {{vars.NAME}}; names must be identifier-like.');
+    }
+
+    if (issue.includes('operationId "') && issue.includes(' was not found')) {
+      addHint('Find the endpoint with openapi-k6 catalog --query <keyword> --ai, then update api.operationId or use api.method/api.path.');
+    }
+
+    if (issue.includes('api must include operationId or both method and path') || /step ".+": [A-Z]+ .+ was not found$/.test(issue)) {
+      addHint('Use api.operationId when possible; otherwise set both api.method and api.path from catalog output.');
+    }
+
+    if (issue.includes('api.module is required because no fallback module was selected')) {
+      addHint('Set defaultModule in config.yaml or add api.module to the step.');
+    }
+
+    if (issue.includes('api.module "') && issue.includes('" was not found')) {
+      addHint('Use an existing module from config.yaml, or add the module with openapi-k6 module add.');
+    }
+
+    if (issue.includes('missing request.pathParams.')) {
+      addHint('Add the missing request.pathParams value for each {...} segment in api.path.');
+    }
+
+    if (issue.includes('missing request.query.')) {
+      addHint('Add the required request.query value from OpenAPI parameters.');
+    }
+
+    if (issue.includes('missing request.headers.')) {
+      addHint('Add the required request.headers value from OpenAPI parameters.');
+    }
+
+    if (issue.includes('missing request.body.')) {
+      addHint('Add the missing required request.body fields; inspect body fields with openapi-k6 catalog --query <keyword> --ai.');
+    }
+
+    if (issue.includes('request.body or request.multipart is required')) {
+      addHint('Add request.body for JSON endpoints or request.multipart for multipart/form-data endpoints.');
+    }
+
+    if (issue.includes('request.body requires OpenAPI requestBody content type')) {
+      addHint('Use request.body only for JSON requestBody content types; use request.multipart for multipart/form-data.');
+    }
+
+    if (issue.includes('request.multipart requires OpenAPI requestBody content type')) {
+      addHint('Use request.multipart only when OpenAPI requestBody content type is multipart/form-data.');
+    }
+
+    if (issue.includes('request.body is only supported for POST, PUT, or PATCH')) {
+      addHint('Remove request.body from GET/DELETE steps unless the endpoint method is POST, PUT, or PATCH.');
+    }
+
+    if (issue.includes('request.multipart is only supported for POST, PUT, or PATCH')) {
+      addHint('Remove request.multipart from GET/DELETE steps unless the endpoint method is POST, PUT, or PATCH.');
+    }
+
+    if (issue.includes('unsupported condition ')) {
+      addHint('Use supported conditions such as status == 200, status != 404, status >= 200, or status < 300.');
+    }
+
+    if (issue.includes('.from is invalid:')) {
+      addHint('Use simple extract JSONPath values like $.token, $.data.id, or $.items[0].id.');
+    }
+  }
+
+  return hints;
+}
+
+function formatScenarioValidationHints(hints: string[]): string[] {
+  if (hints.length === 0) {
+    return [];
+  }
+
+  return [
+    '',
+    'Fix hints:',
+    ...hints.map((hint) => `  - ${hint}`),
+  ];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

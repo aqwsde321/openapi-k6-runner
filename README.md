@@ -413,6 +413,7 @@ AI coding agent에게는 아래처럼 요청하면 됩니다.
    여러 서버를 이어야 할 때만 module add와 api.module을 사용해.
 10. 비밀값은 scenario YAML에 직접 쓰지 말고 {{env.NAME}}으로 참조해. 실제 값은 load-tests/.env에만 둬.
 11. npx --yes openapi-k6 validate -s <scenario-name>으로 YAML/OpenAPI 정합성을 먼저 확인해.
+    실패하면 Scenario validation failed의 각 항목과 Fix hints를 기준으로 scenario YAML을 수정해.
 12. npx --yes openapi-k6 test -s <scenario-name>으로 실제 API 흐름을 검증해.
 13. validate와 test가 통과하기 전에는 run이나 generate를 하지 마.
 14. 통과한 scenario만 npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1 --iterations 1로 짧게 실행해.

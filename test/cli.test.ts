@@ -450,6 +450,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('include 파일에는 vars:나 fixtures:를 두지 말고, 변수는 실행하는 scenario 파일에서 관리해.');
     expect(readme).toContain('여러 서버를 이어야 할 때만 module add와 api.module을 사용해.');
     expect(readme).toContain('비밀 값은 scenario YAML에 직접 쓰지 말고 {{env.NAME}}으로 참조해. 실제 값은 load-tests/.env에만 둬.');
+    expect(readme).toContain('실패하면 Scenario validation failed의 각 항목과 Fix hints를 기준으로 scenario YAML을 수정해.');
     expect(readme).toContain('validate와 test가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 마.');
     expect(readme).toContain('CLI가 Scaffold update available을 표시하면 npx --yes openapi-k6 update를 실행하고 이 README를 다시 읽어.');
     expect(readme).toContain('이 폴더를 최신화할 때 init --force를 사용하지 마.');
@@ -792,7 +793,13 @@ describe('openapi-k6 CLI', () => {
           },
         },
       ),
-    ).rejects.toThrow('Scenario validation failed:');
+    ).rejects.toThrow([
+      'Scenario validation failed:',
+      '  - step "health": operationId "missingOperation" was not found',
+      '',
+      'Fix hints:',
+      '  - Find the endpoint with openapi-k6 catalog --query <keyword> --ai, then update api.operationId or use api.method/api.path.',
+    ].join('\n'));
 
     await expect(readFile(argLogPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
@@ -3470,6 +3477,79 @@ describe('openapi-k6 CLI', () => {
     ].join('\n'));
   });
 
+  it('reports missing required request body fields with fix hints', async () => {
+    await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/openapi/app.openapi.yaml'),
+      [
+        'openapi: 3.0.3',
+        'info:',
+        '  title: App API',
+        '  version: 1.0.0',
+        'paths:',
+        '  /orders:',
+        '    post:',
+        '      operationId: createOrder',
+        '      requestBody:',
+        '        required: true',
+        '        content:',
+        '          application/json:',
+        '            schema:',
+        '              type: object',
+        '              required:',
+        '                - sku',
+        '                - quantity',
+        '              properties:',
+        '                sku:',
+        '                  type: string',
+        '                quantity:',
+        '                  type: integer',
+        '      responses:',
+        '        "201":',
+        '          description: Created',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        sku: ABC-001',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['validate', '-s', 'smoke'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow([
+      'Scenario validation failed:',
+      '  - step "create-order": missing request.body.quantity required by POST /orders',
+      '',
+      'Fix hints:',
+      '  - Add the missing required request.body fields; inspect body fields with openapi-k6 catalog --query <keyword> --ai.',
+    ].join('\n'));
+  });
+
   it('reports invalid or unavailable context template references during validation', async () => {
     await writeValidationOpenApi(workspace);
     await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
@@ -3624,6 +3704,9 @@ describe('openapi-k6 CLI', () => {
       '  - scenario: vars.loginId still contains placeholder "<loginId>"',
       '  - step "create-order": request.body.sku still contains placeholder "<sku>"',
       '  - step "create-order": request.body.nested.itemId still contains placeholder "<itemId>"',
+      '',
+      'Fix hints:',
+      '  - Replace every <...> placeholder with a real value, {{env.NAME}}, {{vars.NAME}}, or an earlier extract before validate/test.',
     ].join('\n'));
   });
 

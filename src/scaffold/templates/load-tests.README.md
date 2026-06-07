@@ -34,6 +34,7 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
    여러 서버를 이어야 할 때만 module add와 api.module을 사용해.
 7. 비밀 값은 scenario YAML에 직접 쓰지 말고 {{env.NAME}}으로 참조해. 실제 값은 __ENV_PATH__에만 둬.
 8. __VALIDATE_NAME_COMMAND__ 형식으로 YAML/OpenAPI 정합성을 먼저 확인해.
+   실패하면 Scenario validation failed의 각 항목과 Fix hints를 기준으로 scenario YAML을 수정해.
 9. __TEST_NAME_COMMAND__ 형식으로 실제 API 흐름을 검증해.
 10. validate와 test가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 마.
 11. 통과한 scenario만 __RUN_NAME_COMMAND__ --log -- --vus 1 --iterations 1 형식으로 짧게 실행해.
