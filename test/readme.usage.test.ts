@@ -26,7 +26,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('아래 예시는 이해를 돕기 위한 값입니다. 실제 명령에는 위 placeholder를 프로젝트에 맞게 바꿔 넣습니다.');
     expect(readme).toContain('처음 적용하는 프로젝트는 `init`부터 실행하고, 이미 `load-tests/`가 있는 프로젝트는 `init`을 다시 실행하지 말고 `update`로 scaffold 안내만 갱신합니다.');
     expect(readme).toContain('기존 프로젝트에서 CLI가 `Scaffold update available`을 표시하면 안내된 `update` 명령을 실행하면 됩니다.');
-    expect(readme).toContain('API base URL과 OpenAPI 경로가 확실하면 `init --sync`로 작업 공간 생성 직후 snapshot/catalog/changes까지 만들 수 있습니다.');
+    expect(readme).toContain('API base URL과 OpenAPI 경로가 확실하면 `init --sync`로 작업 공간 생성 직후 snapshot/catalog까지 만들 수 있습니다.');
     expect(readme).toContain('npx --yes openapi-k6 init --base-url <url> --openapi <path-or-url> --sync');
 
     const quickStartSection = readme.slice(readme.indexOf('## 빠른 시작'), readme.indexOf('## 1. 작업 공간 만들기'));
@@ -86,8 +86,6 @@ describe('README usage guide', () => {
     expect(readme).toContain('`load-tests/.env`');
     expect(readme).toContain('`load-tests/scenarios/*.yaml`');
     expect(readme).toContain('`load-tests/openapi/*.openapi.json`: `sync` 생성물');
-    expect(readme).toContain('`load-tests/openapi/*.changes.md`: `sync` 생성물');
-    expect(readme).toContain('`load-tests/openapi/*.changes.json`: `sync` 생성물');
     expect(readme).toContain('`load-tests/generated/*.k6.js`: `generate` 생성물');
     expect(readme).toContain('비밀값이 필요하면 `load-tests/.env.example`을 참고해 직접 만들고 commit하지 않습니다.');
 
@@ -105,11 +103,10 @@ describe('README usage guide', () => {
     expect(readme).toContain('CLI가 Scaffold update available을 표시하거나 scaffold README/runner를 최신화해야 하면 npx --yes openapi-k6 update를 실행해.');
     expect(readme).toContain('init 또는 update 후 백엔드 프로젝트의 load-tests/README.md를 다시 읽고, 그 문서의 실제 경로와 명령을 기준으로 진행해.');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai로 endpoint 후보와 scenario step 초안을 확인해.');
-    expect(readme).toContain('실행 후 load-tests/openapi/*.changes.md를 먼저 확인해.');
     expect(readme).toContain('출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.');
     expect(readme).toContain('operationId가 없거나 애매하면 api.method와 api.path를 사용해.');
     expect(readme).toContain('여러 서버를 이어야 할 때만 module add와 api.module을 사용해.');
-    expect(readme).toContain('load-tests/openapi/*.openapi.json, load-tests/openapi/*.catalog.json, load-tests/openapi/*.changes.md, load-tests/openapi/*.changes.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.');
+    expect(readme).toContain('load-tests/openapi/*.openapi.json, load-tests/openapi/*.catalog.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.');
     expect(readme).toContain('validate와 test가 통과하기 전에는 run이나 generate를 하지 마.');
 
     expect(readme.indexOf('## 빠른 시작')).toBeLessThan(readme.indexOf('## 1. 작업 공간 만들기'));

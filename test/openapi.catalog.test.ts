@@ -123,20 +123,10 @@ describe('OpenAPI snapshot and catalog', () => {
       operations: Array<Record<string, unknown>>;
     };
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       snapshotPath,
       catalogPath,
       operationCount: 2,
-      changesPath: path.join(workspace, 'load-tests/openapi/catalog.changes.md'),
-      changesJsonPath: path.join(workspace, 'load-tests/openapi/catalog.changes.json'),
-      changes: {
-        baseline: true,
-        totalOperationCount: 2,
-        added: [],
-        removed: [],
-        changed: [],
-        unchangedCount: 0,
-      },
     });
     expect(snapshot.openapi).toBe('3.0.3');
     expect(catalog.operations).toHaveLength(2);
@@ -154,66 +144,6 @@ describe('OpenAPI snapshot and catalog', () => {
       hasRequestBody: true,
       requestBodyContentTypes: ['application/json'],
     });
-  });
-
-  it('writes sync change summaries against the previous catalog', async () => {
-    const sourcePath = path.join(workspace, 'openapi.json');
-    const snapshotPath = path.join(workspace, 'load-tests/openapi/default.openapi.json');
-    const catalogPath = path.join(workspace, 'load-tests/openapi/default.catalog.json');
-
-    await writeFile(sourcePath, JSON.stringify(createCatalogFixture()), 'utf8');
-    await syncOpenApiSnapshot({
-      openapi: sourcePath,
-      write: snapshotPath,
-      catalog: catalogPath,
-      generatedAt: new Date('2026-04-26T00:00:00.000Z'),
-    });
-
-    await writeFile(sourcePath, JSON.stringify(createChangedCatalogFixture()), 'utf8');
-    const result = await syncOpenApiSnapshot({
-      openapi: sourcePath,
-      write: snapshotPath,
-      catalog: catalogPath,
-      generatedAt: new Date('2026-04-27T00:00:00.000Z'),
-    });
-    const changesMarkdown = await readFile(result.changesPath, 'utf8');
-    const changesJson = JSON.parse(await readFile(result.changesJsonPath, 'utf8')) as typeof result.changes;
-
-    expect(result.changes).toMatchObject({
-      baseline: false,
-      totalOperationCount: 2,
-      unchangedCount: 0,
-      added: [
-        expect.objectContaining({
-          method: 'GET',
-          path: '/health',
-          operationId: 'getHealth',
-        }),
-      ],
-      removed: [
-        expect.objectContaining({
-          method: 'POST',
-          path: '/orders/{orderId}',
-          operationId: 'createOrder',
-        }),
-      ],
-      changed: [
-        expect.objectContaining({
-          method: 'GET',
-          path: '/orders/{orderId}',
-          operationId: 'getOrder',
-          fields: expect.arrayContaining(['summary', 'parameters']),
-        }),
-      ],
-    });
-    expect(changesJson).toEqual(result.changes);
-    expect(changesMarkdown).toContain('# OpenAPI Sync Changes');
-    expect(changesMarkdown).toContain('- Added: 1');
-    expect(changesMarkdown).toContain('- Removed: 1');
-    expect(changesMarkdown).toContain('- Changed: 1');
-    expect(changesMarkdown).toContain('- GET `/health` (getHealth) - Health check');
-    expect(changesMarkdown).toContain('- POST `/orders/{orderId}` (createOrder)');
-    expect(changesMarkdown).toContain('- GET `/orders/{orderId}` (getOrder) - Get order detail - fields: summary, description, parameters');
   });
 
   it('syncs an OpenAPI URL into snapshot and catalog files', async () => {
@@ -439,46 +369,6 @@ function createCatalogFixture(): unknown {
               },
             },
           },
-        },
-      },
-    },
-  };
-}
-
-function createChangedCatalogFixture(): unknown {
-  return {
-    openapi: '3.0.3',
-    info: { title: 'Fixture API', version: '1.0.1' },
-    paths: {
-      '/health': {
-        get: {
-          operationId: 'getHealth',
-          tags: ['system'],
-          summary: 'Health check',
-          responses: { 200: { description: 'OK' } },
-        },
-      },
-      '/orders/{orderId}': {
-        parameters: [
-          {
-            name: 'orderId',
-            in: 'path',
-            required: true,
-            schema: { type: 'string' },
-          },
-        ],
-        get: {
-          operationId: 'getOrder',
-          tags: ['orders'],
-          summary: 'Get order detail',
-          parameters: [
-            {
-              name: 'includeItems',
-              in: 'query',
-              schema: { type: 'string' },
-            },
-          ],
-          responses: { 200: { description: 'OK' } },
         },
       },
     },
