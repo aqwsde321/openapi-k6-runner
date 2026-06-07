@@ -38,7 +38,10 @@ import {
   type ScenarioExecutionReporter,
   type ScenarioExecutionResult,
 } from '../executor/scenario.executor.js';
-import { syncOpenApiSnapshot } from '../openapi/openapi.catalog.js';
+import {
+  syncOpenApiSnapshot,
+  type OpenApiCatalogChangeSummary,
+} from '../openapi/openapi.catalog.js';
 import { HTTP_METHOD_ORDER, parseOpenApiFile } from '../openapi/openapi.parser.js';
 import { parseScenarioFile } from '../parser/scenario.parser.js';
 import {
@@ -243,6 +246,9 @@ export interface SyncResult {
   catalogPath: string;
   openapiPath: string;
   operationCount: number;
+  changesPath: string;
+  changesJsonPath: string;
+  changes: OpenApiCatalogChangeSummary;
   moduleName?: string;
 }
 
@@ -318,6 +324,9 @@ export interface ModuleAddResult {
     snapshotPath: string;
     catalogPath: string;
     operationCount: number;
+    changesPath: string;
+    changesJsonPath: string;
+    changes: OpenApiCatalogChangeSummary;
   };
 }
 
@@ -2040,6 +2049,9 @@ export async function runSyncCommand(
     snapshotPath: result.snapshotPath,
     catalogPath: result.catalogPath,
     operationCount: result.operationCount,
+    changesPath: result.changesPath,
+    changesJsonPath: result.changesJsonPath,
+    changes: result.changes,
     ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
   };
 }
@@ -2203,6 +2215,9 @@ export async function runModuleAddCommand(
       snapshotPath: syncResult.snapshotPath,
       catalogPath: syncResult.catalogPath,
       operationCount: syncResult.operationCount,
+      changesPath: syncResult.changesPath,
+      changesJsonPath: syncResult.changesJsonPath,
+      changes: syncResult.changes,
     };
   }
 
@@ -4557,6 +4572,7 @@ function writeInitSummary(
     writeLine(stdout, '');
     writeLine(stdout, `Synced ${formatDisplayPath(cwd, result.synced.snapshotPath)}`);
     writeLine(stdout, `Catalog ${formatDisplayPath(cwd, result.synced.catalogPath)} (${result.synced.operationCount} operations)`);
+    writeSyncChangeSummary(stdout, result.synced, cwd);
   }
 
   writeLine(stdout, '');
@@ -4582,6 +4598,7 @@ function writeSyncSummary(
 ): void {
   writeLine(stdout, `Synced ${result.snapshotPath}`);
   writeLine(stdout, `Catalog ${result.catalogPath} (${result.operationCount} operations)`);
+  writeSyncChangeSummary(stdout, result, cwd);
   writeLine(stdout, '');
   writeLine(stdout, 'Next');
 
@@ -4595,6 +4612,24 @@ function writeSyncSummary(
   writeLine(stdout, `  ${initNextCommand('catalog', configPath, result.moduleName, cwd)}`);
   writeLine(stdout, `  ${initNextCommand('validate', configPath, result.moduleName, cwd)}`);
   writeLine(stdout, `  ${initNextCommand('test', configPath, result.moduleName, cwd)}`);
+}
+
+function writeSyncChangeSummary(
+  stdout: WritableLike,
+  result: Pick<SyncResult, 'changes' | 'changesPath'>,
+  cwd: string,
+  prefix = '',
+): void {
+  if (result.changes.baseline) {
+    writeLine(stdout, `${prefix}Changes baseline saved (no previous catalog)`);
+  } else {
+    writeLine(
+      stdout,
+      `${prefix}Changes +${result.changes.added.length} / -${result.changes.removed.length} / ~${result.changes.changed.length} / =${result.changes.unchangedCount}`,
+    );
+  }
+
+  writeLine(stdout, `${prefix}Change summary ${formatDisplayPath(cwd, result.changesPath)}`);
 }
 
 function writeUpdateSummary(
@@ -5124,6 +5159,7 @@ function writeCatalogSyncNotice(
 
   writeLine(stdout, `${prefix}Synced ${formatDisplayPath(cwd, result.synced.snapshotPath)}`);
   writeLine(stdout, `${prefix}Catalog ${formatDisplayPath(cwd, result.synced.catalogPath)} (${result.synced.operationCount} operations)`);
+  writeSyncChangeSummary(stdout, result.synced, cwd, prefix);
   writeLine(stdout, '');
 }
 
@@ -5571,6 +5607,7 @@ function writeModuleAddSummary(stdout: WritableLike, result: ModuleAddResult, cw
     writeLine(stdout, '');
     writeLine(stdout, `Synced ${formatDisplayPath(cwd, result.synced.snapshotPath)}`);
     writeLine(stdout, `Catalog ${formatDisplayPath(cwd, result.synced.catalogPath)} (${result.synced.operationCount} operations)`);
+    writeSyncChangeSummary(stdout, result.synced, cwd);
   }
 
   writeModuleAddNextSteps(stdout, result, cwd);

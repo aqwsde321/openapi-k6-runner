@@ -19,7 +19,8 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
    접힌 "고급 기능"과 "AI 작업 규칙"도 읽고 진행해.
 2. 모든 명령은 백엔드 프로젝트 루트에서 실행해.
 3. __CONFIG_PATH__에 TODO가 남아 있으면 이 백엔드 프로젝트에 맞게 채워.
-4. __SYNC_COMMAND__를 실행해서 OpenAPI snapshot과 catalog를 만들어.
+4. __SYNC_COMMAND__를 실행해서 OpenAPI snapshot, catalog, 변경 요약을 만들어.
+   실행 후 __CHANGES_PATH__를 먼저 확인해. 첫 sync라 baseline이면 변경 목록이 비어 있을 수 있어.
 5. __CATALOG_AI_COMMAND__ 명령으로 테스트할 endpoint 후보와 scenario step 초안을 확인해.
    <검색어>는 실제 API 이름, path, tag에 맞게 바꿔. 필요하면 __CATALOG_PATH__도 열어봐.
    출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.
@@ -40,7 +41,7 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
     이 폴더를 최신화할 때 init --force를 사용하지 마.
 
 __DIRECTORY__/README.md, __RUN_SCRIPT_PATH__, __DIRECTORY__/.env.example, __DIRECTORY__/.gitignore, __DIRECTORY__/.openapi-k6.json은 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.
-__SNAPSHOT_PATH__, __CATALOG_PATH__, __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.
+__SNAPSHOT_PATH__, __CATALOG_PATH__, __CHANGES_PATH__, __CHANGES_JSON_PATH__, __DIRECTORY__/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.
 ```
 
 ## 빠른 시작
@@ -91,13 +92,13 @@ modules:
 - `snapshot`: `sync`가 저장하고 `generate`가 읽을 OpenAPI snapshot
 - `catalog`: scenario 작성자가 endpoint를 고를 때 참고할 catalog
 
-OpenAPI snapshot과 catalog를 만듭니다.
+OpenAPI snapshot, catalog, 변경 요약을 만듭니다.
 
 ```bash
 __SYNC_COMMAND__
 ```
 
-생성/갱신: `__SNAPSHOT_PATH__`, `__CATALOG_PATH__`
+생성/갱신: `__SNAPSHOT_PATH__`, `__CATALOG_PATH__`, `__CHANGES_PATH__`, `__CHANGES_JSON_PATH__`
 
 ## 2. Endpoint 고르기
 
@@ -215,6 +216,8 @@ include와 fixture 경로는 실행하는 scenario 파일 기준 상대 경로�
 
 - `__SNAPSHOT_PATH__`: `sync` 생성물
 - `__CATALOG_PATH__`: `sync` 생성물
+- `__CHANGES_PATH__`: `sync` 생성물
+- `__CHANGES_JSON_PATH__`: `sync` 생성물
 - `__DIRECTORY__/generated/*.k6.js`: `generate` 생성물
 
 `__ENV_PATH__`는 생성되지 않습니다.
@@ -227,7 +230,7 @@ include와 fixture 경로는 실행하는 scenario 파일 기준 상대 경로�
 
 | 상황 | 명령 |
 | --- | --- |
-| OpenAPI snapshot/catalog 갱신 | `__SYNC_COMMAND__` |
+| OpenAPI snapshot/catalog/changes 갱신 | `__SYNC_COMMAND__` |
 | endpoint 검색 | `__CATALOG_SEARCH_COMMAND__` |
 | AI용 scenario 초안 | `__CATALOG_AI_COMMAND__` |
 | 최신 sync 후 AI용 scenario 초안 | `__CATALOG_SYNC_AI_COMMAND__` |
@@ -421,7 +424,7 @@ __GENERATE_WORKFLOW_COMMAND__
 
 ### update와 제거
 
-`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.
+`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog/changes 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.
 오래된 scaffold에서 `validate`, `test`, `generate`, `run`을 실행하면 최신 README/runner를 받을 수 있도록 `Scaffold update available` notice와 `__UPDATE_COMMAND__` 명령이 표시됩니다.
 기존 scaffold를 최신화할 때는 `init --force`가 아니라 `update`를 사용합니다.
 
@@ -438,7 +441,7 @@ ls __DIRECTORY_SHELL_ARG__
 rm -rf __DIRECTORY_SHELL_ARG__
 ```
 
-삭제 전에 필요한 scenario, snapshot, catalog가 있는지 확인합니다.
+삭제 전에 필요한 scenario, snapshot, catalog, changes 파일이 있는지 확인합니다.
 
 </details>
 
@@ -452,7 +455,7 @@ rm -rf __DIRECTORY_SHELL_ARG__
 - 일반 작업에서 수정하는 파일은 `__CONFIG_PATH__`, `__ENV_PATH__`, `__DIRECTORY__/scenarios/*.yaml`로 제한합니다.
 - CLI가 `Scaffold update available`을 표시하면 `__UPDATE_COMMAND__`를 실행하고 이 README를 다시 읽습니다.
 - scaffold 문서나 runner를 바꿔야 하면 openapi-k6-runner의 생성 템플릿을 수정하고 `__UPDATE_COMMAND__`를 의도적으로 실행합니다.
-- `__SNAPSHOT_PATH__`, `__CATALOG_PATH__`, `__DIRECTORY__/generated/*.k6.js`는 직접 수정하지 말고 `sync`/`generate`로 다시 만듭니다.
+- `__SNAPSHOT_PATH__`, `__CATALOG_PATH__`, `__CHANGES_PATH__`, `__CHANGES_JSON_PATH__`, `__DIRECTORY__/generated/*.k6.js`는 직접 수정하지 말고 `sync`/`generate`로 다시 만듭니다.
 - endpoint와 step 초안은 `__CATALOG_AI_COMMAND__`에서 확인하고, 필요하면 `__CATALOG_PATH__`도 엽니다. `validate`, `test`, `generate`는 catalog가 아니라 OpenAPI snapshot을 읽습니다.
 - 처음에는 plain step으로 작성하고, 값이나 step이 반복될 때만 `vars`, `fixtures`, `include`를 사용합니다.
 - `operationId`를 우선 사용하고, 없거나 애매하면 `api.method`와 `api.path`를 사용합니다.

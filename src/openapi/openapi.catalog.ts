@@ -22,6 +22,33 @@ export interface OpenApiSyncResult {
   snapshotPath: string;
   catalogPath: string;
   operationCount: number;
+  changesPath: string;
+  changesJsonPath: string;
+  changes: OpenApiCatalogChangeSummary;
+}
+
+export interface OpenApiCatalogChangeSummary {
+  generatedAt: string;
+  source: string;
+  baseline: boolean;
+  totalOperationCount: number;
+  added: OpenApiCatalogChangeOperation[];
+  removed: OpenApiCatalogChangeOperation[];
+  changed: OpenApiCatalogChangedOperation[];
+  unchangedCount: number;
+}
+
+export interface OpenApiCatalogChangeOperation {
+  method: string;
+  path: string;
+  operationId?: string;
+  summary?: string;
+  tags: string[];
+}
+
+export interface OpenApiCatalogChangedOperation extends OpenApiCatalogChangeOperation {
+  previous: OpenApiCatalogChangeOperation;
+  fields: string[];
 }
 
 interface LoadedOpenApiDocument {
@@ -35,6 +62,17 @@ const CATALOG_HINT_MAX_DEPTH = 4;
 const CATALOG_HINT_MAX_PROPERTIES = 12;
 const CATALOG_HINT_MAX_ARRAY_ITEMS = 2;
 const CATALOG_EXTRACT_MAX_CANDIDATES = 8;
+const CATALOG_COMPARE_FIELDS = [
+  'operationId',
+  'tags',
+  'summary',
+  'description',
+  'parameters',
+  'hasRequestBody',
+  'requestBodyContentTypes',
+  'requestBodyHint',
+  'responseExtractCandidates',
+] as const satisfies readonly (keyof ApiCatalogOperation)[];
 
 const openApiRefOptions: SwaggerParser.Options = {
   resolve: {
@@ -54,6 +92,7 @@ export class OpenApiSyncError extends Error {
 export async function syncOpenApiSnapshot(
   options: OpenApiSyncOptions,
 ): Promise<OpenApiSyncResult> {
+  const previousCatalog = await readPreviousCatalog(options.catalog);
   const loaded = await loadOpenApiDocument(options.openapi);
   // Bundle external refs into the snapshot so generate can run from the local snapshot alone.
   const bundled = await SwaggerParser.bundle(
@@ -68,20 +107,28 @@ export async function syncOpenApiSnapshot(
     bundled as SwaggerApiInput,
     openApiRefOptions,
   );
+  const generatedAt = (options.generatedAt ?? new Date()).toISOString();
   const catalog = buildOpenApiCatalog(dereferenced, {
-    generatedAt: (options.generatedAt ?? new Date()).toISOString(),
+    generatedAt,
     source: loaded.source,
   });
+  const changes = buildCatalogChangeSummary(previousCatalog, catalog);
+  const changePaths = resolveCatalogChangePaths(options.catalog);
 
   await fs.mkdir(path.dirname(options.write), { recursive: true });
   await fs.mkdir(path.dirname(options.catalog), { recursive: true });
   await fs.writeFile(options.write, snapshot, 'utf8');
   await fs.writeFile(options.catalog, `${JSON.stringify(catalog, null, 2)}\n`, 'utf8');
+  await fs.writeFile(changePaths.json, `${JSON.stringify(changes, null, 2)}\n`, 'utf8');
+  await fs.writeFile(changePaths.markdown, renderCatalogChangeMarkdown(changes), 'utf8');
 
   return {
     snapshotPath: options.write,
     catalogPath: options.catalog,
     operationCount: catalog.operations.length,
+    changesPath: changePaths.markdown,
+    changesJsonPath: changePaths.json,
+    changes,
   };
 }
 
@@ -145,6 +192,278 @@ export function buildOpenApiCatalog(
     source: options.source,
     operations,
   };
+}
+
+async function readPreviousCatalog(catalogPath: string): Promise<ApiCatalog | undefined> {
+  let raw: string;
+
+  try {
+    raw = await fs.readFile(catalogPath, 'utf8');
+  } catch (error) {
+    if (isNodeErrorCode(error, 'ENOENT')) {
+      return undefined;
+    }
+
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (
+      !isRecord(parsed) ||
+      !Array.isArray(parsed.operations) ||
+      !parsed.operations.every(isCatalogOperationLike)
+    ) {
+      return undefined;
+    }
+
+    return parsed as unknown as ApiCatalog;
+  } catch {
+    return undefined;
+  }
+}
+
+function isCatalogOperationLike(value: unknown): value is ApiCatalogOperation {
+  return isRecord(value) &&
+    typeof value.method === 'string' &&
+    typeof value.path === 'string';
+}
+
+function buildCatalogChangeSummary(
+  previousCatalog: ApiCatalog | undefined,
+  nextCatalog: ApiCatalog,
+): OpenApiCatalogChangeSummary {
+  if (previousCatalog === undefined) {
+    return {
+      generatedAt: nextCatalog.generatedAt,
+      source: nextCatalog.source,
+      baseline: true,
+      totalOperationCount: nextCatalog.operations.length,
+      added: [],
+      removed: [],
+      changed: [],
+      unchangedCount: 0,
+    };
+  }
+
+  const previousByKey = new Map(
+    previousCatalog.operations.map((operation) => [catalogOperationKey(operation), operation]),
+  );
+  const nextByKey = new Map(
+    nextCatalog.operations.map((operation) => [catalogOperationKey(operation), operation]),
+  );
+  const added: OpenApiCatalogChangeOperation[] = [];
+  const removed: OpenApiCatalogChangeOperation[] = [];
+  const changed: OpenApiCatalogChangedOperation[] = [];
+  let unchangedCount = 0;
+
+  for (const nextOperation of nextCatalog.operations) {
+    const previousOperation = previousByKey.get(catalogOperationKey(nextOperation));
+
+    if (previousOperation === undefined) {
+      added.push(toCatalogChangeOperation(nextOperation));
+      continue;
+    }
+
+    const fields = collectChangedCatalogFields(previousOperation, nextOperation);
+
+    if (fields.length === 0) {
+      unchangedCount += 1;
+      continue;
+    }
+
+    changed.push({
+      ...toCatalogChangeOperation(nextOperation),
+      previous: toCatalogChangeOperation(previousOperation),
+      fields,
+    });
+  }
+
+  for (const previousOperation of previousCatalog.operations) {
+    if (!nextByKey.has(catalogOperationKey(previousOperation))) {
+      removed.push(toCatalogChangeOperation(previousOperation));
+    }
+  }
+
+  return {
+    generatedAt: nextCatalog.generatedAt,
+    source: nextCatalog.source,
+    baseline: false,
+    totalOperationCount: nextCatalog.operations.length,
+    added: added.sort(compareCatalogChangeOperations),
+    removed: removed.sort(compareCatalogChangeOperations),
+    changed: changed.sort(compareCatalogChangeOperations),
+    unchangedCount,
+  };
+}
+
+function collectChangedCatalogFields(
+  previousOperation: ApiCatalogOperation,
+  nextOperation: ApiCatalogOperation,
+): string[] {
+  return CATALOG_COMPARE_FIELDS
+    .filter((field) => stableStringify(previousOperation[field]) !== stableStringify(nextOperation[field]))
+    .map(String);
+}
+
+function toCatalogChangeOperation(operation: ApiCatalogOperation): OpenApiCatalogChangeOperation {
+  return {
+    method: operation.method.toUpperCase(),
+    path: operation.path,
+    tags: Array.isArray(operation.tags) ? [...operation.tags] : [],
+    ...(operation.operationId === undefined ? {} : { operationId: operation.operationId }),
+    ...(operation.summary === undefined ? {} : { summary: operation.summary }),
+  };
+}
+
+function resolveCatalogChangePaths(catalogPath: string): { markdown: string; json: string } {
+  const basePath = catalogPath.endsWith('.catalog.json')
+    ? catalogPath.slice(0, -'.catalog.json'.length)
+    : catalogPath.endsWith('.json')
+    ? catalogPath.slice(0, -'.json'.length)
+    : catalogPath;
+
+  return {
+    markdown: `${basePath}.changes.md`,
+    json: `${basePath}.changes.json`,
+  };
+}
+
+function renderCatalogChangeMarkdown(changes: OpenApiCatalogChangeSummary): string {
+  const lines = [
+    '# OpenAPI Sync Changes',
+    '',
+    `- Generated at: ${changes.generatedAt}`,
+    `- Source: ${changes.source}`,
+    `- Current total operations: ${changes.totalOperationCount}`,
+  ];
+
+  if (changes.baseline) {
+    lines.push(
+      '- Baseline: previous catalog was not found or could not be read; current catalog is now the comparison baseline.',
+      '',
+    );
+    return `${lines.join('\n')}\n`;
+  }
+
+  lines.push(
+    `- Added: ${changes.added.length}`,
+    `- Removed: ${changes.removed.length}`,
+    `- Changed: ${changes.changed.length}`,
+    `- Unchanged: ${changes.unchangedCount}`,
+    '',
+  );
+
+  appendCatalogChangeSection(lines, 'Added', changes.added);
+  appendCatalogChangeSection(lines, 'Removed', changes.removed);
+  appendChangedCatalogSection(lines, changes.changed);
+
+  return `${lines.join('\n')}\n`;
+}
+
+function appendCatalogChangeSection(
+  lines: string[],
+  title: string,
+  operations: OpenApiCatalogChangeOperation[],
+): void {
+  lines.push(`## ${title}`, '');
+
+  if (operations.length === 0) {
+    lines.push('- none', '');
+    return;
+  }
+
+  for (const operation of operations) {
+    lines.push(formatCatalogChangeOperation(operation));
+  }
+
+  lines.push('');
+}
+
+function appendChangedCatalogSection(
+  lines: string[],
+  operations: OpenApiCatalogChangedOperation[],
+): void {
+  lines.push('## Changed', '');
+
+  if (operations.length === 0) {
+    lines.push('- none', '');
+    return;
+  }
+
+  for (const operation of operations) {
+    lines.push(`${formatCatalogChangeOperation(operation)} - fields: ${operation.fields.join(', ')}`);
+
+    if (operation.previous.operationId !== operation.operationId) {
+      const previousOperationId = operation.previous.operationId ?? 'none';
+      const nextOperationId = operation.operationId ?? 'none';
+      lines.push(`  - operationId: ${previousOperationId} -> ${nextOperationId}`);
+    }
+  }
+
+  lines.push('');
+}
+
+function formatCatalogChangeOperation(operation: OpenApiCatalogChangeOperation): string {
+  const operationId = operation.operationId === undefined ? '' : ` (${operation.operationId})`;
+  const summary = operation.summary === undefined ? '' : ` - ${toSingleLine(operation.summary)}`;
+
+  return `- ${operation.method.toUpperCase()} \`${operation.path}\`${operationId}${summary}`;
+}
+
+function catalogOperationKey(operation: Pick<ApiCatalogOperation, 'method' | 'path'>): string {
+  return `${operation.method.toUpperCase()} ${operation.path}`;
+}
+
+function compareCatalogChangeOperations(
+  left: OpenApiCatalogChangeOperation,
+  right: OpenApiCatalogChangeOperation,
+): number {
+  const pathCompare = left.path.localeCompare(right.path);
+
+  if (pathCompare !== 0) {
+    return pathCompare;
+  }
+
+  return compareHttpMethods(left.method, right.method);
+}
+
+function compareHttpMethods(left: string, right: string): number {
+  const leftIndex = HTTP_METHOD_ORDER.indexOf(left.toLowerCase() as (typeof HTTP_METHOD_ORDER)[number]);
+  const rightIndex = HTTP_METHOD_ORDER.indexOf(right.toLowerCase() as (typeof HTTP_METHOD_ORDER)[number]);
+  const normalizedLeft = leftIndex === -1 ? Number.MAX_SAFE_INTEGER : leftIndex;
+  const normalizedRight = rightIndex === -1 ? Number.MAX_SAFE_INTEGER : rightIndex;
+
+  if (normalizedLeft !== normalizedRight) {
+    return normalizedLeft - normalizedRight;
+  }
+
+  return left.localeCompare(right);
+}
+
+function stableStringify(value: unknown): string {
+  return JSON.stringify(sortJsonValue(value));
+}
+
+function sortJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortJsonValue);
+  }
+
+  if (!isRecord(value)) {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort((left, right) => left.localeCompare(right))
+      .map((key) => [key, sortJsonValue(value[key])]),
+  );
+}
+
+function toSingleLine(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
 }
 
 function renderRequestBodyContentTypes(requestBody: unknown): Pick<ApiCatalogOperation, 'requestBodyContentTypes'> | Record<string, never> {
@@ -787,6 +1106,13 @@ function expectRecord(value: unknown, message: string): Record<string, unknown> 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function isNodeErrorCode(error: unknown, code: string): boolean {
+  return error !== null &&
+    typeof error === 'object' &&
+    'code' in error &&
+    error.code === code;
 }
 
 function normalizeOptionalString(value: unknown): string | undefined {

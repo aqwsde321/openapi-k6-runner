@@ -591,6 +591,8 @@ function renderReadme(
   const workflowOutputPath = directory + '/generated/login-flow.k6.js';
   const fixturesPath = directory + '/fixtures/';
   const envPath = directory + '/.env';
+  const changesPath = formatCatalogChangesPath(catalogPath, 'md');
+  const changesJsonPath = formatCatalogChangesPath(catalogPath, 'json');
   const configArg = shellQuote(configPath);
   const runScriptArg = shellCommandPath(runScriptPath);
   const workflowScenarioArg = shellQuote(workflowScenarioPath);
@@ -632,6 +634,8 @@ function renderReadme(
 
   return renderReadmeTemplate({
     CATALOG_PATH: catalogPath,
+    CHANGES_PATH: changesPath,
+    CHANGES_JSON_PATH: changesJsonPath,
     CATALOG_AI_COMMAND: catalogAiCommand,
     CATALOG_SEARCH_COMMAND: catalogSearchCommand,
     CATALOG_SYNC_AI_COMMAND: catalogSyncAiCommand,
@@ -662,6 +666,18 @@ function renderReadme(
     VALIDATE_WORKFLOW_COMMAND: validateWorkflowCommand,
     WORKFLOW_OUTPUT_PATH: workflowOutputPath,
   });
+}
+
+function formatCatalogChangesPath(catalogPath: string, extension: 'json' | 'md'): string {
+  if (catalogPath.endsWith('.catalog.json')) {
+    return catalogPath.slice(0, -'.catalog.json'.length) + `.changes.${extension}`;
+  }
+
+  if (catalogPath.endsWith('.json')) {
+    return catalogPath.slice(0, -'.json'.length) + `.changes.${extension}`;
+  }
+
+  return catalogPath + `.changes.${extension}`;
 }
 
 function renderConfigRelativePath(

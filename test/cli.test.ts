@@ -456,7 +456,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.');
     expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 scenario에 남아 있으면 `validate`가 실패합니다.');
     expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore, load-tests/.openapi-k6.json은 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.');
-    expect(readme).toContain('load-tests/openapi/pharma.openapi.json, load-tests/openapi/pharma.catalog.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.');
+    expect(readme).toContain('load-tests/openapi/pharma.openapi.json, load-tests/openapi/pharma.catalog.json, load-tests/openapi/pharma.changes.md, load-tests/openapi/pharma.changes.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.');
 
     expect(readme).toContain('<summary>vars, fixtures, include, module, run.sh, multipart 예시 보기</summary>');
     expect(readme).toContain('값 우선순위는 scenario `fixtures:` < scenario `vars:` < CLI `--var-file` < CLI `--var`입니다.');
@@ -467,7 +467,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Spring의 `@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)` endpoint는 `request.multipart`로 작성합니다.');
     expect(readme).toContain('npx --yes openapi-k6 generate -s login-flow');
     expect(readme).toContain('cp load-tests/.env.example load-tests/.env');
-    expect(readme).toContain('`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.');
+    expect(readme).toContain('`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog/changes 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.');
     expect(readme).toContain('기존 scaffold를 최신화할 때는 `init --force`가 아니라 `update`를 사용합니다.');
     expect(readme).toContain('rm -rf load-tests');
 
@@ -1303,7 +1303,7 @@ describe('openapi-k6 CLI', () => {
 
     expect(config).toContain('baseUrl: https://changed.test.local');
     expect(readme).toContain('# load-tests');
-    expect(readme).toContain('`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.');
+    expect(readme).toContain('`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog/changes 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.');
     expect(readme).toContain('오래된 scaffold에서 `validate`, `test`, `generate`, `run`을 실행하면 최신 README/runner를 받을 수 있도록 `Scaffold update available` notice와 `npx --yes openapi-k6 update` 명령이 표시됩니다.');
     expect(runScript).toContain('exec k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH"');
     expect(scenario).toContain('path: /health');
@@ -1714,11 +1714,12 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 update --module vendor');
     expect(readme).toContain('load-tests/snapshots/vendor.snapshot.json');
     expect(readme).toContain('load-tests/catalogs/vendor.catalog.json');
+    expect(readme).toContain('load-tests/catalogs/vendor.changes.md');
     expect(readme).toContain('snapshot: snapshots/vendor.snapshot.json');
     expect(readme).toContain('catalog: catalogs/vendor.catalog.json');
     expect(readme).toContain('- `load-tests/snapshots/vendor.snapshot.json`: `sync` 생성물');
     expect(readme).toContain('- `load-tests/catalogs/vendor.catalog.json`: `sync` 생성물');
-    expect(readme).toContain('load-tests/snapshots/vendor.snapshot.json, load-tests/catalogs/vendor.catalog.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.');
+    expect(readme).toContain('load-tests/snapshots/vendor.snapshot.json, load-tests/catalogs/vendor.catalog.json, load-tests/catalogs/vendor.changes.md, load-tests/catalogs/vendor.changes.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.');
     expect(readme).not.toContain('openapi/vendor.openapi.json');
     expect(readme).not.toContain('openapi/vendor.catalog.json');
     expect(readme).not.toContain('load-tests/openapi/vendor.openapi.json');
@@ -1903,6 +1904,8 @@ describe('openapi-k6 CLI', () => {
 
     expect(output).toContain('Synced ');
     expect(output).toContain('Catalog ');
+    expect(output).toContain('Changes baseline saved (no previous catalog)');
+    expect(output).toContain('Change summary load-tests/openapi/app.changes.md');
     expect(output).toContain('Next');
     expect(output).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai --module app');
     expect(output).toContain('npx --yes openapi-k6 validate -s <scenario-name> --module app');
@@ -2111,6 +2114,8 @@ describe('openapi-k6 CLI', () => {
 
     expect(output).toContain('Synced load-tests/openapi/app.openapi.json');
     expect(output).toContain('Catalog load-tests/openapi/app.catalog.json (1 operations)');
+    expect(output).toContain('Changes +1 / -1 / ~0 / =0');
+    expect(output).toContain('Change summary load-tests/openapi/app.changes.md');
     expect(output).toContain('AI scenario authoring guide');
     expect(output).toContain('Query: health');
     expect(output).toContain('operationId: getHealth');

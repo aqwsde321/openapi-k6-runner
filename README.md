@@ -43,7 +43,7 @@ npx --yes openapi-k6 generate -s <scenario-name>
 npx --yes openapi-k6 update
 ```
 
-API base URL과 OpenAPI 경로가 확실하면 `init --sync`로 작업 공간 생성 직후 snapshot/catalog까지 만들 수 있습니다.
+API base URL과 OpenAPI 경로가 확실하면 `init --sync`로 작업 공간 생성 직후 snapshot/catalog/changes까지 만들 수 있습니다.
 
 ```bash
 npx --yes openapi-k6 init --base-url <url> --openapi <path-or-url> --sync
@@ -81,7 +81,8 @@ npx --yes openapi-k6 sync
 npx --yes openapi-k6 catalog --query <검색어>
 ```
 
-`sync`는 OpenAPI snapshot과 endpoint catalog를 만듭니다.
+`sync`는 OpenAPI snapshot, endpoint catalog, 변경 요약(`load-tests/openapi/*.changes.md`, `load-tests/openapi/*.changes.json`)을 만듭니다.
+기존 catalog가 있으면 추가/삭제/변경된 endpoint 수와 목록을 확인할 수 있습니다.
 `catalog` 출력에서는 주로 `operationId`, `body`, `parameters`를 봅니다.
 AI에게 scenario 초안까지 맡길 때는 `npx --yes openapi-k6 catalog --query <검색어> --ai`를 사용합니다.
 Swagger/OpenAPI 변경을 바로 반영하려면 `npx --yes openapi-k6 catalog --sync --query <검색어> --ai`를 사용합니다.
@@ -300,7 +301,7 @@ npx --yes openapi-k6 update
 
 - `ui`: 브라우저에서 scenario를 고르고 `validate`/`test`를 실행합니다.
 - `doctor`: config, snapshot, catalog, scaffold metadata, module env 충돌, k6 설치 여부를 점검합니다.
-- `update`: 기존 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog, `generated/`, `logs/`를 보존하고 scaffold 파일만 갱신합니다.
+- `update`: 기존 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog/changes, `generated/`, `logs/`를 보존하고 scaffold 파일만 갱신합니다.
 
 CLI가 `Scaffold update available`을 표시하면 안내된 `update` 명령을 실행합니다.
 초기 scaffold를 의도적으로 다시 만들 때만 `init --force`를 사용합니다.
@@ -347,6 +348,8 @@ k6 옵션은 scenario 이름 뒤에 붙입니다.
 
 - `load-tests/openapi/*.openapi.json`: `sync` 생성물
 - `load-tests/openapi/*.catalog.json`: `sync` 생성물
+- `load-tests/openapi/*.changes.md`: `sync` 생성물
+- `load-tests/openapi/*.changes.json`: `sync` 생성물
 - `load-tests/generated/*.k6.js`: `generate` 생성물
 
 `load-tests/.env`는 생성되지 않습니다.
@@ -361,7 +364,8 @@ k6 옵션은 scenario 이름 뒤에 붙입니다.
 | --- | --- |
 | 작업 공간 생성 | `npx --yes openapi-k6 init` |
 | 작업 공간 생성 후 즉시 sync | `npx --yes openapi-k6 init --base-url <url> --openapi <path-or-url> --sync` |
-| OpenAPI snapshot/catalog 갱신 | `npx --yes openapi-k6 sync` |
+| OpenAPI snapshot/catalog/changes 갱신 | `npx --yes openapi-k6 sync` |
+| OpenAPI 변경 요약 확인 | `load-tests/openapi/*.changes.md` |
 | endpoint 검색 | `npx --yes openapi-k6 catalog --query <검색어>` |
 | AI용 scenario 초안 | `npx --yes openapi-k6 catalog --query <검색어> --ai` |
 | 최신 sync 후 AI용 scenario 초안 | `npx --yes openapi-k6 catalog --sync --query <검색어> --ai` |
@@ -399,7 +403,8 @@ AI coding agent에게는 아래처럼 요청하면 됩니다.
 4. CLI가 Scaffold update available을 표시하거나 scaffold README/runner를 최신화해야 하면 npx --yes openapi-k6 update를 실행해.
 5. init 또는 update 후 백엔드 프로젝트의 load-tests/README.md를 다시 읽고, 그 문서의 실제 경로와 명령을 기준으로 진행해.
 6. load-tests/config.yaml에 TODO가 남아 있으면 실제 API 정보로 채워.
-7. npx --yes openapi-k6 sync로 OpenAPI snapshot과 catalog를 만들어.
+7. npx --yes openapi-k6 sync로 OpenAPI snapshot, catalog, 변경 요약을 만들어.
+   실행 후 load-tests/openapi/*.changes.md를 먼저 확인해. 첫 sync라 baseline이면 변경 목록이 비어 있을 수 있어.
 8. npx --yes openapi-k6 catalog --query <검색어> --ai로 endpoint 후보와 scenario step 초안을 확인해. 필요하면 load-tests/openapi/*.catalog.json도 열어봐.
    출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.
 9. 내가 원하는 API 흐름을 확인한 뒤 load-tests/scenarios/*.yaml을 작성하거나 수정해.
@@ -416,7 +421,7 @@ AI coding agent에게는 아래처럼 요청하면 됩니다.
     스크립트만 필요하면 npx --yes openapi-k6 generate -s <scenario-name>을 사용해.
 15. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 확인 포인트만 알려줘.
 16. load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore, load-tests/.openapi-k6.json은 scaffold 파일이므로 명시 요청 없이는 수정하지 마.
-    load-tests/openapi/*.openapi.json, load-tests/openapi/*.catalog.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.
+    load-tests/openapi/*.openapi.json, load-tests/openapi/*.catalog.json, load-tests/openapi/*.changes.md, load-tests/openapi/*.changes.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.
 ```
 
 `init` 후 생성되는 `load-tests/README.md`에는 선택한 디렉터리와 module 이름이 반영된 작업 안내가 들어 있습니다.
