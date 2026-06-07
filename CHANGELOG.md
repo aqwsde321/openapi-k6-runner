@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-06-08
+
+### Changed
+
+- 루트 README와 `init` 생성 README를 첫 실행 흐름 중심으로 단순화하고, 고급 기능 예시는 별도 문서와 접힌 섹션으로 분리했습니다.
+- `login`, `smoke` 같은 예시 값은 출력 예시나 기본 scaffold 설명에서만 보이도록 하고, 복사해서 실행하는 명령 안내는 `<검색어>`, `<scenario-name>` placeholder 기준으로 정리했습니다.
+- `init` 완료 후 다음 명령 안내, `catalog` summary, `run.sh --help` 예시도 placeholder 기준으로 맞췄습니다.
+
 ## [0.7.0] - 2026-05-27
 
 ### Added
@@ -162,7 +170,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.5.0...v0.5.1
