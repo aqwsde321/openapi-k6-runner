@@ -215,6 +215,16 @@ async function runMultiModuleFlow(projectDir, fixture, env, options) {
   await assertFileContains(path.join(projectDir, 'load-tests/openapi/auth.openapi.json'), '"operationId": "login"');
   await assertFileContains(path.join(projectDir, 'load-tests/openapi/bos.openapi.json'), '"operationId": "createOrder"');
 
+  const authCatalogAi = await runCli(['catalog', '--module', 'auth', '--query', 'login', '--ai'], projectDir, env);
+  assertIncludes(authCatalogAi.stdout, 'response extract candidates:', 'auth catalog --ai should show extract candidates');
+  assertIncludes(authCatalogAi.stdout, 'token <- $.token (200 application/json)', 'auth catalog --ai should show token extract path');
+  assertIncludes(authCatalogAi.stdout, 'yaml:', 'auth catalog --ai should show extract yaml');
+  assertIncludes(authCatalogAi.stdout, 'request.headers.Authorization: "Bearer {{token}}"', 'auth catalog --ai should show token next-use hint');
+
+  const bosCatalogAi = await runCli(['catalog', '--module', 'bos', '--query', 'createOrder', '--ai'], projectDir, env);
+  assertIncludes(bosCatalogAi.stdout, 'id <- $.id (201 application/json)', 'bos catalog --ai should show id extract path');
+  assertIncludes(bosCatalogAi.stdout, 'request.pathParams.id: "{{id}}"', 'bos catalog --ai should show id next-use hint');
+
   const moduleList = await runCli(['module', 'list', '--json'], projectDir, env);
   assertModuleList(moduleList.stdout, ['seed', 'auth', 'bos'], 'auth');
 
