@@ -5317,10 +5317,9 @@ function writeCatalogAiScenarioMapping(stdout: WritableLike, operation: ApiCatal
     writeLine(stdout, '    response extract candidates:');
 
     for (const candidate of extractCandidates) {
-      writeLine(
-        stdout,
-        `      - ${candidate.name} <- ${candidate.from} (${formatCatalogExtractCandidateSource(candidate)})`,
-      );
+      for (const line of formatCatalogExtractCandidateMappingLines(candidate)) {
+        writeLine(stdout, `      ${line}`);
+      }
     }
   }
 }
@@ -5388,6 +5387,40 @@ function formatCatalogExtractCandidateSource(candidate: ApiCatalogExtractCandida
     candidate.status,
     candidate.contentType,
   ].filter((value) => value !== undefined).join(' ');
+}
+
+function formatCatalogExtractCandidateMappingLines(
+  candidate: ApiCatalogExtractCandidate,
+): string[] {
+  const lines = [
+    `- ${candidate.name} <- ${candidate.from} (${formatCatalogExtractCandidateSource(candidate)})`,
+    '  yaml:',
+    '    extract:',
+    `      ${formatYamlKey(candidate.name)}:`,
+    `        from: ${candidate.from}`,
+  ];
+  const nextUse = formatCatalogExtractNextUse(candidate.name);
+
+  if (nextUse !== undefined) {
+    lines.push('  likely next use:');
+    lines.push(`    ${nextUse}`);
+  }
+
+  return lines;
+}
+
+function formatCatalogExtractNextUse(candidateName: string): string | undefined {
+  const normalized = candidateName.toLowerCase();
+
+  if (normalized.includes('token')) {
+    return `request.headers.Authorization: "Bearer {{${candidateName}}}"`;
+  }
+
+  if (normalized.endsWith('id') || normalized.endsWith('uuid')) {
+    return `request.pathParams.${candidateName}: "{{${candidateName}}}"`;
+  }
+
+  return undefined;
 }
 
 function renderCatalogScenarioStepSnippet(

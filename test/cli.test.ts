@@ -455,6 +455,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('이 폴더를 최신화할 때 init --force를 사용하지 마.');
     expect(readme).toContain('출력의 scenario mapping에서 path/query/header/body/extract 후보가 scenario YAML의 어느 위치에 들어가는지 확인해.');
     expect(readme).toContain('body fields의 required/optional, placeholder, env 표시를 보고 필수 값과 비밀 값 처리 방식을 정해.');
+    expect(readme).toContain('response extract candidates의 yaml과 likely next use를 보고 다음 step의 header/pathParams/query/body 참조를 설계해.');
     expect(readme).toContain('출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.');
     expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 scenario에 남아 있으면 `validate`가 실패합니다.');
     expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore, load-tests/.openapi-k6.json은 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.');
@@ -2043,6 +2044,12 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('        - password: string, required, env {{env.PASSWORD}}');
     expect(output).toContain('    response extract candidates:');
     expect(output).toContain('      - accessToken <- $.accessToken (200 application/json)');
+    expect(output).toContain('        yaml:');
+    expect(output).toContain('          extract:');
+    expect(output).toContain('            accessToken:');
+    expect(output).toContain('              from: $.accessToken');
+    expect(output).toContain('        likely next use:');
+    expect(output).toContain('          request.headers.Authorization: "Bearer {{accessToken}}"');
     expect(output).toContain('Suggested scenario step:');
     expect(output).toContain('```yaml');
     expect(output).toContain('- id: login-user');
@@ -2092,6 +2099,8 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('    request.body: application/json; schema example');
     expect(output).toContain('        - sku: string, required, placeholder <sku>');
     expect(output).toContain('        - quantity: integer, required');
+    expect(output).toContain('      - orderId <- $.orderId (201 application/json)');
+    expect(output).toContain('          request.pathParams.orderId: "{{orderId}}"');
   });
 
   it('syncs before printing AI-friendly catalog guidance when --sync is used', async () => {

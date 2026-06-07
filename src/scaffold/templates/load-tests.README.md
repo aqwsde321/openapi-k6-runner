@@ -24,6 +24,7 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
    <검색어>는 실제 API 이름, path, tag에 맞게 바꿔. 필요하면 __CATALOG_PATH__도 열어봐.
    출력의 scenario mapping에서 path/query/header/body/extract 후보가 scenario YAML의 어느 위치에 들어가는지 확인해.
    body fields의 required/optional, placeholder, env 표시를 보고 필수 값과 비밀 값 처리 방식을 정해.
+   response extract candidates의 yaml과 likely next use를 보고 다음 step의 header/pathParams/query/body 참조를 설계해.
    출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.
 6. 내가 원하는 API 흐름을 확인한 뒤 __DIRECTORY__/scenarios/*.yaml을 작성하거나 수정해.
    처음에는 id, api.operationId, request, extract, condition만 채워.
