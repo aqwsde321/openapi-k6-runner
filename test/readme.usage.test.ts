@@ -18,6 +18,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('npx --yes openapi-k6 sync');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어>');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai');
+    expect(readme).toContain('npx --yes openapi-k6 catalog --sync --query <검색어> --ai');
     expect(readme).toContain('# load-tests/scenarios/<scenario-name>.yaml 작성');
     expect(readme).toContain('npx --yes openapi-k6 validate -s <scenario-name>');
     expect(readme).toContain('npx --yes openapi-k6 test -s <scenario-name>');
@@ -45,6 +46,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('## 2. Endpoint 고르기');
     expect(readme).toContain('Catalog: load-tests/openapi/default.catalog.json');
     expect(readme).toContain('AI에게 scenario 초안까지 맡길 때는 `npx --yes openapi-k6 catalog --query <검색어> --ai`를 사용합니다.');
+    expect(readme).toContain('Swagger/OpenAPI 변경을 바로 반영하려면 `npx --yes openapi-k6 catalog --sync --query <검색어> --ai`를 사용합니다.');
     expect(readme).toContain('OpenAPI schema/example이 있으면 request body 초안과 response extract 후보도 함께 보여줍니다.');
     expect(readme).toContain('아래는 검색어 `login`을 사용한 출력 예시입니다.');
     expect(readme).toContain('operationId: loginUser');

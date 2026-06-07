@@ -157,6 +157,7 @@ export interface CatalogOptions {
   method?: string;
   tag?: string;
   all?: boolean;
+  sync?: boolean;
   ai?: boolean;
   snippet?: boolean;
   json?: boolean;
@@ -287,6 +288,7 @@ export interface CatalogResult {
   warnings: string[];
   filters: CatalogFilters;
   moduleName?: string;
+  synced?: SyncResult;
 }
 
 export interface ModuleListResult {
@@ -2047,6 +2049,13 @@ export async function runCatalogCommand(
   context: CliContext = {},
 ): Promise<CatalogResult> {
   const cwd = resolveCwd(context);
+
+  const synced = options.sync === true
+    ? await runSyncCommand({
+        config: options.config,
+        module: options.module,
+      }, context)
+    : undefined;
   const config = await loadOptionalConfig(cwd, options.config, true);
   const moduleConfig = selectConfigModule(config, options.module);
   const moduleName = moduleConfig?.name ?? '<none>';
@@ -2084,6 +2093,7 @@ export async function runCatalogCommand(
     warnings: shouldList ? findDuplicateOperationWarnings(operations) : [],
     filters,
     ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
+    ...(synced === undefined ? {} : { synced }),
   };
 }
 
@@ -5079,14 +5089,18 @@ function writeCatalogOutput(
   }
 
   if (options.ai === true) {
+    writeCatalogSyncNotice(stdout, result, cwd, false);
     writeCatalogAiGuide(stdout, result, cwd);
     return;
   }
 
   if (options.snippet === true) {
+    writeCatalogSyncNotice(stdout, result, cwd, true);
     writeCatalogSnippets(stdout, result, cwd);
     return;
   }
+
+  writeCatalogSyncNotice(stdout, result, cwd, false);
 
   if (shouldListCatalogOperations(result.filters)) {
     writeCatalogOperations(stdout, result, cwd);
@@ -5094,6 +5108,23 @@ function writeCatalogOutput(
   }
 
   writeCatalogSummary(stdout, result, cwd);
+}
+
+function writeCatalogSyncNotice(
+  stdout: WritableLike,
+  result: CatalogResult,
+  cwd: string,
+  asComment: boolean,
+): void {
+  if (result.synced === undefined) {
+    return;
+  }
+
+  const prefix = asComment ? '# ' : '';
+
+  writeLine(stdout, `${prefix}Synced ${formatDisplayPath(cwd, result.synced.snapshotPath)}`);
+  writeLine(stdout, `${prefix}Catalog ${formatDisplayPath(cwd, result.synced.catalogPath)} (${result.synced.operationCount} operations)`);
+  writeLine(stdout, '');
 }
 
 function writeCatalogAiGuide(stdout: WritableLike, result: CatalogResult, cwd: string): void {
@@ -5434,6 +5465,7 @@ function formatCatalogJson(result: CatalogResult): Record<string, unknown> {
     filters: result.filters,
     tagCounts: result.tagCounts,
     warnings: result.warnings,
+    ...(result.synced === undefined ? {} : { synced: result.synced }),
     operations: result.operations,
   };
 }
@@ -5855,6 +5887,7 @@ export function createProgram(context: CliContext = {}): Command {
     .option('--method <method>', 'Filter by HTTP method')
     .option('--tag <tag>', 'Filter by exact tag')
     .option('--all', 'List all operations instead of only the summary')
+    .option('--sync', 'Run sync before reading the catalog')
     .option('--ai', 'Print AI-friendly scenario authoring guidance')
     .option('--snippet', 'Print scenario YAML step snippets')
     .option('--json', 'Print JSON output')

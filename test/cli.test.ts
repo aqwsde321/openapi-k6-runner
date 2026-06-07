@@ -399,6 +399,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 sync');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어>');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai');
+    expect(readme).toContain('npx --yes openapi-k6 catalog --sync --query <검색어> --ai');
+    expect(readme).toContain('Swagger/OpenAPI 변경을 바로 반영하려면 `npx --yes openapi-k6 catalog --sync --query <검색어> --ai`를 사용합니다.');
     expect(readme).toContain('OpenAPI schema/example이 있으면 request body 초안과 response extract 후보도 함께 보여줍니다.');
     expect(readme).toContain('npx --yes openapi-k6 validate -s <name>');
     expect(readme).toContain('npx --yes openapi-k6 test -s <name>');
@@ -2043,6 +2045,54 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('  #     from: $.accessToken');
     expect(output).toContain('Keep secrets in load-tests/.env');
     expect(output).not.toContain('createOrder');
+  });
+
+  it('syncs before printing AI-friendly catalog guidance when --sync is used', async () => {
+    await writeGenerateFixtures(workspace);
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: ../openapi.yaml',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    await writeCatalog('openapi/app.catalog.json', [
+      {
+        method: 'GET',
+        path: '/stale',
+        operationId: 'staleEndpoint',
+        tags: ['stale'],
+        parameters: [],
+        hasRequestBody: false,
+      },
+    ]);
+    const stdout = createCapture();
+
+    await runCli(
+      ['catalog', '--sync', '--query', 'health', '--ai'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const output = stdout.output();
+    const catalog = JSON.parse(
+      await readFile(path.join(workspace, 'load-tests/openapi/app.catalog.json'), 'utf8'),
+    ) as { operations: Array<Record<string, unknown>> };
+
+    expect(output).toContain('Synced load-tests/openapi/app.openapi.json');
+    expect(output).toContain('Catalog load-tests/openapi/app.catalog.json (1 operations)');
+    expect(output).toContain('AI scenario authoring guide');
+    expect(output).toContain('Query: health');
+    expect(output).toContain('operationId: getHealth');
+    expect(output).not.toContain('staleEndpoint');
+    expect(catalog.operations).toEqual([
+      expect.objectContaining({
+        method: 'GET',
+        path: '/health',
+        operationId: 'getHealth',
+      }),
+    ]);
   });
 
   it('prints catalog scenario snippets with request placeholders', async () => {

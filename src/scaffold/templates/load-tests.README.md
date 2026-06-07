@@ -107,6 +107,7 @@ __CATALOG_SEARCH_COMMAND__
 
 `catalog` 출력에서는 주로 `operationId`, `body`, `parameters`를 봅니다.
 AI에게 scenario 초안까지 맡길 때는 아래 명령을 사용합니다.
+Swagger/OpenAPI 변경을 바로 반영하려면 `__CATALOG_SYNC_AI_COMMAND__`를 사용합니다.
 OpenAPI schema/example이 있으면 request body 초안과 response extract 후보도 함께 보여줍니다.
 
 ```bash
@@ -228,6 +229,7 @@ include와 fixture 경로는 실행하는 scenario 파일 기준 상대 경로�
 | OpenAPI snapshot/catalog 갱신 | `__SYNC_COMMAND__` |
 | endpoint 검색 | `__CATALOG_SEARCH_COMMAND__` |
 | AI용 scenario 초안 | `__CATALOG_AI_COMMAND__` |
+| 최신 sync 후 AI용 scenario 초안 | `__CATALOG_SYNC_AI_COMMAND__` |
 | 정적 검증 | `__VALIDATE_NAME_COMMAND__` |
 | 실행 검증 | `__TEST_NAME_COMMAND__` |
 | k6 스크립트 생성 | `__GENERATE_NAME_COMMAND__` |
