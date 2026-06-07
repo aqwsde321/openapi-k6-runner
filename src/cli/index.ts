@@ -5142,8 +5142,10 @@ function writeCatalogAiGuide(stdout: WritableLike, result: CatalogResult, cwd: s
   writeLine(stdout, '');
   writeLine(stdout, 'Rules for AI agents:');
   writeLine(stdout, '  - Use operationId first. If it is missing or ambiguous, use api.method and api.path.');
+  writeLine(stdout, '  - Map path/query/header parameters to request.pathParams/request.query/request.headers.');
   writeLine(stdout, '  - Keep secrets in load-tests/.env and reference them as {{env.NAME}}.');
   writeLine(stdout, '  - Fill request body values from the OpenAPI schema or real API contract before test.');
+  writeLine(stdout, '  - Replace every <...> placeholder before validate/test.');
   writeLine(stdout, '  - Add extract only after checking the real response JSON path.');
 
   if (result.operations.length > 1) {
@@ -5176,6 +5178,8 @@ function writeCatalogAiGuide(stdout: WritableLike, result: CatalogResult, cwd: s
     if (operation.summary !== undefined) {
       writeLine(stdout, `  summary: ${operation.summary}`);
     }
+
+    writeCatalogAiScenarioMapping(stdout, operation);
 
     writeLine(stdout, '');
     writeLine(stdout, 'Suggested scenario step:');
@@ -5239,6 +5243,94 @@ function writeCatalogFilterSummary(stdout: WritableLike, result: CatalogResult):
       writeLine(stdout, `  ${warning}`);
     }
   }
+}
+
+function writeCatalogAiScenarioMapping(stdout: WritableLike, operation: ApiCatalogOperation): void {
+  const parametersByRequestKey = [
+    ['pathParams', readCatalogParametersByLocation(operation.parameters, 'path')],
+    ['query', readCatalogParametersByLocation(operation.parameters, 'query')],
+    ['headers', readCatalogParametersByLocation(operation.parameters, 'header')],
+  ] as const;
+  const extractCandidates = operation.responseExtractCandidates ?? [];
+  const shouldPrint = operation.hasRequestBody ||
+    extractCandidates.length > 0 ||
+    parametersByRequestKey.some(([, parameters]) => parameters.length > 0);
+
+  if (!shouldPrint) {
+    return;
+  }
+
+  writeLine(stdout, '  scenario mapping:');
+
+  for (const [requestKey, parameters] of parametersByRequestKey) {
+    if (parameters.length === 0) {
+      continue;
+    }
+
+    writeLine(stdout, `    request.${requestKey}:`);
+
+    for (const parameter of parameters) {
+      const requiredLabel = parameter.required ? 'required' : 'optional';
+      writeLine(stdout, `      - ${parameter.name} (${requiredLabel})`);
+    }
+  }
+
+  if (operation.hasRequestBody) {
+    writeLine(stdout, `    ${formatCatalogAiBodyMapping(operation)}`);
+  }
+
+  if (extractCandidates.length > 0) {
+    writeLine(stdout, '    response extract candidates:');
+
+    for (const candidate of extractCandidates) {
+      writeLine(
+        stdout,
+        `      - ${candidate.name} <- ${candidate.from} (${formatCatalogExtractCandidateSource(candidate)})`,
+      );
+    }
+  }
+}
+
+function readCatalogParametersByLocation(
+  parameters: unknown[],
+  location: string,
+): CatalogParameterHint[] {
+  return readCatalogParameterHints(parameters)
+    .filter((parameter) => parameter.location.toLowerCase() === location);
+}
+
+function formatCatalogAiBodyMapping(operation: ApiCatalogOperation): string {
+  if (isMultipartCatalogOperation(operation)) {
+    const contentTypes = operation.requestBodyContentTypes?.join(', ') ?? 'multipart/form-data';
+    return `request.multipart: ${contentTypes}`;
+  }
+
+  if (operation.requestBodyHint !== undefined) {
+    const fields = formatCatalogBodyHintFields(operation.requestBodyHint.example);
+    const fieldSuffix = fields.length === 0 ? '' : `; fields: ${fields.join(', ')}`;
+
+    return [
+      `request.body: ${operation.requestBodyHint.contentType}`,
+      `${operation.requestBodyHint.source} example${fieldSuffix}`,
+    ].join('; ');
+  }
+
+  return `request.body: ${formatCatalogBody(operation)}`;
+}
+
+function formatCatalogBodyHintFields(value: unknown): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return [];
+  }
+
+  return Object.keys(value as Record<string, unknown>);
+}
+
+function formatCatalogExtractCandidateSource(candidate: ApiCatalogExtractCandidate): string {
+  return [
+    candidate.status,
+    candidate.contentType,
+  ].filter((value) => value !== undefined).join(' ');
 }
 
 function renderCatalogScenarioStepSnippet(
