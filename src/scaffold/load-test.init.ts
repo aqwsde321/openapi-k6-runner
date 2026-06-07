@@ -604,6 +604,7 @@ function renderReadme(
 
   const syncCommand = cliCommand + ' sync' + configOption + moduleOption;
   const catalogSearchCommand = cliCommand + ' catalog' + configOption + moduleOption + ' --query <검색어>';
+  const catalogAiCommand = catalogSearchCommand + ' --ai';
   const uiCommand = cliCommand + ' ui' + configOption + moduleOption;
   const updateCommand = cliCommand + ' update' + configOption + moduleOption;
   const validateNameCommand = usesDefaultDirectory
@@ -630,6 +631,7 @@ function renderReadme(
 
   return renderReadmeTemplate({
     CATALOG_PATH: catalogPath,
+    CATALOG_AI_COMMAND: catalogAiCommand,
     CATALOG_SEARCH_COMMAND: catalogSearchCommand,
     CLI_COMMAND: cliCommand,
     CONFIG_PATH: configPath,

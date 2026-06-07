@@ -398,6 +398,7 @@ describe('openapi-k6 CLI', () => {
 
     expect(readme).toContain('npx --yes openapi-k6 sync');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어>');
+    expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai');
     expect(readme).toContain('npx --yes openapi-k6 validate -s <name>');
     expect(readme).toContain('npx --yes openapi-k6 test -s <name>');
     expect(readme).toContain('npx --yes openapi-k6 run -s <name> --log -- --vus 1 --iterations 1');
@@ -449,6 +450,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('validate와 test가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 마.');
     expect(readme).toContain('CLI가 Scaffold update available을 표시하면 npx --yes openapi-k6 update를 실행하고 이 README를 다시 읽어.');
     expect(readme).toContain('이 폴더를 최신화할 때 init --force를 사용하지 마.');
+    expect(readme).toContain('출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워.');
     expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore, load-tests/.openapi-k6.json은 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.');
     expect(readme).toContain('load-tests/openapi/pharma.openapi.json, load-tests/openapi/pharma.catalog.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.');
 
@@ -469,7 +471,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('사용자에게 보이는 설명은 한국어로 유지합니다.');
     expect(readme).toContain('일반 작업에서 수정하는 파일은 `load-tests/config.yaml`, `load-tests/.env`, `load-tests/scenarios/*.yaml`로 제한합니다.');
     expect(readme).toContain('CLI가 `Scaffold update available`을 표시하면 `npx --yes openapi-k6 update`를 실행하고 이 README를 다시 읽습니다.');
-    expect(readme).toContain('endpoint는 `npx --yes openapi-k6 catalog --query <검색어>` 또는 `load-tests/openapi/pharma.catalog.json`에서 고릅니다.');
+    expect(readme).toContain('endpoint와 step 초안은 `npx --yes openapi-k6 catalog --query <검색어> --ai`에서 확인하고, 필요하면 `load-tests/openapi/pharma.catalog.json`도 엽니다.');
     expect(readme).not.toContain('## AI Work Guide');
     expect(readme).not.toContain('This section is for AI agents.');
     expect(readme).not.toContain('### Scenario DSL Reference');
@@ -1928,6 +1930,79 @@ describe('openapi-k6 CLI', () => {
     expect(moduleOutput.output()).toContain('operationId: searchVendors');
     expect(moduleOutput.output()).toContain('parameters: query keyword');
     expect(moduleOutput.output()).not.toContain('createOrder');
+  });
+
+  it('prints AI-friendly catalog guidance with scenario step snippets', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    await writeCatalog('openapi/app.catalog.json', createCatalogOperations());
+    const stdout = createCapture();
+
+    await runCli(
+      ['catalog', '--query', 'login', '--ai'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const output = stdout.output();
+
+    expect(output).toContain('AI scenario authoring guide');
+    expect(output).toContain('Catalog: load-tests/openapi/app.catalog.json');
+    expect(output).toContain('Module: app');
+    expect(output).toContain('Query: login');
+    expect(output).toContain('Operations: 1');
+    expect(output).toContain('Rules for AI agents:');
+    expect(output).toContain('Operation 1: loginUser');
+    expect(output).toContain('  method: POST');
+    expect(output).toContain('  path: /auth/login');
+    expect(output).toContain('  body: yes (application/json)');
+    expect(output).toContain('Suggested scenario step:');
+    expect(output).toContain('```yaml');
+    expect(output).toContain('- id: login-user');
+    expect(output).toContain('    module: app');
+    expect(output).toContain('    operationId: loginUser');
+    expect(output).toContain('    body: {}');
+    expect(output).toContain('  condition: status < 300');
+    expect(output).toContain('Keep secrets in load-tests/.env');
+    expect(output).not.toContain('createOrder');
+  });
+
+  it('prints catalog scenario snippets with request placeholders', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    await writeCatalog('openapi/app.catalog.json', createCatalogOperations());
+    const stdout = createCapture();
+
+    await runCli(
+      ['catalog', '--method', 'POST', '--tag', 'orders', '--snippet'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const output = stdout.output();
+
+    expect(output).toContain('# Catalog: load-tests/openapi/app.catalog.json');
+    expect(output).toContain('# Module: app');
+    expect(output).toContain('# POST /orders');
+    expect(output).toContain('- id: create-order');
+    expect(output).toContain('    module: app');
+    expect(output).toContain('    operationId: createOrder');
+    expect(output).toContain('  request:');
+    expect(output).toContain('    headers:');
+    expect(output).toContain('      "Idempotency-Key": "<Idempotency-Key>" # optional');
+    expect(output).toContain('    body: {}');
+    expect(output).toContain('  condition: status < 300');
+    expect(output).not.toContain('loginUser');
   });
 
   it('prints filtered catalog operations as JSON', async () => {

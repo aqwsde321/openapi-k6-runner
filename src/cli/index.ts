@@ -150,6 +150,8 @@ export interface CatalogOptions {
   method?: string;
   tag?: string;
   all?: boolean;
+  ai?: boolean;
+  snippet?: boolean;
   json?: boolean;
 }
 
@@ -2056,7 +2058,9 @@ export async function runCatalogCommand(
     options,
   });
   const filters = normalizeCatalogFilters(options);
-  const shouldList = shouldListCatalogOperations(filters);
+  const shouldList = shouldListCatalogOperations(filters) ||
+    options.ai === true ||
+    options.snippet === true;
   const operations = shouldList
     ? sortCatalogOperations(filterCatalogOperations(catalog.operations, filters))
     : [];
@@ -4865,7 +4869,17 @@ function catalogSearchValues(operation: ApiCatalogOperation): string[] {
   ].flatMap((value) => value === undefined ? [] : [value]);
 }
 
+interface CatalogParameterHint {
+  location: string;
+  name: string;
+  required: boolean;
+}
+
 function readCatalogParameterLabels(parameters: unknown[]): string[] {
+  return readCatalogParameterHints(parameters).map(({ location, name }) => `${location} ${name}`);
+}
+
+function readCatalogParameterHints(parameters: unknown[]): CatalogParameterHint[] {
   return parameters.flatMap((parameter) => {
     if (!parameter || typeof parameter !== 'object' || Array.isArray(parameter)) {
       return [];
@@ -4879,7 +4893,11 @@ function readCatalogParameterLabels(parameters: unknown[]): string[] {
       return [];
     }
 
-    return [`${location ?? 'param'} ${name ?? '<unnamed>'}`];
+    return [{
+      location: location ?? 'param',
+      name: name ?? '<unnamed>',
+      required: record.required === true,
+    }];
   });
 }
 
@@ -4929,10 +4947,20 @@ function writeCatalogOutput(
   stdout: WritableLike,
   result: CatalogResult,
   cwd: string,
-  json: boolean | undefined,
+  options: Pick<CatalogOptions, 'ai' | 'json' | 'snippet'>,
 ): void {
-  if (json === true) {
+  if (options.json === true) {
     writeLine(stdout, JSON.stringify(formatCatalogJson(result), null, 2));
+    return;
+  }
+
+  if (options.ai === true) {
+    writeCatalogAiGuide(stdout, result, cwd);
+    return;
+  }
+
+  if (options.snippet === true) {
+    writeCatalogSnippets(stdout, result, cwd);
     return;
   }
 
@@ -4942,6 +4970,218 @@ function writeCatalogOutput(
   }
 
   writeCatalogSummary(stdout, result, cwd);
+}
+
+function writeCatalogAiGuide(stdout: WritableLike, result: CatalogResult, cwd: string): void {
+  writeLine(stdout, 'AI scenario authoring guide');
+  writeLine(stdout, `Catalog: ${formatDisplayPath(cwd, result.catalogPath)}`);
+  writeCatalogFilterSummary(stdout, result);
+
+  if (result.operations.length === 0) {
+    writeLine(stdout, '');
+    writeLine(stdout, 'No operations matched.');
+    writeLine(stdout, 'Try a broader --query, --tag, --method, or use --all.');
+    return;
+  }
+
+  writeLine(stdout, '');
+  writeLine(stdout, 'Rules for AI agents:');
+  writeLine(stdout, '  - Use operationId first. If it is missing or ambiguous, use api.method and api.path.');
+  writeLine(stdout, '  - Keep secrets in load-tests/.env and reference them as {{env.NAME}}.');
+  writeLine(stdout, '  - Fill request body values from the OpenAPI schema or real API contract before test.');
+  writeLine(stdout, '  - Add extract only after checking the real response JSON path.');
+
+  for (const [index, operation] of result.operations.entries()) {
+    writeLine(stdout, '');
+    writeLine(stdout, `Operation ${index + 1}: ${operation.operationId ?? `${operation.method} ${operation.path}`}`);
+    writeLine(stdout, `  method: ${operation.method.toUpperCase()}`);
+    writeLine(stdout, `  path: ${operation.path}`);
+
+    if (operation.operationId !== undefined) {
+      writeLine(stdout, `  operationId: ${operation.operationId}`);
+    }
+
+    writeLine(stdout, `  tags: ${operation.tags.length === 0 ? '-' : operation.tags.join(', ')}`);
+    writeLine(stdout, `  body: ${formatCatalogBody(operation)}`);
+
+    const parameters = readCatalogParameterLabels(operation.parameters);
+
+    if (parameters.length > 0) {
+      writeLine(stdout, `  parameters: ${parameters.join(', ')}`);
+    }
+
+    if (operation.summary !== undefined) {
+      writeLine(stdout, `  summary: ${operation.summary}`);
+    }
+
+    writeLine(stdout, '');
+    writeLine(stdout, 'Suggested scenario step:');
+    writeLine(stdout, '```yaml');
+
+    for (const line of renderCatalogScenarioStepSnippet(operation, result.moduleName)) {
+      writeLine(stdout, line);
+    }
+
+    writeLine(stdout, '```');
+  }
+}
+
+function writeCatalogSnippets(stdout: WritableLike, result: CatalogResult, cwd: string): void {
+  writeLine(stdout, `# Catalog: ${formatDisplayPath(cwd, result.catalogPath)}`);
+
+  if (result.moduleName !== undefined) {
+    writeLine(stdout, `# Module: ${result.moduleName}`);
+  }
+
+  if (result.operations.length === 0) {
+    writeLine(stdout, '# No operations matched.');
+    return;
+  }
+
+  for (const [index, operation] of result.operations.entries()) {
+    if (index > 0) {
+      writeLine(stdout, '');
+    }
+
+    for (const line of renderCatalogScenarioStepSnippet(operation, result.moduleName)) {
+      writeLine(stdout, line);
+    }
+  }
+}
+
+function writeCatalogFilterSummary(stdout: WritableLike, result: CatalogResult): void {
+  if (result.moduleName !== undefined) {
+    writeLine(stdout, `Module: ${result.moduleName}`);
+  }
+
+  if (result.filters.query !== undefined) {
+    writeLine(stdout, `Query: ${result.filters.query}`);
+  }
+
+  if (result.filters.method !== undefined) {
+    writeLine(stdout, `Method: ${result.filters.method}`);
+  }
+
+  if (result.filters.tag !== undefined) {
+    writeLine(stdout, `Tag: ${result.filters.tag}`);
+  }
+
+  writeLine(stdout, `Operations: ${result.operations.length}`);
+
+  if (result.warnings.length > 0) {
+    writeLine(stdout, '');
+    writeLine(stdout, 'Warnings:');
+
+    for (const warning of result.warnings) {
+      writeLine(stdout, `  ${warning}`);
+    }
+  }
+}
+
+function renderCatalogScenarioStepSnippet(
+  operation: ApiCatalogOperation,
+  moduleName: string | undefined,
+): string[] {
+  const lines = [
+    `# ${operation.method.toUpperCase()} ${operation.path}`,
+    `- id: ${formatYamlPlainValue(formatCatalogScenarioStepId(operation))}`,
+    '  api:',
+  ];
+
+  if (moduleName !== undefined) {
+    lines.push(`    module: ${formatYamlPlainValue(moduleName)}`);
+  }
+
+  if (operation.operationId !== undefined) {
+    lines.push(`    operationId: ${formatYamlPlainValue(operation.operationId)}`);
+  } else {
+    lines.push(`    method: ${formatYamlPlainValue(operation.method.toUpperCase())}`);
+    lines.push(`    path: ${formatYamlString(operation.path)}`);
+  }
+
+  const requestLines = renderCatalogRequestSnippet(operation);
+
+  if (requestLines.length > 0) {
+    lines.push('  request:');
+    lines.push(...requestLines.map((line) => `    ${line}`));
+  }
+
+  lines.push('  condition: status < 300');
+
+  return lines;
+}
+
+function renderCatalogRequestSnippet(operation: ApiCatalogOperation): string[] {
+  const lines: string[] = [];
+
+  appendCatalogParameterGroup(lines, operation, 'pathParams', 'path');
+  appendCatalogParameterGroup(lines, operation, 'query', 'query');
+  appendCatalogParameterGroup(lines, operation, 'headers', 'header');
+
+  if (operation.hasRequestBody) {
+    if (isMultipartCatalogOperation(operation)) {
+      lines.push('multipart:');
+      lines.push('  fields: {}');
+      lines.push('  files: {}');
+    } else {
+      lines.push('body: {}');
+    }
+  }
+
+  return lines;
+}
+
+function appendCatalogParameterGroup(
+  lines: string[],
+  operation: ApiCatalogOperation,
+  requestKey: 'headers' | 'pathParams' | 'query',
+  location: string,
+): void {
+  const parameters = readCatalogParameterHints(operation.parameters)
+    .filter((parameter) => parameter.location.toLowerCase() === location);
+
+  if (parameters.length === 0) {
+    return;
+  }
+
+  lines.push(`${requestKey}:`);
+
+  for (const parameter of parameters) {
+    const optionalSuffix = parameter.required ? '' : ' # optional';
+    lines.push(`  ${formatYamlKey(parameter.name)}: ${formatYamlString(`<${parameter.name}>`)}${optionalSuffix}`);
+  }
+}
+
+function formatCatalogScenarioStepId(operation: ApiCatalogOperation): string {
+  const source = operation.operationId ?? `${operation.method}-${operation.path}`;
+  const value = source
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+
+  return value || 'step';
+}
+
+function isMultipartCatalogOperation(operation: ApiCatalogOperation): boolean {
+  return operation.requestBodyContentTypes
+    ?.some((contentType) => contentType.toLowerCase().includes('multipart/form-data')) === true;
+}
+
+function formatYamlKey(value: string): string {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(value)
+    ? value
+    : formatYamlString(value);
+}
+
+function formatYamlPlainValue(value: string): string {
+  return /^[A-Za-z0-9_.-]+$/.test(value)
+    ? value
+    : formatYamlString(value);
+}
+
+function formatYamlString(value: string): string {
+  return JSON.stringify(value);
 }
 
 function formatCatalogJson(result: CatalogResult): Record<string, unknown> {
@@ -5376,10 +5616,12 @@ export function createProgram(context: CliContext = {}): Command {
     .option('--method <method>', 'Filter by HTTP method')
     .option('--tag <tag>', 'Filter by exact tag')
     .option('--all', 'List all operations instead of only the summary')
+    .option('--ai', 'Print AI-friendly scenario authoring guidance')
+    .option('--snippet', 'Print scenario YAML step snippets')
     .option('--json', 'Print JSON output')
     .action(async (options: CatalogOptions) => {
       const result = await runCatalogCommand(options, context);
-      writeCatalogOutput(stdout, result, resolveCwd(context), options.json);
+      writeCatalogOutput(stdout, result, resolveCwd(context), options);
     });
 
   const moduleCommand = program

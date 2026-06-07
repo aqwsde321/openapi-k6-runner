@@ -20,8 +20,9 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
 2. 모든 명령은 백엔드 프로젝트 루트에서 실행해.
 3. __CONFIG_PATH__에 TODO가 남아 있으면 이 백엔드 프로젝트에 맞게 채워.
 4. __SYNC_COMMAND__를 실행해서 OpenAPI snapshot과 catalog를 만들어.
-5. __CATALOG_SEARCH_COMMAND__ 명령으로 테스트할 endpoint 후보를 확인해.
+5. __CATALOG_AI_COMMAND__ 명령으로 테스트할 endpoint 후보와 scenario step 초안을 확인해.
    <검색어>는 실제 API 이름, path, tag에 맞게 바꿔. 필요하면 __CATALOG_PATH__도 열어봐.
+   출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워.
 6. 내가 원하는 API 흐름을 확인한 뒤 __DIRECTORY__/scenarios/*.yaml을 작성하거나 수정해.
    처음에는 id, api.operationId, request, extract, condition만 채워.
    operationId가 없거나 애매하면 api.method와 api.path를 사용해.
@@ -105,6 +106,11 @@ __CATALOG_SEARCH_COMMAND__
 ```
 
 `catalog` 출력에서는 주로 `operationId`, `body`, `parameters`를 봅니다.
+AI에게 scenario 초안까지 맡길 때는 아래 명령을 사용합니다.
+
+```bash
+__CATALOG_AI_COMMAND__
+```
 
 아래는 검색어 `login`을 사용한 출력 예시입니다.
 
@@ -220,6 +226,7 @@ include와 fixture 경로는 실행하는 scenario 파일 기준 상대 경로�
 | --- | --- |
 | OpenAPI snapshot/catalog 갱신 | `__SYNC_COMMAND__` |
 | endpoint 검색 | `__CATALOG_SEARCH_COMMAND__` |
+| AI용 scenario 초안 | `__CATALOG_AI_COMMAND__` |
 | 정적 검증 | `__VALIDATE_NAME_COMMAND__` |
 | 실행 검증 | `__TEST_NAME_COMMAND__` |
 | k6 스크립트 생성 | `__GENERATE_NAME_COMMAND__` |
@@ -442,7 +449,7 @@ rm -rf __DIRECTORY_SHELL_ARG__
 - CLI가 `Scaffold update available`을 표시하면 `__UPDATE_COMMAND__`를 실행하고 이 README를 다시 읽습니다.
 - scaffold 문서나 runner를 바꿔야 하면 openapi-k6-runner의 생성 템플릿을 수정하고 `__UPDATE_COMMAND__`를 의도적으로 실행합니다.
 - `__SNAPSHOT_PATH__`, `__CATALOG_PATH__`, `__DIRECTORY__/generated/*.k6.js`는 직접 수정하지 말고 `sync`/`generate`로 다시 만듭니다.
-- endpoint는 `__CATALOG_SEARCH_COMMAND__` 또는 `__CATALOG_PATH__`에서 고릅니다. `validate`, `test`, `generate`는 catalog가 아니라 OpenAPI snapshot을 읽습니다.
+- endpoint와 step 초안은 `__CATALOG_AI_COMMAND__`에서 확인하고, 필요하면 `__CATALOG_PATH__`도 엽니다. `validate`, `test`, `generate`는 catalog가 아니라 OpenAPI snapshot을 읽습니다.
 - 처음에는 plain step으로 작성하고, 값이나 step이 반복될 때만 `vars`, `fixtures`, `include`를 사용합니다.
 - `operationId`를 우선 사용하고, 없거나 애매하면 `api.method`와 `api.path`를 사용합니다.
 - 여러 OpenAPI module을 한 scenario에서 섞을 때만 `api.module`을 사용합니다.

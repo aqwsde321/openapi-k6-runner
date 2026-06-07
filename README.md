@@ -77,6 +77,7 @@ npx --yes openapi-k6 catalog --query <검색어>
 
 `sync`는 OpenAPI snapshot과 endpoint catalog를 만듭니다.
 `catalog` 출력에서는 주로 `operationId`, `body`, `parameters`를 봅니다.
+AI에게 scenario 초안까지 맡길 때는 `npx --yes openapi-k6 catalog --query <검색어> --ai`를 사용합니다.
 
 아래는 검색어 `login`을 사용한 출력 예시입니다.
 
@@ -352,6 +353,7 @@ k6 옵션은 scenario 이름 뒤에 붙입니다.
 | 작업 공간 생성 | `npx --yes openapi-k6 init` |
 | OpenAPI snapshot/catalog 갱신 | `npx --yes openapi-k6 sync` |
 | endpoint 검색 | `npx --yes openapi-k6 catalog --query <검색어>` |
+| AI용 scenario 초안 | `npx --yes openapi-k6 catalog --query <검색어> --ai` |
 | 정적 검증 | `npx --yes openapi-k6 validate -s <scenario-name>` |
 | 실행 검증 | `npx --yes openapi-k6 test -s <scenario-name>` |
 | k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <scenario-name>` |
@@ -387,7 +389,8 @@ AI coding agent에게는 아래처럼 요청하면 됩니다.
 5. init 또는 update 후 백엔드 프로젝트의 load-tests/README.md를 다시 읽고, 그 문서의 실제 경로와 명령을 기준으로 진행해.
 6. load-tests/config.yaml에 TODO가 남아 있으면 실제 API 정보로 채워.
 7. npx --yes openapi-k6 sync로 OpenAPI snapshot과 catalog를 만들어.
-8. npx --yes openapi-k6 catalog --query <검색어>로 endpoint 후보를 확인해. 필요하면 load-tests/openapi/*.catalog.json도 열어봐.
+8. npx --yes openapi-k6 catalog --query <검색어> --ai로 endpoint 후보와 scenario step 초안을 확인해. 필요하면 load-tests/openapi/*.catalog.json도 열어봐.
+   출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워.
 9. 내가 원하는 API 흐름을 확인한 뒤 load-tests/scenarios/*.yaml을 작성하거나 수정해.
    처음에는 id, api, request, extract, condition만 채워.
    operationId가 없거나 애매하면 api.method와 api.path를 사용해.

@@ -17,6 +17,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('npx --yes openapi-k6 init');
     expect(readme).toContain('npx --yes openapi-k6 sync');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어>');
+    expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai');
     expect(readme).toContain('# load-tests/scenarios/<scenario-name>.yaml 작성');
     expect(readme).toContain('npx --yes openapi-k6 validate -s <scenario-name>');
     expect(readme).toContain('npx --yes openapi-k6 test -s <scenario-name>');
@@ -41,6 +42,7 @@ describe('README usage guide', () => {
 
     expect(readme).toContain('## 2. Endpoint 고르기');
     expect(readme).toContain('Catalog: load-tests/openapi/default.catalog.json');
+    expect(readme).toContain('AI에게 scenario 초안까지 맡길 때는 `npx --yes openapi-k6 catalog --query <검색어> --ai`를 사용합니다.');
     expect(readme).toContain('아래는 검색어 `login`을 사용한 출력 예시입니다.');
     expect(readme).toContain('operationId: loginUser');
     expect(readme).toContain('`operationId`가 없거나 애매하면 `api.method`와 `api.path`를 쓸 수 있습니다.');
@@ -94,6 +96,8 @@ describe('README usage guide', () => {
     expect(readme).toContain('이미 load-tests/README.md가 있으면 init을 다시 실행하지 말고 기존 문서를 먼저 읽어.');
     expect(readme).toContain('CLI가 Scaffold update available을 표시하거나 scaffold README/runner를 최신화해야 하면 npx --yes openapi-k6 update를 실행해.');
     expect(readme).toContain('init 또는 update 후 백엔드 프로젝트의 load-tests/README.md를 다시 읽고, 그 문서의 실제 경로와 명령을 기준으로 진행해.');
+    expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai로 endpoint 후보와 scenario step 초안을 확인해.');
+    expect(readme).toContain('출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워.');
     expect(readme).toContain('operationId가 없거나 애매하면 api.method와 api.path를 사용해.');
     expect(readme).toContain('여러 서버를 이어야 할 때만 module add와 api.module을 사용해.');
     expect(readme).toContain('load-tests/openapi/*.openapi.json, load-tests/openapi/*.catalog.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.');
