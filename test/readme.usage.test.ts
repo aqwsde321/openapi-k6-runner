@@ -104,6 +104,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('init 또는 update 후 백엔드 프로젝트의 load-tests/README.md를 다시 읽고, 그 문서의 실제 경로와 명령을 기준으로 진행해.');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai로 endpoint 후보와 scenario step 초안을 확인해.');
     expect(readme).toContain('출력의 scenario mapping에서 path/query/header/body/extract 후보가 scenario YAML의 어느 위치에 들어가는지 확인해.');
+    expect(readme).toContain('body fields의 required/optional, placeholder, env 표시를 보고 필수 값과 비밀 값 처리 방식을 정해.');
     expect(readme).toContain('출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.');
     expect(readme).toContain('operationId가 없거나 애매하면 api.method와 api.path를 사용해.');
     expect(readme).toContain('여러 서버를 이어야 할 때만 module add와 api.module을 사용해.');

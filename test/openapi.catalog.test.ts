@@ -91,6 +91,25 @@ describe('OpenAPI snapshot and catalog', () => {
               quantity: 0,
               couponCode: '<couponCode>',
             },
+            fields: [
+              {
+                path: 'sku',
+                type: 'string',
+                required: true,
+                placeholder: '<sku>',
+              },
+              {
+                path: 'quantity',
+                type: 'integer',
+                required: true,
+              },
+              {
+                path: 'couponCode',
+                type: 'string',
+                required: false,
+                placeholder: '<couponCode>',
+              },
+            ],
           },
           responseExtractCandidates: [
             {
@@ -144,6 +163,78 @@ describe('OpenAPI snapshot and catalog', () => {
       hasRequestBody: true,
       requestBodyContentTypes: ['application/json'],
     });
+  });
+
+  it('adds shallow nested request body field hints for AI scenario authoring', () => {
+    const catalog = buildOpenApiCatalog({
+      openapi: '3.0.3',
+      info: { title: 'Nested Body API', version: '1.0.0' },
+      paths: {
+        '/profiles': {
+          post: {
+            operationId: 'createProfile',
+            requestBody: {
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['user'],
+                    properties: {
+                      user: {
+                        type: 'object',
+                        required: ['name'],
+                        properties: {
+                          name: { type: 'string' },
+                          addresses: {
+                            type: 'array',
+                            items: {
+                              type: 'object',
+                              required: ['city'],
+                              properties: {
+                                city: { type: 'string' },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            responses: { 201: { description: 'Created' } },
+          },
+        },
+      },
+    }, {
+      generatedAt: '2026-04-26T00:00:00.000Z',
+      source: '<fixture>',
+    });
+
+    expect(catalog.operations[0]?.requestBodyHint?.fields).toEqual([
+      {
+        path: 'user',
+        type: 'object',
+        required: true,
+      },
+      {
+        path: 'user.name',
+        type: 'string',
+        required: true,
+        placeholder: '<name>',
+      },
+      {
+        path: 'user.addresses',
+        type: 'object[]',
+        required: false,
+      },
+      {
+        path: 'user.addresses[].city',
+        type: 'string',
+        required: true,
+        placeholder: '<city>',
+      },
+    ]);
   });
 
   it('syncs an OpenAPI URL into snapshot and catalog files', async () => {

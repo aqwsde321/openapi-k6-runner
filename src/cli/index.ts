@@ -29,6 +29,7 @@ import type {
   ApiCatalog,
   ApiCatalogExtractCandidate,
   ApiCatalogOperation,
+  ApiCatalogRequestBodyFieldHint,
   ApiCatalogRequestBodyHint,
   ApiRegistry,
   Scenario,
@@ -4866,9 +4867,40 @@ function parseCatalogRequestBodyHint(
     contentType: record.contentType,
     source: record.source,
     example: record.example,
+    ...parseCatalogRequestBodyFieldHints(record.fields),
   };
 
   return { requestBodyHint };
+}
+
+function parseCatalogRequestBodyFieldHints(
+  value: unknown,
+): Pick<ApiCatalogRequestBodyHint, 'fields'> | Record<string, never> {
+  if (!Array.isArray(value)) {
+    return {};
+  }
+
+  const fields: ApiCatalogRequestBodyFieldHint[] = value.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return [];
+    }
+
+    const record = item as Record<string, unknown>;
+
+    if (typeof record.path !== 'string') {
+      return [];
+    }
+
+    return [{
+      path: record.path,
+      required: record.required === true,
+      ...(typeof record.type === 'string' ? { type: record.type } : {}),
+      ...(typeof record.placeholder === 'string' ? { placeholder: record.placeholder } : {}),
+      ...(typeof record.env === 'string' ? { env: record.env } : {}),
+    }];
+  });
+
+  return fields.length === 0 ? {} : { fields };
 }
 
 function parseCatalogExtractCandidates(
@@ -5276,7 +5308,9 @@ function writeCatalogAiScenarioMapping(stdout: WritableLike, operation: ApiCatal
   }
 
   if (operation.hasRequestBody) {
-    writeLine(stdout, `    ${formatCatalogAiBodyMapping(operation)}`);
+    for (const line of formatCatalogAiBodyMappingLines(operation)) {
+      writeLine(stdout, `    ${line}`);
+    }
   }
 
   if (extractCandidates.length > 0) {
@@ -5299,23 +5333,46 @@ function readCatalogParametersByLocation(
     .filter((parameter) => parameter.location.toLowerCase() === location);
 }
 
-function formatCatalogAiBodyMapping(operation: ApiCatalogOperation): string {
+function formatCatalogAiBodyMappingLines(operation: ApiCatalogOperation): string[] {
   if (isMultipartCatalogOperation(operation)) {
     const contentTypes = operation.requestBodyContentTypes?.join(', ') ?? 'multipart/form-data';
-    return `request.multipart: ${contentTypes}`;
+    return [`request.multipart: ${contentTypes}`];
   }
 
   if (operation.requestBodyHint !== undefined) {
-    const fields = formatCatalogBodyHintFields(operation.requestBodyHint.example);
-    const fieldSuffix = fields.length === 0 ? '' : `; fields: ${fields.join(', ')}`;
+    const lines = [
+      [
+        `request.body: ${operation.requestBodyHint.contentType}`,
+        `${operation.requestBodyHint.source} example`,
+      ].join('; '),
+    ];
+    const fieldHints = operation.requestBodyHint.fields ?? [];
 
-    return [
-      `request.body: ${operation.requestBodyHint.contentType}`,
-      `${operation.requestBodyHint.source} example${fieldSuffix}`,
-    ].join('; ');
+    if (fieldHints.length > 0) {
+      lines.push('  fields:');
+      lines.push(...fieldHints.map((field) => `    - ${formatCatalogBodyFieldHint(field)}`));
+      return lines;
+    }
+
+    const fields = formatCatalogBodyHintFields(operation.requestBodyHint.example);
+
+    if (fields.length > 0) {
+      lines[0] += `; fields: ${fields.join(', ')}`;
+    }
+
+    return lines;
   }
 
-  return `request.body: ${formatCatalogBody(operation)}`;
+  return [`request.body: ${formatCatalogBody(operation)}`];
+}
+
+function formatCatalogBodyFieldHint(field: ApiCatalogRequestBodyFieldHint): string {
+  return [
+    `${field.path}: ${field.type ?? 'value'}`,
+    field.required ? 'required' : 'optional',
+    ...(field.placeholder === undefined ? [] : [`placeholder ${field.placeholder}`]),
+    ...(field.env === undefined ? [] : [`env ${field.env}`]),
+  ].join(', ');
 }
 
 function formatCatalogBodyHintFields(value: unknown): string[] {

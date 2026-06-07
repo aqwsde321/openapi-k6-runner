@@ -7,6 +7,7 @@ import type {
   ApiCatalog,
   ApiCatalogExtractCandidate,
   ApiCatalogOperation,
+  ApiCatalogRequestBodyFieldHint,
   ApiCatalogRequestBodyHint,
 } from '../core/types.js';
 import { HTTP_METHOD_ORDER, OpenApiParseError } from './openapi.parser.js';
@@ -35,6 +36,8 @@ const CATALOG_HINT_MAX_DEPTH = 4;
 const CATALOG_HINT_MAX_PROPERTIES = 12;
 const CATALOG_HINT_MAX_ARRAY_ITEMS = 2;
 const CATALOG_EXTRACT_MAX_CANDIDATES = 8;
+const CATALOG_FIELD_HINT_MAX_DEPTH = 4;
+const CATALOG_FIELD_HINT_MAX_FIELDS = 16;
 
 const openApiRefOptions: SwaggerParser.Options = {
   resolve: {
@@ -167,11 +170,14 @@ function renderRequestBodyHint(requestBody: unknown): Pick<ApiCatalogOperation, 
   const explicitExample = readMediaTypeExample(selected.mediaType);
 
   if (explicitExample !== undefined) {
+    const example = normalizeCatalogHintValue(explicitExample, 0);
+
     return {
       requestBodyHint: {
         contentType: selected.contentType,
         source: 'example',
-        example: normalizeCatalogHintValue(explicitExample, 0),
+        example,
+        ...renderRequestBodyFieldHints(selected.mediaType.schema, example),
       },
     };
   }
@@ -187,8 +193,19 @@ function renderRequestBodyHint(requestBody: unknown): Pick<ApiCatalogOperation, 
       contentType: selected.contentType,
       source: 'schema',
       example: schemaExample,
+      ...renderRequestBodyFieldHints(selected.mediaType.schema, schemaExample),
     },
   };
+}
+
+function renderRequestBodyFieldHints(
+  schema: unknown,
+  example: unknown,
+): Pick<ApiCatalogRequestBodyHint, 'fields'> | Record<string, never> {
+  const fields = collectRequestBodyFieldHints(schema, example, '', false, 0)
+    .slice(0, CATALOG_FIELD_HINT_MAX_FIELDS);
+
+  return fields.length === 0 ? {} : { fields };
 }
 
 function renderResponseExtractCandidates(
@@ -414,6 +431,221 @@ function createObjectCatalogHint(schema: Record<string, unknown>, depth: number)
   }
 
   return sample;
+}
+
+function collectRequestBodyFieldHints(
+  schema: unknown,
+  example: unknown,
+  pathPrefix: string,
+  required: boolean,
+  depth: number,
+): ApiCatalogRequestBodyFieldHint[] {
+  if (depth >= CATALOG_FIELD_HINT_MAX_DEPTH || !isRecord(schema)) {
+    return [];
+  }
+
+  const compositeHints = collectCompositeRequestBodyFieldHints(schema, example, pathPrefix, required, depth);
+
+  if (compositeHints.length > 0) {
+    return deduplicateRequestBodyFieldHints(compositeHints);
+  }
+
+  const type = readSchemaType(schema);
+
+  if (type === 'array' || schema.items !== undefined) {
+    const itemSchema = schema.items;
+    const itemExample = Array.isArray(example) ? example[0] : undefined;
+    const arrayPath = pathPrefix === '' ? '[]' : `${pathPrefix}[]`;
+
+    return collectRequestBodyFieldHints(itemSchema, itemExample, arrayPath, false, depth + 1);
+  }
+
+  if (type !== 'object' && !isRecord(schema.properties)) {
+    return pathPrefix === ''
+      ? []
+      : [createRequestBodyFieldHint(pathPrefix, schema, example, required)];
+  }
+
+  const properties = isRecord(schema.properties) ? schema.properties : {};
+  const requiredNames = new Set(readStringArray(schema.required));
+  const exampleObject = isRecord(example) ? example : {};
+  const propertyNames = Object.keys(properties).slice(0, CATALOG_HINT_MAX_PROPERTIES);
+  const hints: ApiCatalogRequestBodyFieldHint[] = [];
+
+  for (const propertyName of propertyNames) {
+    const propertySchema = properties[propertyName];
+    const propertyPath = pathPrefix === '' ? propertyName : `${pathPrefix}.${propertyName}`;
+    const propertyExample = exampleObject[propertyName];
+    const propertyRequired = requiredNames.has(propertyName);
+
+    hints.push(createRequestBodyFieldHint(propertyPath, propertySchema, propertyExample, propertyRequired));
+
+    if (shouldCollectNestedRequestBodyFieldHints(propertySchema)) {
+      hints.push(...collectRequestBodyFieldHints(
+        propertySchema,
+        propertyExample,
+        propertyPath,
+        propertyRequired,
+        depth + 1,
+      ));
+    }
+
+    if (hints.length >= CATALOG_FIELD_HINT_MAX_FIELDS) {
+      break;
+    }
+  }
+
+  return hints.slice(0, CATALOG_FIELD_HINT_MAX_FIELDS);
+}
+
+function shouldCollectNestedRequestBodyFieldHints(schema: unknown): boolean {
+  if (!isRecord(schema)) {
+    return false;
+  }
+
+  const type = readSchemaType(schema);
+
+  if (type === 'object' || isRecord(schema.properties)) {
+    return true;
+  }
+
+  if (type !== 'array' && schema.items === undefined) {
+    return false;
+  }
+
+  const items = schema.items;
+
+  return isRecord(items) &&
+    (readSchemaType(items) === 'object' || isRecord(items.properties));
+}
+
+function collectCompositeRequestBodyFieldHints(
+  schema: Record<string, unknown>,
+  example: unknown,
+  pathPrefix: string,
+  required: boolean,
+  depth: number,
+): ApiCatalogRequestBodyFieldHint[] {
+  const allOfHints = Array.isArray(schema.allOf)
+    ? schema.allOf.flatMap((item) =>
+      collectRequestBodyFieldHints(item, example, pathPrefix, required, depth + 1))
+    : [];
+
+  if (allOfHints.length > 0) {
+    return allOfHints;
+  }
+
+  const oneOfItems = Array.isArray(schema.oneOf)
+    ? schema.oneOf
+    : Array.isArray(schema.anyOf)
+      ? schema.anyOf
+      : [];
+
+  for (const item of oneOfItems) {
+    const hints = collectRequestBodyFieldHints(item, example, pathPrefix, required, depth + 1);
+
+    if (hints.length > 0) {
+      return hints;
+    }
+  }
+
+  return [];
+}
+
+function createRequestBodyFieldHint(
+  fieldPath: string,
+  schema: unknown,
+  example: unknown,
+  required: boolean,
+): ApiCatalogRequestBodyFieldHint {
+  return {
+    path: fieldPath,
+    ...formatRequestBodyFieldType(schema),
+    required,
+    ...classifyRequestBodyExample(example),
+  };
+}
+
+function deduplicateRequestBodyFieldHints(
+  fields: ApiCatalogRequestBodyFieldHint[],
+): ApiCatalogRequestBodyFieldHint[] {
+  const seen = new Set<string>();
+  const result: ApiCatalogRequestBodyFieldHint[] = [];
+
+  for (const field of fields) {
+    if (seen.has(field.path)) {
+      continue;
+    }
+
+    seen.add(field.path);
+    result.push(field);
+  }
+
+  return result;
+}
+
+function formatRequestBodyFieldType(schema: unknown): Pick<ApiCatalogRequestBodyFieldHint, 'type'> | Record<string, never> {
+  if (!isRecord(schema)) {
+    return {};
+  }
+
+  const type = readSchemaType(schema);
+
+  if (type === 'array' || schema.items !== undefined) {
+    return { type: `${formatRequestBodyArrayItemType(schema.items)}[]` };
+  }
+
+  if (type === 'object' || isRecord(schema.properties)) {
+    return { type: 'object' };
+  }
+
+  if (type !== undefined) {
+    return { type };
+  }
+
+  const enumValue = readFirstEnumValue(schema.enum);
+
+  if (enumValue !== undefined) {
+    return { type: typeof enumValue };
+  }
+
+  return {};
+}
+
+function formatRequestBodyArrayItemType(items: unknown): string {
+  if (!isRecord(items)) {
+    return 'value';
+  }
+
+  const type = readSchemaType(items);
+
+  if (type === 'array' || items.items !== undefined) {
+    return `${formatRequestBodyArrayItemType(items.items)}[]`;
+  }
+
+  if (type === 'object' || isRecord(items.properties)) {
+    return 'object';
+  }
+
+  return type ?? 'value';
+}
+
+function classifyRequestBodyExample(
+  example: unknown,
+): Pick<ApiCatalogRequestBodyFieldHint, 'placeholder' | 'env'> | Record<string, never> {
+  if (typeof example !== 'string') {
+    return {};
+  }
+
+  if (/^<[^<>]+>$/.test(example)) {
+    return { placeholder: example };
+  }
+
+  if (/^\{\{env\.[A-Za-z_][A-Za-z0-9_]*\}\}$/.test(example)) {
+    return { env: example };
+  }
+
+  return {};
 }
 
 function createAllOfCatalogHint(value: unknown, propertyName: string, depth: number): unknown {

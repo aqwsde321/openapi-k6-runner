@@ -454,6 +454,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('CLI가 Scaffold update available을 표시하면 npx --yes openapi-k6 update를 실행하고 이 README를 다시 읽어.');
     expect(readme).toContain('이 폴더를 최신화할 때 init --force를 사용하지 마.');
     expect(readme).toContain('출력의 scenario mapping에서 path/query/header/body/extract 후보가 scenario YAML의 어느 위치에 들어가는지 확인해.');
+    expect(readme).toContain('body fields의 required/optional, placeholder, env 표시를 보고 필수 값과 비밀 값 처리 방식을 정해.');
     expect(readme).toContain('출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.');
     expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 scenario에 남아 있으면 `validate`가 실패합니다.');
     expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore, load-tests/.openapi-k6.json은 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.');
@@ -2036,7 +2037,10 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('  path: /auth/login');
     expect(output).toContain('  body: yes (application/json)');
     expect(output).toContain('  scenario mapping:');
-    expect(output).toContain('    request.body: application/json; schema example; fields: loginId, password');
+    expect(output).toContain('    request.body: application/json; schema example');
+    expect(output).toContain('      fields:');
+    expect(output).toContain('        - loginId: string, required, placeholder <loginId>');
+    expect(output).toContain('        - password: string, required, env {{env.PASSWORD}}');
     expect(output).toContain('    response extract candidates:');
     expect(output).toContain('      - accessToken <- $.accessToken (200 application/json)');
     expect(output).toContain('Suggested scenario step:');
@@ -2085,7 +2089,9 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('      - orderId (required)');
     expect(output).toContain('    request.headers:');
     expect(output).toContain('      - Idempotency-Key (optional)');
-    expect(output).toContain('    request.body: application/json; schema example; fields: sku, quantity');
+    expect(output).toContain('    request.body: application/json; schema example');
+    expect(output).toContain('        - sku: string, required, placeholder <sku>');
+    expect(output).toContain('        - quantity: integer, required');
   });
 
   it('syncs before printing AI-friendly catalog guidance when --sync is used', async () => {
@@ -4591,6 +4597,19 @@ describe('openapi-k6 CLI', () => {
             sku: '<sku>',
             quantity: 0,
           },
+          fields: [
+            {
+              path: 'sku',
+              type: 'string',
+              required: true,
+              placeholder: '<sku>',
+            },
+            {
+              path: 'quantity',
+              type: 'integer',
+              required: true,
+            },
+          ],
         },
         responseExtractCandidates: [
           {
@@ -4617,6 +4636,20 @@ describe('openapi-k6 CLI', () => {
             loginId: '<loginId>',
             password: '{{env.PASSWORD}}',
           },
+          fields: [
+            {
+              path: 'loginId',
+              type: 'string',
+              required: true,
+              placeholder: '<loginId>',
+            },
+            {
+              path: 'password',
+              type: 'string',
+              required: true,
+              env: '{{env.PASSWORD}}',
+            },
+          ],
         },
         responseExtractCandidates: [
           {

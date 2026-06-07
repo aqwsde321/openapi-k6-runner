@@ -82,6 +82,15 @@ export interface ApiCatalogRequestBodyHint {
   contentType: string;
   source: 'example' | 'schema';
   example: unknown;
+  fields?: ApiCatalogRequestBodyFieldHint[];
+}
+
+export interface ApiCatalogRequestBodyFieldHint {
+  path: string;
+  type?: string;
+  required: boolean;
+  placeholder?: string;
+  env?: string;
 }
 
 export interface ApiCatalogExtractCandidate {
