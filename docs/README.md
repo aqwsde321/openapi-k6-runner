@@ -2,10 +2,6 @@
 
 현재 사용자 사용법은 루트 [README](../README.md)를 기준으로 한다.
 
-## 사용자 가이드
-
-- [고급 기능](./advanced-usage.md): vars/fixtures, include, module, UI, doctor, update, runner 사용법
-
 ## 릴리스
 
 - [변경 이력](../CHANGELOG.md): 공개 npm 배포 버전별 변경 사항

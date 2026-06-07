@@ -11,6 +11,7 @@ describe('README usage guide', () => {
 
     expect(readme).toContain('OpenAPI에서 API 흐름을 **Scenario YAML**로 작성하고');
     expect(readme).toContain('OpenAPI 가져오기 -> scenario 작성 -> validate/test -> run');
+    expect(readme).toContain('직접 실행하려면 [빠른 시작](#빠른-시작)을 보고, AI coding agent에게 맡기려면 [AI에게 맡기기](#ai에게-맡기기)를 복사합니다.');
 
     expect(readme).toContain('## 빠른 시작');
     expect(readme).toContain('npx --yes openapi-k6 init');
@@ -61,10 +62,16 @@ describe('README usage guide', () => {
     expect(readme).toContain('`npx --yes openapi-k6 module add auth --base-url <url> --sync`');
     expect(readme).toContain('CLI가 `Scaffold update available`을 표시하면 `npx --yes openapi-k6 update`');
     expect(readme).toContain('include와 fixture 경로는 실행하는 scenario 파일 기준 상대 경로이며');
-    expect(readme).toContain('아래 기능은 [고급 기능](docs/advanced-usage.md)에서 예시를 봅니다.');
-    expect(readme).toContain('`vars`/`fixtures`와 CLI override');
-    expect(readme).toContain('여러 서버를 연결하는 module');
-    expect(readme).toContain('[고급 기능](docs/advanced-usage.md)');
+    expect(readme).toContain('<summary>고급 기능 예시 보기</summary>');
+    expect(readme).toContain('### 테스트 데이터 재사용');
+    expect(readme).toContain('우선순위는 `fixtures:` < `vars:` < `--var-file` < `--var`입니다.');
+    expect(readme).toContain('### 공통 step include');
+    expect(readme).toContain('include 파일에는 `vars:`나 `fixtures:`를 두지 않습니다.');
+    expect(readme).toContain('### 여러 서버 연결');
+    expect(readme).toContain('npx --yes openapi-k6 module add auth --base-url https://auth-api.example.com --sync');
+    expect(readme).toContain('### UI, doctor, update');
+    expect(readme).toContain('### generate와 runner');
+    expect(readme).toContain('### 제약');
 
     expect(readme).toContain('## 파일 규칙');
     expect(readme).toContain('`load-tests/config.yaml`');
@@ -80,7 +87,8 @@ describe('README usage guide', () => {
     expect(readme).toContain('Swagger/OpenAPI 2.0 문서는 지원하지 않습니다.');
 
     expect(readme).toContain('## AI에게 맡기기');
-    expect(readme).toContain('먼저 이 openapi-k6 루트 README와 docs/advanced-usage.md를 읽어.');
+    expect(readme).toContain('먼저 이 openapi-k6 루트 README 전체를 읽어.');
+    expect(readme).toContain('접힌 고급 기능 예시도 읽고 진행해.');
     expect(readme).toContain('모든 명령은 적용할 백엔드 프로젝트 루트에서 실행해.');
     expect(readme).toContain('백엔드 프로젝트에 load-tests/README.md가 없으면 npx --yes openapi-k6 init을 실행해.');
     expect(readme).toContain('이미 load-tests/README.md가 있으면 init을 다시 실행하지 말고 기존 문서를 먼저 읽어.');
@@ -95,30 +103,21 @@ describe('README usage guide', () => {
     expect(readme.indexOf('## 4. 검증과 실행')).toBeLessThan(readme.indexOf('## 필요할 때만'));
     expect(readme.indexOf('## 필요할 때만')).toBeLessThan(readme.indexOf('## 파일 규칙'));
     expect(readme.indexOf('## 명령 모음')).toBeLessThan(readme.indexOf('## 지원 범위'));
+    expect(readme.indexOf('<summary>고급 기능 예시 보기</summary>')).toBeGreaterThan(readme.indexOf('## 필요할 때만'));
+    expect(readme.indexOf('<summary>고급 기능 예시 보기</summary>')).toBeLessThan(readme.indexOf('## 파일 규칙'));
 
     expect(readme).not.toContain('## 진행 방식 선택');
     expect(readme).not.toContain('### 4-4. 선택: 데이터와 공통 step');
+    expect(readme).not.toContain('docs/advanced-usage.md');
     expect(readme).not.toContain('npx --yes openapi-k6 run -s smoke --log -- --vus 1 --iterations 1');
   });
 
-  it('keeps advanced usage details outside the root README', async () => {
+  it('keeps the docs index focused on secondary documents', async () => {
     const docsReadme = await readFile(path.join(repoRoot, 'docs/README.md'), 'utf8');
-    const advanced = await readFile(path.join(repoRoot, 'docs/advanced-usage.md'), 'utf8');
 
-    expect(docsReadme).toContain('[고급 기능](./advanced-usage.md)');
-
-    expect(advanced).toContain('# 고급 기능');
-    expect(advanced).toContain('## 테스트 데이터 재사용');
-    expect(advanced).toContain('우선순위는 `fixtures:` < `vars:` < `--var-file` < `--var`입니다.');
-    expect(advanced).toContain('## 공통 step include');
-    expect(advanced).toContain('include 파일에는 `vars:`나 `fixtures:`를 두지 않습니다.');
-    expect(advanced).toContain('## 여러 서버 연결');
-    expect(advanced).toContain('npx --yes openapi-k6 module add auth --base-url https://auth-api.example.com --sync');
-    expect(advanced).toContain('## UI, doctor, update');
-    expect(advanced).toContain('CLI가 `Scaffold update available`을 표시하면 안내된 `update` 명령을 실행합니다.');
-    expect(advanced).toContain('초기 scaffold를 의도적으로 다시 만들 때만 `init --force`를 사용합니다.');
-    expect(advanced).toContain('## generate와 runner');
-    expect(advanced).toContain('## 제약');
-    expect(advanced).toContain('비밀값은 scenario YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조합니다.');
+    expect(docsReadme).toContain('현재 사용자 사용법은 루트 [README](../README.md)를 기준으로 한다.');
+    expect(docsReadme).toContain('[변경 이력](../CHANGELOG.md)');
+    expect(docsReadme).toContain('[도구 개발/유지보수](./03-maintainer-notes.md)');
+    expect(docsReadme).not.toContain('advanced-usage.md');
   });
 });

@@ -18,7 +18,6 @@
     "dist",
     "README.md",
     "CHANGELOG.md",
-    "docs/advanced-usage.md",
     "docs/03-maintainer-notes.md",
     "docs/project-review.md",
     ".env.example"
