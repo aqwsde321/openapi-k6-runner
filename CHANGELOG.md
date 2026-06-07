@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-06-08
+
+### Changed
+
+- 별도 `docs/advanced-usage.md`로 분리했던 고급 기능 설명을 루트 README의 접힌 섹션으로 통합했습니다.
+- 루트 README 상단에 빠른 시작과 AI 작업 프롬프트로 바로 이동하는 링크를 추가했습니다.
+
 ## [0.7.1] - 2026-06-08
 
 ### Changed
@@ -170,7 +177,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.5.1...v0.6.0

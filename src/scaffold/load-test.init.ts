@@ -57,7 +57,7 @@ const README_TEMPLATE = readFileSync(
   new URL('./templates/load-tests.README.md', import.meta.url),
   'utf8',
 );
-export const CURRENT_SCAFFOLD_VERSION = '0.7.1';
+export const CURRENT_SCAFFOLD_VERSION = '0.7.2';
 export const SCAFFOLD_METADATA_FILENAME = '.openapi-k6.json';
 
 export async function initLoadTests(
