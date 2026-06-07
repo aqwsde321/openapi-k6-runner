@@ -42,9 +42,11 @@ node ./dist/cli/index.js --help
 cd <백엔드 프로젝트 루트>
 node <openapi-k6-runner 저장소 루트>/dist/cli/index.js init
 node <openapi-k6-runner 저장소 루트>/dist/cli/index.js sync
-node <openapi-k6-runner 저장소 루트>/dist/cli/index.js test -s smoke
-node <openapi-k6-runner 저장소 루트>/dist/cli/index.js generate -s smoke
+node <openapi-k6-runner 저장소 루트>/dist/cli/index.js test -s <scenario-name>
+node <openapi-k6-runner 저장소 루트>/dist/cli/index.js generate -s <scenario-name>
 ```
+
+`init`이 만든 기본 scenario를 그대로 확인할 때는 `<scenario-name>`에 `smoke`를 넣습니다.
 
 개발 중 전역 명령처럼 반복해서 쓰고 싶을 때만 link를 사용합니다.
 
@@ -147,9 +149,9 @@ node <openapi-k6-runner 저장소 루트>/dist/cli/index.js init
 # 대화형 init이 baseUrl만 묻고 /v3/api-docs, /api-docs, /openapi.json 등을 자동 탐색한다.
 # 비대화형 실행으로 TODO가 남았다면 load-tests/config.yaml의 baseUrl, modules.default.openapi 값을 설정한다.
 node <openapi-k6-runner 저장소 루트>/dist/cli/index.js sync
-node <openapi-k6-runner 저장소 루트>/dist/cli/index.js test -s smoke
-node <openapi-k6-runner 저장소 루트>/dist/cli/index.js generate -s smoke
-./load-tests/run.sh smoke --log
+node <openapi-k6-runner 저장소 루트>/dist/cli/index.js test -s <scenario-name>
+node <openapi-k6-runner 저장소 루트>/dist/cli/index.js generate -s <scenario-name>
+./load-tests/run.sh <scenario-name> --log
 ```
 
 기존 bootstrap 초기화가 필요할 때만 아래처럼 실행합니다.

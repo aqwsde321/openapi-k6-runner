@@ -3357,6 +3357,7 @@ const UI_HTML = String.raw`<!doctype html>
     .header-meta {
       justify-content: flex-end;
       max-width: 820px;
+      min-width: 0;
     }
     main {
       display: grid;
@@ -3440,7 +3441,12 @@ const UI_HTML = String.raw`<!doctype html>
       border-radius: 8px;
       padding: 10px;
       background: #fff;
+      display: block;
       text-align: left;
+      width: 100%;
+      min-width: 0;
+      white-space: normal;
+      overflow: hidden;
       transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
     }
     .scenario-item:hover { background: var(--hover); }
@@ -3449,8 +3455,37 @@ const UI_HTML = String.raw`<!doctype html>
       background: #f8fdfa;
       box-shadow: inset 3px 0 0 var(--accent);
     }
-    .scenario-name { font-weight: 750; }
-    .scenario-path, .muted { color: var(--muted); font-size: 12px; }
+    .scenario-item-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      align-items: start;
+      gap: 8px;
+    }
+    .scenario-name {
+      display: block;
+      min-width: 0;
+      font-weight: 750;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .scenario-path, .muted {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .scenario-item .scenario-path,
+    .scenario-item .muted {
+      display: block;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .row {
       display: flex;
       align-items: center;
@@ -3507,12 +3542,17 @@ const UI_HTML = String.raw`<!doctype html>
     .pill {
       display: inline-flex;
       align-items: center;
+      min-width: 0;
+      max-width: 100%;
       padding: 3px 8px;
       border-radius: 999px;
       background: var(--panel-2);
       font-size: 12px;
       color: #344054;
       font-weight: 650;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .pill.ok { background: var(--ok-bg); color: var(--ok); }
     .pill.bad { background: var(--bad-bg); color: var(--bad); }
@@ -3535,8 +3575,14 @@ const UI_HTML = String.raw`<!doctype html>
       padding: 10px;
       display: grid;
       gap: 6px;
+      min-width: 0;
     }
-    .step-title { font-weight: 750; }
+    .step-title {
+      min-width: 0;
+      font-weight: 750;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
     .actions {
       display: flex;
       align-items: flex-start;
@@ -3574,12 +3620,18 @@ const UI_HTML = String.raw`<!doctype html>
     .server-grid { display: grid; gap: 8px; }
     .server {
       display: grid;
-      grid-template-columns: 90px 1fr auto;
+      grid-template-columns: minmax(64px, 90px) minmax(0, 1fr) auto;
       gap: 8px;
       align-items: center;
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 9px;
+      min-width: 0;
+    }
+    .server > strong {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .server-lines {
       display: grid;
@@ -3793,7 +3845,7 @@ const UI_HTML = String.raw`<!doctype html>
       els.scenarioList.innerHTML = items.map((scenario) => {
         const status = state.lastRun.get(scenario.id) || (scenario.error ? 'failed' : 'not run');
         return '<button class="scenario-item ' + (state.selected === scenario.id ? 'active' : '') + '" data-id="' + escapeHtml(scenario.id) + '">' +
-          '<div class="row" style="justify-content: space-between;"><span class="scenario-name">' + escapeHtml(scenario.name) + '</span><span class="pill ' + (status === 'passed' ? 'ok' : status === 'failed' ? 'bad' : '') + '">' + escapeHtml(status) + '</span></div>' +
+          '<div class="scenario-item-head"><span class="scenario-name">' + escapeHtml(scenario.name) + '</span><span class="pill ' + (status === 'passed' ? 'ok' : status === 'failed' ? 'bad' : '') + '">' + escapeHtml(status) + '</span></div>' +
           '<div class="scenario-path">' + escapeHtml(scenario.path) + '</div>' +
           '<div class="muted">' + (scenario.stepCount === undefined ? 'parse error' : scenario.stepCount + ' steps') + '</div>' +
           '</button>';
@@ -4426,7 +4478,7 @@ function initNextCommand(
   const parts = ['npx', '--yes', 'openapi-k6', command];
 
   if (command === 'validate' || command === 'test' || command === 'generate') {
-    parts.push('-s', 'smoke');
+    parts.push('-s', '<scenario-name>');
   }
 
   if (path.resolve(configPath) !== defaultConfigPath) {
@@ -4437,7 +4489,7 @@ function initNextCommand(
     parts.push('--module', moduleName);
   }
 
-  return parts.map(shellQuote).join(' ');
+  return parts.map((part) => part === '<scenario-name>' ? part : shellQuote(part)).join(' ');
 }
 
 function writeInitSummary(
@@ -4463,7 +4515,7 @@ function writeInitSummary(
   writeLine(stdout, `  ${initNextCommand('validate', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${initNextCommand('test', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${initNextCommand('generate', result.configPath, moduleName, cwd)}`);
-  writeLine(stdout, `  ${formatRunScriptCommand(cwd, result.runScriptPath)} smoke --log`);
+  writeLine(stdout, `  ${formatRunScriptCommand(cwd, result.runScriptPath)} <scenario-name> --log`);
 }
 
 function writeUpdateSummary(
@@ -4930,7 +4982,7 @@ function writeCatalogSummary(stdout: WritableLike, result: CatalogResult, cwd: s
 
   writeLine(stdout, '');
   writeLine(stdout, 'Use filters:');
-  writeLine(stdout, '  openapi-k6 catalog --query login');
+  writeLine(stdout, '  openapi-k6 catalog --query <query>');
   writeLine(stdout, '  openapi-k6 catalog --tag auth');
   writeLine(stdout, '  openapi-k6 catalog --method POST');
   writeLine(stdout, '  openapi-k6 catalog --all');

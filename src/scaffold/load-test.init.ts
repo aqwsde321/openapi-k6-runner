@@ -438,10 +438,10 @@ function renderRunScript(): string {
     'Usage: $0 [scenario] [run.sh flags] [k6 run options]',
     '',
     'Examples:',
-    '  $0 smoke',
-    '  $0 smoke --vus 1 --iterations 1',
-    '  $0 smoke --log',
-    '  $0 smoke --trace --log --report --duration 10s --vus 1',
+    '  $0 <scenario-name>',
+    '  $0 <scenario-name> --vus 1 --iterations 1',
+    '  $0 <scenario-name> --log',
+    '  $0 <scenario-name> --trace --log --report --duration 10s --vus 1',
     '',
     'run.sh flags:',
     '  --log             Save console output to logs/<scenario>.log',
@@ -566,7 +566,6 @@ function renderReadme(
 ): string {
   const configPath = directory + '/config.yaml';
   const scenarioPath = directory + '/scenarios/smoke.yaml';
-  const outputPath = directory + '/generated/smoke.k6.js';
   const snapshotPath = renderConfigRelativePath(
     directory,
     options.snapshot,
@@ -585,8 +584,6 @@ function renderReadme(
     options.catalog,
     'openapi/' + moduleName + '.catalog.json',
   );
-  const logPath = directory + '/logs/smoke.log';
-  const reportPath = directory + '/logs/smoke-report.html';
   const runScriptPath = directory + '/run.sh';
   const scenarioTemplatePath = directory + '/scenarios/<name>.yaml';
   const outputTemplatePath = directory + '/generated/<name>.k6.js';
@@ -595,8 +592,6 @@ function renderReadme(
   const fixturesPath = directory + '/fixtures/';
   const envPath = directory + '/.env';
   const configArg = shellQuote(configPath);
-  const scenarioArg = shellQuote(scenarioPath);
-  const outputArg = shellQuote(outputPath);
   const runScriptArg = shellCommandPath(runScriptPath);
   const workflowScenarioArg = shellQuote(workflowScenarioPath);
   const workflowOutputArg = shellQuote(workflowOutputPath);
@@ -608,7 +603,7 @@ function renderReadme(
   const moduleOption = shouldIncludeModuleOption ? ' --module ' + moduleName : '';
 
   const syncCommand = cliCommand + ' sync' + configOption + moduleOption;
-  const catalogQueryCommand = cliCommand + ' catalog' + configOption + moduleOption + ' --query login';
+  const catalogSearchCommand = cliCommand + ' catalog' + configOption + moduleOption + ' --query <검색어>';
   const uiCommand = cliCommand + ' ui' + configOption + moduleOption;
   const updateCommand = cliCommand + ' update' + configOption + moduleOption;
   const validateNameCommand = usesDefaultDirectory
@@ -623,32 +618,6 @@ function renderReadme(
   const generateNameCommand = usesDefaultDirectory
     ? cliCommand + ' generate' + moduleOption + ' -s <name>'
     : cliCommand + ' generate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath) + ' --write ' + shellQuote(outputTemplatePath);
-  const validateSmokeCommand = usesDefaultDirectory
-    ? cliCommand + ' validate' + moduleOption + ' -s smoke'
-    : cliCommand + ' validate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + scenarioArg;
-  const testSmokeCommand = usesDefaultDirectory
-    ? cliCommand + ' test' + moduleOption + ' -s smoke'
-    : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + scenarioArg;
-  const runSmokeCommand = usesDefaultDirectory
-    ? cliCommand + ' run' + moduleOption + ' -s smoke'
-    : cliCommand + ' run --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + scenarioArg + ' --write ' + outputArg;
-  const runSmokeIterationsCommand = runSmokeCommand + ' -- --vus 1 --iterations 1';
-  const runSmokeLogCommand = runSmokeCommand + ' --log';
-  const runSmokeReportCommand = runSmokeCommand + ' --log --report -- --duration 10s --vus 1';
-  const runSmokeTraceReportCommand = runSmokeCommand + ' --trace --log --report -- --duration 10s --vus 1';
-  const generateSmokeCommand = usesDefaultDirectory
-    ? [
-        cliCommand + ' generate \\',
-        ...(shouldIncludeModuleOption ? ['  --module ' + moduleName + ' \\'] : []),
-        '  -s smoke',
-      ].join('\n')
-    : [
-        cliCommand + ' generate \\',
-        '  --config ' + configArg + ' \\',
-        '  --module ' + moduleName + ' \\',
-        '  --scenario ' + scenarioArg + ' \\',
-        '  --write ' + outputArg,
-      ].join('\n');
   const testWorkflowCommand = usesDefaultDirectory
     ? cliCommand + ' test' + moduleOption + ' -s login-flow'
     : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + workflowScenarioArg;
@@ -660,9 +629,8 @@ function renderReadme(
     : cliCommand + ' generate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + workflowScenarioArg + ' --write ' + workflowOutputArg;
 
   return renderReadmeTemplate({
-    BASE_URL_RUN_COMMAND: 'BASE_URL=https://api.example.com ' + runScriptArg + ' smoke',
     CATALOG_PATH: catalogPath,
-    CATALOG_QUERY_COMMAND: catalogQueryCommand,
+    CATALOG_SEARCH_COMMAND: catalogSearchCommand,
     CLI_COMMAND: cliCommand,
     CONFIG_PATH: configPath,
     DIRECTORY: directory,
@@ -671,26 +639,11 @@ function renderReadme(
     ENV_PATH: envPath,
     FIXTURES_PATH: fixturesPath,
     GENERATE_NAME_COMMAND: generateNameCommand,
-    GENERATE_SMOKE_COMMAND: generateSmokeCommand,
     GENERATE_WORKFLOW_COMMAND: generateWorkflowCommand,
-    LOG_PATH: logPath,
     MODULE_NAME: moduleName,
-    OUTPUT_PATH: outputPath,
-    OUTPUT_TEMPLATE_PATH: outputTemplatePath,
-    REPORT_PATH: reportPath,
     RUN_NAME_COMMAND: runNameCommand,
     RUN_SCRIPT_ARG: runScriptArg,
     RUN_SCRIPT_PATH: runScriptPath,
-    RUN_SMOKE_CLI_COMMAND: runSmokeCommand,
-    RUN_SMOKE_CLI_ITERATIONS_COMMAND: runSmokeIterationsCommand,
-    RUN_SMOKE_CLI_LOG_COMMAND: runSmokeLogCommand,
-    RUN_SMOKE_CLI_REPORT_COMMAND: runSmokeReportCommand,
-    RUN_SMOKE_CLI_TRACE_REPORT_COMMAND: runSmokeTraceReportCommand,
-    RUN_SMOKE_COMMAND: runScriptArg + ' smoke',
-    RUN_SMOKE_ITERATIONS_COMMAND: runScriptArg + ' smoke --vus 1 --iterations 1',
-    RUN_SMOKE_LOG_COMMAND: runScriptArg + ' smoke --log',
-    RUN_SMOKE_REPORT_COMMAND: runScriptArg + ' smoke --report --duration 10s --vus 1',
-    RUN_SMOKE_TRACE_REPORT_COMMAND: runScriptArg + ' smoke --trace --log --report --duration 10s --vus 1',
     SCENARIO_PATH: scenarioPath,
     SCENARIO_TEMPLATE_PATH: scenarioTemplatePath,
     CATALOG_CONFIG_VALUE: catalogConfigValue,
@@ -698,15 +651,12 @@ function renderReadme(
     SNAPSHOT_PATH: snapshotPath,
     SYNC_COMMAND: syncCommand,
     TEST_NAME_COMMAND: testNameCommand,
-    TEST_SMOKE_COMMAND: testSmokeCommand,
     TEST_WORKFLOW_COMMAND: testWorkflowCommand,
     UI_COMMAND: uiCommand,
     UPDATE_COMMAND: updateCommand,
     VALIDATE_NAME_COMMAND: validateNameCommand,
-    VALIDATE_SMOKE_COMMAND: validateSmokeCommand,
     VALIDATE_WORKFLOW_COMMAND: validateWorkflowCommand,
     WORKFLOW_OUTPUT_PATH: workflowOutputPath,
-    WORKFLOW_SCENARIO_PATH: workflowScenarioPath,
   });
 }
 

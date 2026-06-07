@@ -61,7 +61,7 @@ openapi-k6 generate -s scenario.yaml -o openapi.yaml -w output.js
 기본 `load-tests/config.yaml`을 사용하는 현재 흐름에서는 다음 축약형을 우선 사용한다.
 
 ```text
-openapi-k6 generate -s smoke
+openapi-k6 generate -s <scenario-name>
 ```
 
 ### 출력
@@ -461,7 +461,7 @@ multi-module generated k6/test의 base URL 우선순위는 `BASE_URL_<MODULE>`, 
 
 ```text
 openapi-k6 sync
-openapi-k6 generate -s smoke
+openapi-k6 generate -s <scenario-name>
 ```
 
 기본 흐름은 `load-tests/config.yaml`과 `defaultModule`을 사용한다. 기본 경로가 아니거나 특정 module을 지정해야 할 때만 `--config`, `--module`을 명시한다.
@@ -578,7 +578,7 @@ openapi-k6 init
 ### 입력
 
 ```text
-openapi-k6 validate -s smoke
+openapi-k6 validate -s <scenario-name>
 ```
 
 ### 검증
