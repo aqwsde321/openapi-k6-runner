@@ -56,6 +56,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('name: smoke');
     expect(readme).toContain('Authorization: "Bearer {{token}}"');
     expect(readme).toContain('비밀값은 scenario YAML에 직접 쓰지 않습니다.');
+    expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 scenario에 남아 있으면 `validate`가 실패합니다.');
 
     expect(readme).toContain('## 4. 검증과 실행');
     expect(readme).toContain('| `validate` | 없음 | 없음 | YAML과 OpenAPI 정합성 확인 |');
@@ -102,7 +103,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('CLI가 Scaffold update available을 표시하거나 scaffold README/runner를 최신화해야 하면 npx --yes openapi-k6 update를 실행해.');
     expect(readme).toContain('init 또는 update 후 백엔드 프로젝트의 load-tests/README.md를 다시 읽고, 그 문서의 실제 경로와 명령을 기준으로 진행해.');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai로 endpoint 후보와 scenario step 초안을 확인해.');
-    expect(readme).toContain('출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워.');
+    expect(readme).toContain('출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.');
     expect(readme).toContain('operationId가 없거나 애매하면 api.method와 api.path를 사용해.');
     expect(readme).toContain('여러 서버를 이어야 할 때만 module add와 api.module을 사용해.');
     expect(readme).toContain('load-tests/openapi/*.openapi.json, load-tests/openapi/*.catalog.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.');

@@ -22,7 +22,7 @@ AI coding agent에게 아래 프롬프트를 그대로 붙여넣으면 됩니다
 4. __SYNC_COMMAND__를 실행해서 OpenAPI snapshot과 catalog를 만들어.
 5. __CATALOG_AI_COMMAND__ 명령으로 테스트할 endpoint 후보와 scenario step 초안을 확인해.
    <검색어>는 실제 API 이름, path, tag에 맞게 바꿔. 필요하면 __CATALOG_PATH__도 열어봐.
-   출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워.
+   출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.
 6. 내가 원하는 API 흐름을 확인한 뒤 __DIRECTORY__/scenarios/*.yaml을 작성하거나 수정해.
    처음에는 id, api.operationId, request, extract, condition만 채워.
    operationId가 없거나 애매하면 api.method와 api.path를 사용해.
@@ -168,6 +168,7 @@ steps:
 
 `{{env.*}}` 값은 `test` 전에 `__ENV_PATH__`에 둡니다.
 비밀 값은 scenario YAML에 직접 쓰지 않습니다.
+`catalog --ai` 초안의 `<...>` placeholder가 scenario에 남아 있으면 `validate`가 실패합니다.
 
 ## 4. 검증과 실행
 

@@ -140,6 +140,7 @@ steps:
 
 `{{env.*}}` 값은 `test` 전에 `load-tests/.env`에 둡니다.
 비밀값은 scenario YAML에 직접 쓰지 않습니다.
+`catalog --ai` 초안의 `<...>` placeholder가 scenario에 남아 있으면 `validate`가 실패합니다.
 
 ## 4. 검증과 실행
 
@@ -400,7 +401,7 @@ AI coding agent에게는 아래처럼 요청하면 됩니다.
 6. load-tests/config.yaml에 TODO가 남아 있으면 실제 API 정보로 채워.
 7. npx --yes openapi-k6 sync로 OpenAPI snapshot과 catalog를 만들어.
 8. npx --yes openapi-k6 catalog --query <검색어> --ai로 endpoint 후보와 scenario step 초안을 확인해. 필요하면 load-tests/openapi/*.catalog.json도 열어봐.
-   출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워.
+   출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.
 9. 내가 원하는 API 흐름을 확인한 뒤 load-tests/scenarios/*.yaml을 작성하거나 수정해.
    처음에는 id, api, request, extract, condition만 채워.
    operationId가 없거나 애매하면 api.method와 api.path를 사용해.

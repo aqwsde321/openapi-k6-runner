@@ -5,6 +5,7 @@ import { compileJsonPathSegments } from '../utils/jsonpath.js';
 
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 const CONDITION_PATTERN = /^status\s*(==|!=|>=|<)\s*\d{3}$/;
+const PLACEHOLDER_PATTERN = /^<[A-Za-z0-9_.-]+>$/;
 
 type ApiRegistrySource = ApiRegistry | Map<string, ApiRegistry>;
 
@@ -41,12 +42,15 @@ export function validateScenarioAgainstOpenApi(
   const availableContextNames = new Set<string>();
   const availableVarsNames = new Set(Object.keys(scenario.vars ?? {}));
 
+  validateScenarioVarPlaceholders(scenario, issues);
+
   for (const step of scenario.steps) {
     let operation: ApiOperation;
 
     validateCondition(step, issues);
     validateExtracts(step, issues);
     validateRequestTemplates(step, availableContextNames, availableVarsNames, issues);
+    validateRequestPlaceholders(step, issues);
 
     try {
       const { registry } = resolveStepRegistry(step, registrySource, options);
@@ -76,6 +80,10 @@ export function validateScenarioAgainstOpenApi(
     stepCount: scenario.steps.length,
     warnings,
   };
+}
+
+function validateScenarioVarPlaceholders(scenario: Scenario, issues: string[]): void {
+  validatePlaceholderValue('scenario', 'vars', scenario.vars, issues);
 }
 
 function resolveStepRegistry(
@@ -123,6 +131,10 @@ function validateRequestTemplates(
   validateTemplateValue(step, 'request.body', request.body, availableContextNames, availableVarsNames, issues);
   validateTemplateValue(step, 'request.multipart.fields', request.multipart?.fields, availableContextNames, availableVarsNames, issues);
   validateMultipartFileMetadataTemplates(step, availableContextNames, availableVarsNames, issues);
+}
+
+function validateRequestPlaceholders(step: Step, issues: string[]): void {
+  validatePlaceholderValue(`step "${step.id}"`, 'request', step.request, issues);
 }
 
 function validatePathParamTemplates(
@@ -175,6 +187,39 @@ function validateMultipartFileMetadataTemplates(
       availableVarsNames,
       issues,
     );
+  }
+}
+
+function validatePlaceholderValue(
+  ownerLabel: string,
+  pathLabel: string,
+  value: unknown,
+  issues: string[],
+): void {
+  if (value === undefined || value === null || typeof value === 'number' || typeof value === 'boolean') {
+    return;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+
+    if (PLACEHOLDER_PATTERN.test(trimmed)) {
+      issues.push(`${ownerLabel}: ${pathLabel} still contains placeholder ${JSON.stringify(trimmed)}`);
+    }
+
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item, index) =>
+      validatePlaceholderValue(ownerLabel, `${pathLabel}[${index}]`, item, issues));
+    return;
+  }
+
+  if (isRecord(value)) {
+    for (const [key, item] of Object.entries(value)) {
+      validatePlaceholderValue(ownerLabel, appendTemplatePath(pathLabel, key), item, issues);
+    }
   }
 }
 

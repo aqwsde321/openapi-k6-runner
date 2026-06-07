@@ -453,7 +453,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('validate와 test가 통과하기 전에는 k6 스크립트를 생성하거나 실행하지 마.');
     expect(readme).toContain('CLI가 Scaffold update available을 표시하면 npx --yes openapi-k6 update를 실행하고 이 README를 다시 읽어.');
     expect(readme).toContain('이 폴더를 최신화할 때 init --force를 사용하지 마.');
-    expect(readme).toContain('출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워.');
+    expect(readme).toContain('출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.');
+    expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 scenario에 남아 있으면 `validate`가 실패합니다.');
     expect(readme).toContain('load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore, load-tests/.openapi-k6.json은 scaffold 파일이므로 명시 요청이 없으면 수정하지 마.');
     expect(readme).toContain('load-tests/openapi/pharma.openapi.json, load-tests/openapi/pharma.catalog.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.');
 
@@ -3523,6 +3524,51 @@ describe('openapi-k6 CLI', () => {
       '  - step "future-reference": request.body.items[0].id references unknown context.missingItemId',
       '  - step "upload-metadata": request.multipart.files.attachment.filename references unknown context.missingFilename',
       '  - step "invalid-template": request.body.id has invalid template: Invalid template string: Bearer {{bad-name}}',
+    ].join('\n'));
+  });
+
+  it('fails validation when AI placeholder values remain in the scenario', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'load-tests/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'vars:',
+        "  loginId: '<loginId>'",
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        "        sku: '<sku>'",
+        '        password: "{{env.PASSWORD}}"',
+        '        nested:',
+        "          itemId: '<itemId>'",
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    await expect(
+      runCli(
+        ['validate', '-s', 'smoke'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow([
+      'Scenario validation failed:',
+      '  - scenario: vars.loginId still contains placeholder "<loginId>"',
+      '  - step "create-order": request.body.sku still contains placeholder "<sku>"',
+      '  - step "create-order": request.body.nested.itemId still contains placeholder "<itemId>"',
     ].join('\n'));
   });
 
