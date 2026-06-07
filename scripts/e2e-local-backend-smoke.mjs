@@ -209,6 +209,11 @@ async function runMultiModuleFlow(projectDir, fixture, env, options) {
     createCrossModuleScenario(),
     'utf8',
   );
+  await writeFile(
+    path.join(projectDir, 'load-tests/scenarios/validation-errors.yaml'),
+    createValidationErrorsScenario(),
+    'utf8',
+  );
 
   await assertFileContains(path.join(projectDir, 'load-tests/config.yaml'), `openapi: ${authBaseUrl}/api-docs`);
   await assertFileContains(path.join(projectDir, 'load-tests/config.yaml'), `openapi: ${bosBaseUrl}/v3/api-docs`);
@@ -224,6 +229,14 @@ async function runMultiModuleFlow(projectDir, fixture, env, options) {
   const bosCatalogAi = await runCli(['catalog', '--module', 'bos', '--query', 'createOrder', '--ai'], projectDir, env);
   assertIncludes(bosCatalogAi.stdout, 'id <- $.id (201 application/json)', 'bos catalog --ai should show id extract path');
   assertIncludes(bosCatalogAi.stdout, 'request.pathParams.id: "{{id}}"', 'bos catalog --ai should show id next-use hint');
+
+  const invalidValidate = await runFailingCli(['validate', '-s', 'validation-errors'], projectDir, env);
+  assertIncludes(invalidValidate.stderr, 'Scenario validation failed:', 'invalid validate should print validation failure');
+  assertIncludes(invalidValidate.stderr, 'step "login": missing request.body.username required by POST /login', 'invalid validate should show missing required body field');
+  assertIncludes(invalidValidate.stderr, 'step "missing-operation": operationId "createMissingOrder" was not found', 'invalid validate should show missing operationId');
+  assertIncludes(invalidValidate.stderr, 'Fix hints:', 'invalid validate should print fix hints');
+  assertIncludes(invalidValidate.stderr, 'Add the missing required request.body fields; inspect body fields with openapi-k6 catalog --query <keyword> --ai.', 'invalid validate should hint catalog body fields');
+  assertIncludes(invalidValidate.stderr, 'Find the endpoint with openapi-k6 catalog --query <keyword> --ai, then update api.operationId or use api.method/api.path.', 'invalid validate should hint catalog operation lookup');
 
   const moduleList = await runCli(['module', 'list', '--json'], projectDir, env);
   assertModuleList(moduleList.stdout, ['seed', 'auth', 'bos'], 'auth');
@@ -282,7 +295,18 @@ function runCli(args, cwd, env) {
   );
 }
 
-function runCommand(command, args, cwd, label, env) {
+function runFailingCli(args, cwd, env) {
+  return runCommand(
+    process.execPath,
+    [cliPath, ...args],
+    cwd,
+    `openapi-k6 ${args.join(' ')}`,
+    env,
+    { expectFailure: true },
+  );
+}
+
+function runCommand(command, args, cwd, label, env, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       cwd,
@@ -306,6 +330,24 @@ function runCommand(command, args, cwd, label, env) {
     });
     child.on('error', reject);
     child.on('close', (code) => {
+      if (options.expectFailure === true) {
+        if (code !== 0) {
+          resolve({ stdout, stderr, code });
+          return;
+        }
+
+        reject(new Error([
+          `${label} unexpectedly succeeded`,
+          '',
+          'stdout:',
+          stdout.trimEnd(),
+          '',
+          'stderr:',
+          stderr.trimEnd(),
+        ].join('\n')));
+        return;
+      }
+
       if (code === 0) {
         resolve({ stdout, stderr });
         return;
@@ -410,6 +452,26 @@ function createCrossModuleScenario() {
     '    extract:',
     '      orderId:',
     '        from: $.id',
+    '',
+  ].join('\n');
+}
+
+function createValidationErrorsScenario() {
+  return [
+    'name: validation-errors',
+    '',
+    'steps:',
+    '  - id: login',
+    '    api:',
+    '      module: auth',
+    '      operationId: login',
+    '    request:',
+    '      body: {}',
+    '',
+    '  - id: missing-operation',
+    '    api:',
+    '      module: bos',
+    '      operationId: createMissingOrder',
     '',
   ].join('\n');
 }
