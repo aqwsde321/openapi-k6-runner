@@ -74,6 +74,21 @@ export interface ApiCatalogOperation {
   parameters: unknown[];
   hasRequestBody: boolean;
   requestBodyContentTypes?: string[];
+  requestBodyHint?: ApiCatalogRequestBodyHint;
+  responseExtractCandidates?: ApiCatalogExtractCandidate[];
+}
+
+export interface ApiCatalogRequestBodyHint {
+  contentType: string;
+  source: 'example' | 'schema';
+  example: unknown;
+}
+
+export interface ApiCatalogExtractCandidate {
+  name: string;
+  from: string;
+  status: string;
+  contentType?: string;
 }
 
 export interface ASTScenario {

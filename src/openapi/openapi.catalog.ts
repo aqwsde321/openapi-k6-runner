@@ -3,7 +3,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
-import type { ApiCatalog, ApiCatalogOperation } from '../core/types.js';
+import type {
+  ApiCatalog,
+  ApiCatalogExtractCandidate,
+  ApiCatalogOperation,
+  ApiCatalogRequestBodyHint,
+} from '../core/types.js';
 import { HTTP_METHOD_ORDER, OpenApiParseError } from './openapi.parser.js';
 
 export interface OpenApiSyncOptions {
@@ -25,6 +30,11 @@ interface LoadedOpenApiDocument {
 }
 
 type SwaggerApiInput = Parameters<typeof SwaggerParser.dereference>[1];
+
+const CATALOG_HINT_MAX_DEPTH = 4;
+const CATALOG_HINT_MAX_PROPERTIES = 12;
+const CATALOG_HINT_MAX_ARRAY_ITEMS = 2;
+const CATALOG_EXTRACT_MAX_CANDIDATES = 8;
 
 const openApiRefOptions: SwaggerParser.Options = {
   resolve: {
@@ -121,6 +131,8 @@ export function buildOpenApiCatalog(
         parameters: collectOperationParameters(pathItem, operation),
         hasRequestBody: operation.requestBody !== undefined,
         ...renderRequestBodyContentTypes(operation.requestBody),
+        ...renderRequestBodyHint(operation.requestBody),
+        ...renderResponseExtractCandidates(operation.responses),
         ...(operationId === undefined ? {} : { operationId }),
         ...(summary === undefined ? {} : { summary }),
         ...(description === undefined ? {} : { description }),
@@ -141,6 +153,102 @@ function renderRequestBodyContentTypes(requestBody: unknown): Pick<ApiCatalogOpe
   return contentTypes.length === 0 ? {} : { requestBodyContentTypes: contentTypes };
 }
 
+function renderRequestBodyHint(requestBody: unknown): Pick<ApiCatalogOperation, 'requestBodyHint'> | Record<string, never> {
+  if (!isRecord(requestBody)) {
+    return {};
+  }
+
+  const selected = selectJsonMediaType(requestBody.content);
+
+  if (selected === undefined) {
+    return {};
+  }
+
+  const explicitExample = readMediaTypeExample(selected.mediaType);
+
+  if (explicitExample !== undefined) {
+    return {
+      requestBodyHint: {
+        contentType: selected.contentType,
+        source: 'example',
+        example: normalizeCatalogHintValue(explicitExample, 0),
+      },
+    };
+  }
+
+  const schemaExample = createCatalogHintFromSchema(selected.mediaType.schema, 'value', 0);
+
+  if (schemaExample === undefined) {
+    return {};
+  }
+
+  return {
+    requestBodyHint: {
+      contentType: selected.contentType,
+      source: 'schema',
+      example: schemaExample,
+    },
+  };
+}
+
+function renderResponseExtractCandidates(
+  responses: unknown,
+): Pick<ApiCatalogOperation, 'responseExtractCandidates'> | Record<string, never> {
+  if (!isRecord(responses)) {
+    return {};
+  }
+
+  const candidates: ApiCatalogExtractCandidate[] = [];
+  const usedNames = new Set<string>();
+
+  for (const status of Object.keys(responses).sort(compareResponseStatus)) {
+    if (!isSuccessStatus(status)) {
+      continue;
+    }
+
+    const response = responses[status];
+
+    if (!isRecord(response)) {
+      continue;
+    }
+
+    const selected = selectJsonMediaType(response.content);
+
+    if (selected === undefined) {
+      continue;
+    }
+
+    for (const candidate of collectExtractCandidatesFromSchema(
+      selected.mediaType.schema,
+      status,
+      selected.contentType,
+      [],
+      '$',
+      0,
+    )) {
+      if (usedNames.has(candidate.name)) {
+        const derivedName = formatExtractCandidateName(candidate.from);
+
+        if (usedNames.has(derivedName)) {
+          continue;
+        }
+
+        candidates.push({ ...candidate, name: derivedName });
+        usedNames.add(derivedName);
+      } else {
+        candidates.push(candidate);
+        usedNames.add(candidate.name);
+      }
+
+      if (candidates.length >= CATALOG_EXTRACT_MAX_CANDIDATES) {
+        return { responseExtractCandidates: candidates };
+      }
+    }
+  }
+
+  return candidates.length === 0 ? {} : { responseExtractCandidates: candidates };
+}
+
 function readRequestBodyContentTypes(requestBody: unknown): string[] {
   if (!isRecord(requestBody)) {
     return [];
@@ -153,6 +261,425 @@ function readRequestBodyContentTypes(requestBody: unknown): string[] {
   }
 
   return Object.keys(content).sort((left, right) => left.localeCompare(right));
+}
+
+function selectJsonMediaType(content: unknown): { contentType: string; mediaType: Record<string, unknown> } | undefined {
+  if (!isRecord(content)) {
+    return undefined;
+  }
+
+  const contentTypes = Object.keys(content).sort((left, right) => {
+    const leftRank = rankJsonContentType(left);
+    const rightRank = rankJsonContentType(right);
+
+    return leftRank - rightRank || left.localeCompare(right);
+  });
+
+  for (const contentType of contentTypes) {
+    if (!isJsonContentType(contentType)) {
+      continue;
+    }
+
+    const mediaType = content[contentType];
+
+    if (isRecord(mediaType)) {
+      return { contentType, mediaType };
+    }
+  }
+
+  return undefined;
+}
+
+function rankJsonContentType(contentType: string): number {
+  const normalized = contentType.toLowerCase();
+
+  if (normalized === 'application/json') {
+    return 0;
+  }
+
+  if (normalized.endsWith('+json')) {
+    return 1;
+  }
+
+  if (normalized.includes('json')) {
+    return 2;
+  }
+
+  return 3;
+}
+
+function isJsonContentType(contentType: string): boolean {
+  return rankJsonContentType(contentType) < 3;
+}
+
+function readMediaTypeExample(mediaType: Record<string, unknown>): unknown {
+  if (mediaType.example !== undefined) {
+    return mediaType.example;
+  }
+
+  if (!isRecord(mediaType.examples)) {
+    return undefined;
+  }
+
+  for (const key of Object.keys(mediaType.examples).sort((left, right) => left.localeCompare(right))) {
+    const example = mediaType.examples[key];
+
+    if (isRecord(example) && example.value !== undefined) {
+      return example.value;
+    }
+
+    if (!isRecord(example)) {
+      return example;
+    }
+  }
+
+  return undefined;
+}
+
+function createCatalogHintFromSchema(schema: unknown, propertyName: string, depth: number): unknown {
+  if (depth >= CATALOG_HINT_MAX_DEPTH) {
+    return formatSchemaPlaceholder(propertyName);
+  }
+
+  if (!isRecord(schema)) {
+    return undefined;
+  }
+
+  if (schema.example !== undefined) {
+    return normalizeCatalogHintValue(schema.example, depth);
+  }
+
+  if (schema.default !== undefined) {
+    return normalizeCatalogHintValue(schema.default, depth);
+  }
+
+  const enumValue = readFirstEnumValue(schema.enum);
+
+  if (enumValue !== undefined) {
+    return normalizeCatalogHintValue(enumValue, depth);
+  }
+
+  const allOfSample = createAllOfCatalogHint(schema.allOf, propertyName, depth);
+
+  if (allOfSample !== undefined) {
+    return allOfSample;
+  }
+
+  const oneOfSample = createFirstCompositeCatalogHint(schema.oneOf, propertyName, depth) ??
+    createFirstCompositeCatalogHint(schema.anyOf, propertyName, depth);
+
+  if (oneOfSample !== undefined) {
+    return oneOfSample;
+  }
+
+  const type = readSchemaType(schema);
+
+  if (type === 'object' || isRecord(schema.properties)) {
+    return createObjectCatalogHint(schema, depth);
+  }
+
+  if (type === 'array' || schema.items !== undefined) {
+    const item = createCatalogHintFromSchema(schema.items, singularizePropertyName(propertyName), depth + 1) ??
+      formatSchemaPlaceholder(singularizePropertyName(propertyName));
+
+    return [item];
+  }
+
+  if (type === 'integer' || type === 'number') {
+    return 0;
+  }
+
+  if (type === 'boolean') {
+    return false;
+  }
+
+  return formatSchemaPlaceholder(propertyName);
+}
+
+function createObjectCatalogHint(schema: Record<string, unknown>, depth: number): Record<string, unknown> {
+  const properties = isRecord(schema.properties) ? schema.properties : {};
+  const requiredNames = new Set(readStringArray(schema.required));
+  const propertyNamesInSchemaOrder = Object.keys(properties);
+  const propertyIndex = new Map(propertyNamesInSchemaOrder.map((propertyName, index) => [propertyName, index]));
+  const propertyNames = propertyNamesInSchemaOrder.sort((left, right) => {
+    const requiredOrder = Number(requiredNames.has(right)) - Number(requiredNames.has(left));
+
+    return requiredOrder || (propertyIndex.get(left) ?? 0) - (propertyIndex.get(right) ?? 0);
+  });
+  const sample: Record<string, unknown> = {};
+
+  for (const propertyName of propertyNames.slice(0, CATALOG_HINT_MAX_PROPERTIES)) {
+    sample[propertyName] = createCatalogHintFromSchema(properties[propertyName], propertyName, depth + 1) ??
+      formatSchemaPlaceholder(propertyName);
+  }
+
+  return sample;
+}
+
+function createAllOfCatalogHint(value: unknown, propertyName: string, depth: number): unknown {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const merged: Record<string, unknown> = {};
+  let hasObject = false;
+
+  for (const item of value) {
+    const sample = createCatalogHintFromSchema(item, propertyName, depth + 1);
+
+    if (isRecord(sample)) {
+      Object.assign(merged, sample);
+      hasObject = true;
+      continue;
+    }
+
+    if (sample !== undefined) {
+      return sample;
+    }
+  }
+
+  return hasObject ? merged : undefined;
+}
+
+function createFirstCompositeCatalogHint(value: unknown, propertyName: string, depth: number): unknown {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  for (const item of value) {
+    const sample = createCatalogHintFromSchema(item, propertyName, depth + 1);
+
+    if (sample !== undefined) {
+      return sample;
+    }
+  }
+
+  return undefined;
+}
+
+function readFirstEnumValue(value: unknown): unknown {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value.find((item) => item !== null);
+}
+
+function readSchemaType(schema: Record<string, unknown>): string | undefined {
+  if (typeof schema.type === 'string') {
+    return schema.type;
+  }
+
+  if (Array.isArray(schema.type)) {
+    return schema.type.find((type): type is string => typeof type === 'string' && type !== 'null');
+  }
+
+  return undefined;
+}
+
+function normalizeCatalogHintValue(value: unknown, depth: number): unknown {
+  if (depth >= CATALOG_HINT_MAX_DEPTH) {
+    return '<value>';
+  }
+
+  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .slice(0, CATALOG_HINT_MAX_ARRAY_ITEMS)
+      .map((item) => normalizeCatalogHintValue(item, depth + 1));
+  }
+
+  if (!isRecord(value)) {
+    return '<value>';
+  }
+
+  const sample: Record<string, unknown> = {};
+
+  for (const key of Object.keys(value).slice(0, CATALOG_HINT_MAX_PROPERTIES)) {
+    sample[key] = normalizeCatalogHintValue(value[key], depth + 1);
+  }
+
+  return sample;
+}
+
+function collectExtractCandidatesFromSchema(
+  schema: unknown,
+  status: string,
+  contentType: string,
+  pathSegments: Array<string | number>,
+  jsonPath: string,
+  depth: number,
+): ApiCatalogExtractCandidate[] {
+  if (depth >= CATALOG_HINT_MAX_DEPTH || !isRecord(schema)) {
+    return [];
+  }
+
+  const allOfCandidates = Array.isArray(schema.allOf)
+    ? schema.allOf.flatMap((item) =>
+      collectExtractCandidatesFromSchema(item, status, contentType, pathSegments, jsonPath, depth + 1))
+    : [];
+
+  const compositeCandidates = Array.isArray(schema.oneOf)
+    ? schema.oneOf.flatMap((item) =>
+      collectExtractCandidatesFromSchema(item, status, contentType, pathSegments, jsonPath, depth + 1))
+    : Array.isArray(schema.anyOf)
+      ? schema.anyOf.flatMap((item) =>
+        collectExtractCandidatesFromSchema(item, status, contentType, pathSegments, jsonPath, depth + 1))
+      : [];
+
+  const directCandidates = collectDirectExtractCandidates(schema, status, contentType, pathSegments, jsonPath, depth);
+
+  return [...allOfCandidates, ...compositeCandidates, ...directCandidates];
+}
+
+function collectDirectExtractCandidates(
+  schema: Record<string, unknown>,
+  status: string,
+  contentType: string,
+  pathSegments: Array<string | number>,
+  jsonPath: string,
+  depth: number,
+): ApiCatalogExtractCandidate[] {
+  const type = readSchemaType(schema);
+
+  if (type === 'array' || schema.items !== undefined) {
+    return collectExtractCandidatesFromSchema(
+      schema.items,
+      status,
+      contentType,
+      [...pathSegments, 0],
+      `${jsonPath}[0]`,
+      depth + 1,
+    );
+  }
+
+  if (type !== 'object' && !isRecord(schema.properties)) {
+    return [];
+  }
+
+  const properties = isRecord(schema.properties) ? schema.properties : {};
+  const candidates: ApiCatalogExtractCandidate[] = [];
+
+  for (const propertyName of Object.keys(properties)) {
+    if (!isJsonPathDotProperty(propertyName)) {
+      continue;
+    }
+
+    const propertyPathSegments = [...pathSegments, propertyName];
+    const propertyJsonPath = `${jsonPath}.${propertyName}`;
+
+    if (isExtractCandidateProperty(propertyName)) {
+      candidates.push({
+        name: formatExtractCandidateNameFromSegments(propertyPathSegments),
+        from: propertyJsonPath,
+        status,
+        contentType,
+      });
+    }
+
+    candidates.push(...collectExtractCandidatesFromSchema(
+      properties[propertyName],
+      status,
+      contentType,
+      propertyPathSegments,
+      propertyJsonPath,
+      depth + 1,
+    ));
+  }
+
+  return candidates;
+}
+
+function isExtractCandidateProperty(propertyName: string): boolean {
+  const normalized = propertyName.toLowerCase();
+
+  return normalized === 'id' ||
+    normalized === 'uuid' ||
+    normalized === 'code' ||
+    normalized === 'token' ||
+    normalized.endsWith('id') ||
+    normalized.endsWith('uuid') ||
+    normalized.includes('token');
+}
+
+function formatExtractCandidateNameFromSegments(pathSegments: Array<string | number>): string {
+  const stringSegments = pathSegments.filter((segment): segment is string => typeof segment === 'string');
+
+  if (stringSegments.length === 0) {
+    return 'value';
+  }
+
+  if (stringSegments.length === 1) {
+    return stringSegments[0];
+  }
+
+  return stringSegments
+    .map((segment, index) => index === 0 ? segment : capitalize(segment))
+    .join('');
+}
+
+function formatExtractCandidateName(jsonPath: string): string {
+  return jsonPath
+    .replace(/^\$\./, '')
+    .replace(/\[0\]/g, '')
+    .split('.')
+    .filter(Boolean)
+    .map((segment, index) => index === 0 ? segment : capitalize(segment))
+    .join('') || 'value';
+}
+
+function isJsonPathDotProperty(propertyName: string): boolean {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(propertyName);
+}
+
+function isSuccessStatus(status: string): boolean {
+  if (!/^\d+$/.test(status)) {
+    return false;
+  }
+
+  const code = Number(status);
+
+  return code >= 200 && code < 300;
+}
+
+function compareResponseStatus(left: string, right: string): number {
+  const leftCode = /^\d+$/.test(left) ? Number(left) : Number.MAX_SAFE_INTEGER;
+  const rightCode = /^\d+$/.test(right) ? Number(right) : Number.MAX_SAFE_INTEGER;
+
+  return leftCode - rightCode || left.localeCompare(right);
+}
+
+function formatSchemaPlaceholder(propertyName: string): string {
+  if (isSecretLikeProperty(propertyName)) {
+    return `{{env.${formatEnvName(propertyName)}}}`;
+  }
+
+  return `<${propertyName}>`;
+}
+
+function isSecretLikeProperty(propertyName: string): boolean {
+  return /(password|secret|token|api[-_]?key|authorization)/i.test(propertyName);
+}
+
+function formatEnvName(propertyName: string): string {
+  return propertyName
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase() || 'VALUE';
+}
+
+function singularizePropertyName(propertyName: string): string {
+  return propertyName.endsWith('s') && propertyName.length > 1
+    ? propertyName.slice(0, -1)
+    : propertyName;
+}
+
+function capitalize(value: string): string {
+  return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
 }
 
 async function readOpenApiSource(input: string): Promise<string> {

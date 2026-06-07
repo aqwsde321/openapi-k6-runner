@@ -399,6 +399,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 sync');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어>');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai');
+    expect(readme).toContain('OpenAPI schema/example이 있으면 request body 초안과 response extract 후보도 함께 보여줍니다.');
     expect(readme).toContain('npx --yes openapi-k6 validate -s <name>');
     expect(readme).toContain('npx --yes openapi-k6 test -s <name>');
     expect(readme).toContain('npx --yes openapi-k6 run -s <name> --log -- --vus 1 --iterations 1');
@@ -477,6 +478,45 @@ describe('openapi-k6 CLI', () => {
     expect(readme).not.toContain('### Scenario DSL Reference');
     expect(readme.indexOf('## AI에게 작업 맡기기')).toBeLessThan(readme.indexOf('## 빠른 시작'));
     expect(readme.indexOf('## 고급 기능')).toBeLessThan(readme.indexOf('## AI 작업 규칙'));
+  });
+
+  it('initializes and syncs the OpenAPI snapshot/catalog with --sync', async () => {
+    await writeGenerateFixtures(workspace);
+    const stdout = createCapture();
+
+    await runCli(
+      [
+        'init',
+        '--no-input',
+        '--base-url',
+        'https://api.test.local',
+        '--openapi',
+        'openapi.yaml',
+        '--sync',
+      ],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const snapshot = JSON.parse(
+      await readFile(path.join(workspace, 'load-tests/openapi/default.openapi.json'), 'utf8'),
+    ) as Record<string, unknown>;
+    const catalog = JSON.parse(
+      await readFile(path.join(workspace, 'load-tests/openapi/default.catalog.json'), 'utf8'),
+    ) as { operations: Array<Record<string, unknown>> };
+    const output = stdout.output();
+
+    expect(snapshot.openapi).toBe('3.0.3');
+    expect(catalog.operations).toEqual([
+      expect.objectContaining({
+        method: 'GET',
+        path: '/health',
+        operationId: 'getHealth',
+      }),
+    ]);
+    expect(output).toContain('Created load-tests');
+    expect(output).toContain('Synced load-tests/openapi/default.openapi.json');
+    expect(output).toContain('Catalog load-tests/openapi/default.catalog.json (1 operations)');
+    expect(output).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai');
   });
 
   it('runs the generated run.sh with --log when no k6 options are provided', async () => {
@@ -1838,6 +1878,34 @@ describe('openapi-k6 CLI', () => {
     ]);
   });
 
+  it('prints next steps after configured sync', async () => {
+    await writeGenerateFixtures(workspace);
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: ../openapi.yaml',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    const stdout = createCapture();
+
+    await runCli(
+      ['sync'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const output = stdout.output();
+
+    expect(output).toContain('Synced ');
+    expect(output).toContain('Catalog ');
+    expect(output).toContain('Next');
+    expect(output).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai --module app');
+    expect(output).toContain('npx --yes openapi-k6 validate -s <scenario-name> --module app');
+    expect(output).toContain('npx --yes openapi-k6 test -s <scenario-name> --module app');
+  });
+
   it('summarizes the configured catalog without dumping every operation', async () => {
     await writeConfig([
       'defaultModule: app',
@@ -1966,8 +2034,13 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('- id: login-user');
     expect(output).toContain('    module: app');
     expect(output).toContain('    operationId: loginUser');
-    expect(output).toContain('    body: {}');
+    expect(output).toContain('    body:');
+    expect(output).toContain('      loginId: "<loginId>"');
+    expect(output).toContain('      password: "{{env.PASSWORD}}"');
     expect(output).toContain('  condition: status < 300');
+    expect(output).toContain('  # extract candidates:');
+    expect(output).toContain('  #   accessToken:');
+    expect(output).toContain('  #     from: $.accessToken');
     expect(output).toContain('Keep secrets in load-tests/.env');
     expect(output).not.toContain('createOrder');
   });
@@ -2000,8 +2073,13 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('  request:');
     expect(output).toContain('    headers:');
     expect(output).toContain('      "Idempotency-Key": "<Idempotency-Key>" # optional');
-    expect(output).toContain('    body: {}');
+    expect(output).toContain('    body:');
+    expect(output).toContain('      sku: "<sku>"');
+    expect(output).toContain('      quantity: 0');
     expect(output).toContain('  condition: status < 300');
+    expect(output).toContain('  # extract candidates:');
+    expect(output).toContain('  #   orderId:');
+    expect(output).toContain('  #     from: $.orderId');
     expect(output).not.toContain('loginUser');
   });
 
@@ -4370,6 +4448,22 @@ describe('openapi-k6 CLI', () => {
         ],
         hasRequestBody: true,
         requestBodyContentTypes: ['application/json'],
+        requestBodyHint: {
+          contentType: 'application/json',
+          source: 'schema',
+          example: {
+            sku: '<sku>',
+            quantity: 0,
+          },
+        },
+        responseExtractCandidates: [
+          {
+            name: 'orderId',
+            from: '$.orderId',
+            status: '201',
+            contentType: 'application/json',
+          },
+        ],
       },
       {
         method: 'POST',
@@ -4380,6 +4474,22 @@ describe('openapi-k6 CLI', () => {
         parameters: [],
         hasRequestBody: true,
         requestBodyContentTypes: ['application/json'],
+        requestBodyHint: {
+          contentType: 'application/json',
+          source: 'schema',
+          example: {
+            loginId: '<loginId>',
+            password: '{{env.PASSWORD}}',
+          },
+        },
+        responseExtractCandidates: [
+          {
+            name: 'accessToken',
+            from: '$.accessToken',
+            status: '200',
+            contentType: 'application/json',
+          },
+        ],
       },
       {
         method: 'POST',

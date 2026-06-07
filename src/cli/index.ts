@@ -25,7 +25,14 @@ import {
   findModuleBaseUrlEnvNameCollisions,
 } from '../core/module-env.js';
 import { collectTemplateReferences } from '../core/template.js';
-import type { ApiCatalog, ApiCatalogOperation, ApiRegistry, Scenario } from '../core/types.js';
+import type {
+  ApiCatalog,
+  ApiCatalogExtractCandidate,
+  ApiCatalogOperation,
+  ApiCatalogRequestBodyHint,
+  ApiRegistry,
+  Scenario,
+} from '../core/types.js';
 import {
   executeAstScenario,
   type ScenarioExecutionReporter,
@@ -190,6 +197,7 @@ export interface InitOptions {
   openapi?: string;
   smokePath?: string;
   force?: boolean;
+  sync?: boolean;
   input?: boolean;
   noInput?: boolean;
 }
@@ -333,6 +341,7 @@ export interface InitResult {
   dataFixtureExamplePath: string;
   readmePath: string;
   metadataPath: string;
+  synced?: SyncResult;
 }
 
 export interface UpdateResult {
@@ -4000,7 +4009,7 @@ export async function runInitCommand(
   const cwd = resolveCwd(context);
   const resolvedOptions = await resolveInitOptionsInteractively(options, context, cwd);
 
-  return initLoadTests({
+  const result = await initLoadTests({
     cwd,
     directory: resolvedOptions.dir,
     module: resolvedOptions.module,
@@ -4009,6 +4018,20 @@ export async function runInitCommand(
     smokePath: resolvedOptions.smokePath,
     force: resolvedOptions.force,
   });
+
+  if (resolvedOptions.sync !== true) {
+    return result;
+  }
+
+  const synced = await runSyncCommand({
+    config: result.configPath,
+    module: resolvedOptions.module,
+  }, context);
+
+  return {
+    ...result,
+    synced,
+  };
 }
 
 export async function runUpdateCommand(
@@ -4473,13 +4496,17 @@ function formatRunScriptCommand(cwd: string, runScriptPath: string): string {
 }
 
 function initNextCommand(
-  command: 'sync' | 'validate' | 'test' | 'generate',
+  command: 'catalog' | 'sync' | 'validate' | 'test' | 'generate',
   configPath: string,
   moduleName: string | undefined,
   cwd: string,
 ): string {
   const defaultConfigPath = path.join(cwd, DEFAULT_CONFIG_PATH);
   const parts = ['npx', '--yes', 'openapi-k6', command];
+
+  if (command === 'catalog') {
+    parts.push('--query', '<검색어>', '--ai');
+  }
 
   if (command === 'validate' || command === 'test' || command === 'generate') {
     parts.push('-s', '<scenario-name>');
@@ -4493,7 +4520,9 @@ function initNextCommand(
     parts.push('--module', moduleName);
   }
 
-  return parts.map((part) => part === '<scenario-name>' ? part : shellQuote(part)).join(' ');
+  return parts
+    .map((part) => part === '<scenario-name>' || part === '<검색어>' ? part : shellQuote(part))
+    .join(' ');
 }
 
 function writeInitSummary(
@@ -4513,13 +4542,49 @@ function writeInitSummary(
   writeLine(stdout, `  runner    ${formatDisplayPath(cwd, result.runScriptPath)}`);
   writeLine(stdout, `  guide     ${formatDisplayPath(cwd, result.readmePath)}`);
   writeLine(stdout, `  metadata  ${formatDisplayPath(cwd, result.metadataPath)}`);
+
+  if (result.synced !== undefined) {
+    writeLine(stdout, '');
+    writeLine(stdout, `Synced ${formatDisplayPath(cwd, result.synced.snapshotPath)}`);
+    writeLine(stdout, `Catalog ${formatDisplayPath(cwd, result.synced.catalogPath)} (${result.synced.operationCount} operations)`);
+  }
+
   writeLine(stdout, '');
   writeLine(stdout, 'Next');
-  writeLine(stdout, `  ${initNextCommand('sync', result.configPath, moduleName, cwd)}`);
+
+  if (result.synced === undefined) {
+    writeLine(stdout, `  ${initNextCommand('sync', result.configPath, moduleName, cwd)}`);
+  } else {
+    writeLine(stdout, `  ${initNextCommand('catalog', result.configPath, moduleName, cwd)}`);
+  }
+
   writeLine(stdout, `  ${initNextCommand('validate', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${initNextCommand('test', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${initNextCommand('generate', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${formatRunScriptCommand(cwd, result.runScriptPath)} <scenario-name> --log`);
+}
+
+function writeSyncSummary(
+  stdout: WritableLike,
+  result: SyncResult,
+  options: SyncOptions,
+  cwd: string,
+): void {
+  writeLine(stdout, `Synced ${result.snapshotPath}`);
+  writeLine(stdout, `Catalog ${result.catalogPath} (${result.operationCount} operations)`);
+  writeLine(stdout, '');
+  writeLine(stdout, 'Next');
+
+  if (result.moduleName === undefined) {
+    writeLine(stdout, '  configure load-tests/config.yaml, then run openapi-k6 catalog --query <검색어> --ai');
+    return;
+  }
+
+  const configPath = path.resolve(cwd, options.config ?? DEFAULT_CONFIG_PATH);
+
+  writeLine(stdout, `  ${initNextCommand('catalog', configPath, result.moduleName, cwd)}`);
+  writeLine(stdout, `  ${initNextCommand('validate', configPath, result.moduleName, cwd)}`);
+  writeLine(stdout, `  ${initNextCommand('test', configPath, result.moduleName, cwd)}`);
 }
 
 function writeUpdateSummary(
@@ -4765,7 +4830,66 @@ function parseCatalogOperation(value: unknown, label: string): ApiCatalogOperati
             typeof contentType === 'string' ? [contentType] : []),
         }
       : {}),
+    ...parseCatalogRequestBodyHint(operation.requestBodyHint),
+    ...parseCatalogExtractCandidates(operation.responseExtractCandidates),
   };
+}
+
+function parseCatalogRequestBodyHint(
+  value: unknown,
+): Pick<ApiCatalogOperation, 'requestBodyHint'> | Record<string, never> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  const record = value as Record<string, unknown>;
+
+  if (typeof record.contentType !== 'string') {
+    return {};
+  }
+
+  if (record.source !== 'example' && record.source !== 'schema') {
+    return {};
+  }
+
+  const requestBodyHint: ApiCatalogRequestBodyHint = {
+    contentType: record.contentType,
+    source: record.source,
+    example: record.example,
+  };
+
+  return { requestBodyHint };
+}
+
+function parseCatalogExtractCandidates(
+  value: unknown,
+): Pick<ApiCatalogOperation, 'responseExtractCandidates'> | Record<string, never> {
+  if (!Array.isArray(value)) {
+    return {};
+  }
+
+  const responseExtractCandidates: ApiCatalogExtractCandidate[] = value.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return [];
+    }
+
+    const record = item as Record<string, unknown>;
+
+    if (typeof record.name !== 'string' ||
+      typeof record.from !== 'string' ||
+      typeof record.status !== 'string') {
+      return [];
+    }
+
+    return [{
+      name: record.name,
+      from: record.from,
+      status: record.status,
+      ...(typeof record.contentType === 'string' ? { contentType: record.contentType } : {}),
+    }];
+  });
+
+  return responseExtractCandidates.length === 0 ? {} : { responseExtractCandidates };
 }
 
 function expectCatalogRecord(value: unknown, message: string): Record<string, unknown> {
@@ -5107,6 +5231,7 @@ function renderCatalogScenarioStepSnippet(
   }
 
   lines.push('  condition: status < 300');
+  lines.push(...renderCatalogExtractCandidateComments(operation));
 
   return lines;
 }
@@ -5123,12 +5248,30 @@ function renderCatalogRequestSnippet(operation: ApiCatalogOperation): string[] {
       lines.push('multipart:');
       lines.push('  fields: {}');
       lines.push('  files: {}');
+    } else if (operation.requestBodyHint !== undefined) {
+      appendCatalogYamlField(lines, 'body', operation.requestBodyHint.example, 0);
     } else {
       lines.push('body: {}');
     }
   }
 
   return lines;
+}
+
+function renderCatalogExtractCandidateComments(operation: ApiCatalogOperation): string[] {
+  const candidates = operation.responseExtractCandidates ?? [];
+
+  if (candidates.length === 0) {
+    return [];
+  }
+
+  return [
+    '  # extract candidates:',
+    ...candidates.flatMap((candidate) => [
+      `  #   ${formatYamlKey(candidate.name)}:`,
+      `  #     from: ${candidate.from}`,
+    ]),
+  ];
 }
 
 function appendCatalogParameterGroup(
@@ -5149,6 +5292,83 @@ function appendCatalogParameterGroup(
   for (const parameter of parameters) {
     const optionalSuffix = parameter.required ? '' : ' # optional';
     lines.push(`  ${formatYamlKey(parameter.name)}: ${formatYamlString(`<${parameter.name}>`)}${optionalSuffix}`);
+  }
+}
+
+function appendCatalogYamlField(lines: string[], key: string, value: unknown, indent: number): void {
+  const prefix = ' '.repeat(indent);
+
+  if (isYamlScalar(value)) {
+    lines.push(`${prefix}${formatYamlKey(key)}: ${formatYamlScalar(value)}`);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      lines.push(`${prefix}${formatYamlKey(key)}: []`);
+      return;
+    }
+
+    lines.push(`${prefix}${formatYamlKey(key)}:`);
+    appendCatalogYamlArray(lines, value, indent + 2);
+    return;
+  }
+
+  if (!value || typeof value !== 'object') {
+    lines.push(`${prefix}${formatYamlKey(key)}: ${formatYamlString('<value>')}`);
+    return;
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>);
+
+  if (entries.length === 0) {
+    lines.push(`${prefix}${formatYamlKey(key)}: {}`);
+    return;
+  }
+
+  lines.push(`${prefix}${formatYamlKey(key)}:`);
+
+  for (const [childKey, childValue] of entries) {
+    appendCatalogYamlField(lines, childKey, childValue, indent + 2);
+  }
+}
+
+function appendCatalogYamlArray(lines: string[], value: unknown[], indent: number): void {
+  const prefix = ' '.repeat(indent);
+
+  for (const item of value) {
+    if (isYamlScalar(item)) {
+      lines.push(`${prefix}- ${formatYamlScalar(item)}`);
+      continue;
+    }
+
+    if (Array.isArray(item)) {
+      if (item.length === 0) {
+        lines.push(`${prefix}- []`);
+      } else {
+        lines.push(`${prefix}-`);
+        appendCatalogYamlArray(lines, item, indent + 2);
+      }
+      continue;
+    }
+
+    if (!item || typeof item !== 'object') {
+      lines.push(`${prefix}- ${formatYamlString('<value>')}`);
+      continue;
+    }
+
+    const entries = Object.entries(item as Record<string, unknown>);
+
+    if (entries.length === 0) {
+      lines.push(`${prefix}- {}`);
+      continue;
+    }
+
+    lines.push(`${prefix}-`);
+
+    for (const [childKey, childValue] of entries) {
+      appendCatalogYamlField(lines, childKey, childValue, indent + 2);
+    }
   }
 }
 
@@ -5178,6 +5398,25 @@ function formatYamlPlainValue(value: string): string {
   return /^[A-Za-z0-9_.-]+$/.test(value)
     ? value
     : formatYamlString(value);
+}
+
+function isYamlScalar(value: unknown): value is string | number | boolean | null {
+  return value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean';
+}
+
+function formatYamlScalar(value: string | number | boolean | null): string {
+  if (typeof value === 'string') {
+    return formatYamlString(value);
+  }
+
+  if (value === null) {
+    return 'null';
+  }
+
+  return String(value);
 }
 
 function formatYamlString(value: string): string {
@@ -5510,6 +5749,7 @@ export function createProgram(context: CliContext = {}): Command {
     .option('--openapi <path-or-url>', 'OpenAPI spec file path or URL')
     .option('--smoke-path <path>', 'Smoke scenario GET endpoint path', '/health')
     .option('--force', 'Overwrite existing scaffold files')
+    .option('--sync', 'Run sync after creating the scaffold')
     .option('--no-input', 'Do not prompt for missing init values')
     .action(async (options: InitOptions) => {
       const result = await runInitCommand(options, context);
@@ -5603,8 +5843,7 @@ export function createProgram(context: CliContext = {}): Command {
     .option('-m, --module <name>', 'Module name from config')
     .action(async (options: SyncOptions) => {
       const result = await runSyncCommand(options, context);
-      writeLine(stdout, `Synced ${result.snapshotPath}`);
-      writeLine(stdout, `Catalog ${result.catalogPath} (${result.operationCount} operations)`);
+      writeSyncSummary(stdout, result, options, resolveCwd(context));
     });
 
   program

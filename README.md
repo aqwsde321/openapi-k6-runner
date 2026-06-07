@@ -43,6 +43,12 @@ npx --yes openapi-k6 generate -s <scenario-name>
 npx --yes openapi-k6 update
 ```
 
+API base URL과 OpenAPI 경로가 확실하면 `init --sync`로 작업 공간 생성 직후 snapshot/catalog까지 만들 수 있습니다.
+
+```bash
+npx --yes openapi-k6 init --base-url <url> --openapi <path-or-url> --sync
+```
+
 ## 1. 작업 공간 만들기
 
 ```bash
@@ -78,6 +84,7 @@ npx --yes openapi-k6 catalog --query <검색어>
 `sync`는 OpenAPI snapshot과 endpoint catalog를 만듭니다.
 `catalog` 출력에서는 주로 `operationId`, `body`, `parameters`를 봅니다.
 AI에게 scenario 초안까지 맡길 때는 `npx --yes openapi-k6 catalog --query <검색어> --ai`를 사용합니다.
+OpenAPI schema/example이 있으면 request body 초안과 response extract 후보도 함께 보여줍니다.
 
 아래는 검색어 `login`을 사용한 출력 예시입니다.
 
@@ -351,6 +358,7 @@ k6 옵션은 scenario 이름 뒤에 붙입니다.
 | 상황 | 명령 |
 | --- | --- |
 | 작업 공간 생성 | `npx --yes openapi-k6 init` |
+| 작업 공간 생성 후 즉시 sync | `npx --yes openapi-k6 init --base-url <url> --openapi <path-or-url> --sync` |
 | OpenAPI snapshot/catalog 갱신 | `npx --yes openapi-k6 sync` |
 | endpoint 검색 | `npx --yes openapi-k6 catalog --query <검색어>` |
 | AI용 scenario 초안 | `npx --yes openapi-k6 catalog --query <검색어> --ai` |

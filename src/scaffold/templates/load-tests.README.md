@@ -107,6 +107,7 @@ __CATALOG_SEARCH_COMMAND__
 
 `catalog` 출력에서는 주로 `operationId`, `body`, `parameters`를 봅니다.
 AI에게 scenario 초안까지 맡길 때는 아래 명령을 사용합니다.
+OpenAPI schema/example이 있으면 request body 초안과 response extract 후보도 함께 보여줍니다.
 
 ```bash
 __CATALOG_AI_COMMAND__

@@ -83,6 +83,23 @@ describe('OpenAPI snapshot and catalog', () => {
           ],
           hasRequestBody: true,
           requestBodyContentTypes: ['application/json'],
+          requestBodyHint: {
+            contentType: 'application/json',
+            source: 'schema',
+            example: {
+              sku: '<sku>',
+              quantity: 0,
+              couponCode: '<couponCode>',
+            },
+          },
+          responseExtractCandidates: [
+            {
+              name: 'orderId',
+              from: '$.orderId',
+              status: '201',
+              contentType: 'application/json',
+            },
+          ],
         },
       ],
     });
@@ -324,11 +341,34 @@ function createCatalogFixture(): unknown {
           requestBody: {
             content: {
               'application/json': {
-                schema: { type: 'object' },
+                schema: {
+                  type: 'object',
+                  required: ['sku', 'quantity'],
+                  properties: {
+                    sku: { type: 'string' },
+                    quantity: { type: 'integer' },
+                    couponCode: { type: 'string' },
+                  },
+                },
               },
             },
           },
-          responses: { 201: { description: 'Created' } },
+          responses: {
+            201: {
+              description: 'Created',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      orderId: { type: 'string' },
+                      status: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -371,9 +411,28 @@ function createCatalogFixtureYaml(): string {
     '          application/json:',
     '            schema:',
     '              type: object',
+    '              required:',
+    '                - sku',
+    '                - quantity',
+    '              properties:',
+    '                sku:',
+    '                  type: string',
+    '                quantity:',
+    '                  type: integer',
+    '                couponCode:',
+    '                  type: string',
     '      responses:',
     '        "201":',
     '          description: Created',
+    '          content:',
+    '            application/json:',
+    '              schema:',
+    '                type: object',
+    '                properties:',
+    '                  orderId:',
+    '                    type: string',
+    '                  status:',
+    '                    type: string',
     '',
   ].join('\n');
 }

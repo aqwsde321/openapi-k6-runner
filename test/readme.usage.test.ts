@@ -25,6 +25,8 @@ describe('README usage guide', () => {
     expect(readme).toContain('아래 예시는 이해를 돕기 위한 값입니다. 실제 명령에는 위 placeholder를 프로젝트에 맞게 바꿔 넣습니다.');
     expect(readme).toContain('처음 적용하는 프로젝트는 `init`부터 실행하고, 이미 `load-tests/`가 있는 프로젝트는 `init`을 다시 실행하지 말고 `update`로 scaffold 안내만 갱신합니다.');
     expect(readme).toContain('기존 프로젝트에서 CLI가 `Scaffold update available`을 표시하면 안내된 `update` 명령을 실행하면 됩니다.');
+    expect(readme).toContain('API base URL과 OpenAPI 경로가 확실하면 `init --sync`로 작업 공간 생성 직후 snapshot/catalog까지 만들 수 있습니다.');
+    expect(readme).toContain('npx --yes openapi-k6 init --base-url <url> --openapi <path-or-url> --sync');
 
     const quickStartSection = readme.slice(readme.indexOf('## 빠른 시작'), readme.indexOf('## 1. 작업 공간 만들기'));
     const commandSection = readme.slice(readme.indexOf('## 명령 모음'), readme.indexOf('## 지원 범위'));
@@ -43,6 +45,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('## 2. Endpoint 고르기');
     expect(readme).toContain('Catalog: load-tests/openapi/default.catalog.json');
     expect(readme).toContain('AI에게 scenario 초안까지 맡길 때는 `npx --yes openapi-k6 catalog --query <검색어> --ai`를 사용합니다.');
+    expect(readme).toContain('OpenAPI schema/example이 있으면 request body 초안과 response extract 후보도 함께 보여줍니다.');
     expect(readme).toContain('아래는 검색어 `login`을 사용한 출력 예시입니다.');
     expect(readme).toContain('operationId: loginUser');
     expect(readme).toContain('`operationId`가 없거나 애매하면 `api.method`와 `api.path`를 쓸 수 있습니다.');
