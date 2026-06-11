@@ -11,20 +11,35 @@ describe('README usage guide', () => {
 
     expect(readme).toContain('OpenAPI에서 API 흐름을 **Scenario YAML**로 작성하고');
     expect(readme).toContain('OpenAPI 가져오기 -> scenario 작성 -> validate/test -> run');
-    expect(readme).toContain('직접 실행하려면 [빠른 시작](#빠른-시작)을 보고, AI coding agent에게 맡기려면 [AI에게 맡기기](#ai에게-맡기기)를 복사합니다.');
+    expect(readme).toContain('AI coding agent에게 맡기려면 [AI agent로 시작하기](#ai-agent로-시작하기)를 먼저 보고, 직접 실행하려면 [빠른 시작](#빠른-시작)을 봅니다.');
 
+    expect(readme).toContain('## AI agent로 시작하기');
+    expect(readme).toContain('Codex를 사용한다면 `openapi-k6-scenario` 스킬을 설치한 뒤 시나리오를 요청하는 흐름을 권장합니다.');
+    expect(readme).toContain('스킬은 Scenario YAML을 바로 쓰지 않고, 먼저 업무 프로세스와 호출할 API 순서를 정리한 뒤 사용자 확인을 받고 진행합니다.');
+    expect(readme).toContain('npx --yes openapi-k6 install-skill --yes');
+    expect(readme).toContain('$openapi-k6-scenario 회원 로그인 시나리오');
+    expect(readme).toContain('`$openapi-k6-scenario` 스킬을 사용할 수 있는지 확인해.');
+    expect(readme).toContain('npx --yes openapi-k6@latest install-skill --yes');
+    expect(readme).toContain('기본 작업공간은 `openapi-k6/`야. 팀이나 프로젝트 규칙상 다른 이름이 필요하면 `init --dir <path>`를 사용해.');
+    expect(readme).toContain('기존 `load-tests/config.yaml`이 있고 `openapi-k6/config.yaml`이 없으면 npx --yes openapi-k6@latest update로 `openapi-k6/`로 이전해.');
+    expect(readme).toContain('작업공간 README.md가 있으면 먼저 읽고 그 지침을 따라.');
+    expect(readme).toContain('같은 대화에서 최신 init, update, README 변경 이후 이미 읽었다면 전체를 다시 읽지 말고 필요한 섹션만 확인해.');
+    expect(readme).toContain('이 README는 AI 작업 지침이므로, 이후 작업은 그 문서를 기준으로 진행해.');
+    expect(readme).toContain('시나리오 파일을 작성하거나 수정하기 전에는 먼저 업무 프로세스와 호출할 API 순서를 요약해서 내 확인을 받아.');
     expect(readme).toContain('## 빠른 시작');
     expect(readme).toContain('npx --yes openapi-k6 init');
     expect(readme).toContain('npx --yes openapi-k6 sync');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어>');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai');
     expect(readme).toContain('npx --yes openapi-k6 catalog --sync --query <검색어> --ai');
-    expect(readme).toContain('# load-tests/scenarios/<scenario-name>.yaml 작성');
+    expect(readme).toContain('# openapi-k6/scenarios/<scenario-name>.yaml 작성');
     expect(readme).toContain('npx --yes openapi-k6 validate -s <scenario-name>');
     expect(readme).toContain('npx --yes openapi-k6 test -s <scenario-name>');
     expect(readme).toContain('npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1 --iterations 1');
     expect(readme).toContain('아래 예시는 이해를 돕기 위한 값입니다. 실제 명령에는 위 placeholder를 프로젝트에 맞게 바꿔 넣습니다.');
-    expect(readme).toContain('처음 적용하는 프로젝트는 `init`부터 실행하고, 이미 `load-tests/`가 있는 프로젝트는 `init`을 다시 실행하지 말고 `update`로 scaffold 안내만 갱신합니다.');
+    expect(readme).toContain('처음 적용하는 프로젝트는 `init`부터 실행합니다.');
+    expect(readme).toContain('기본 작업공간은 `openapi-k6/`이고, 팀이나 프로젝트 이름에 맞추려면 처음 만들 때 `npx --yes openapi-k6 init --dir <path>`를 사용합니다.');
+    expect(readme).toContain('기존 기본 작업공간인 `load-tests/`가 있는 프로젝트는 `npx --yes openapi-k6 update`로 `openapi-k6/`로 이전하고 scaffold 안내를 갱신합니다.');
     expect(readme).toContain('기존 프로젝트에서 CLI가 `Scaffold update available`을 표시하면 안내된 `update` 명령을 실행하면 됩니다.');
     expect(readme).toContain('API base URL과 OpenAPI 경로가 확실하면 `init --sync`로 작업 공간 생성 직후 snapshot/catalog까지 만들 수 있습니다.');
     expect(readme).toContain('npx --yes openapi-k6 init --base-url <url> --openapi <path-or-url> --sync');
@@ -36,15 +51,17 @@ describe('README usage guide', () => {
     expect(quickStartSection).not.toContain('-s smoke');
     expect(commandSection).not.toContain('catalog --query login');
     expect(commandSection).not.toContain('-s smoke');
+    expect(commandSection).toContain('| Codex 스킬 설치 | `npx --yes openapi-k6 install-skill --yes` |');
 
     expect(readme).toContain('## 1. 작업 공간 만들기');
     expect(readme).toContain('API base URL [http://localhost:8080]: https://api.example.com');
     expect(readme).toContain('Swagger UI 주소가 아니라 실제 API 요청의 기본 주소를 입력합니다.');
-    expect(readme).toContain('이미 `load-tests/`가 있으면 `init --force`로 덮어쓰지 말고 먼저 `npx --yes openapi-k6 update`를 사용합니다.');
+    expect(readme).toContain('이미 `load-tests/`가 있으면 `init --force`로 새로 만들지 말고 먼저 `npx --yes openapi-k6 update`를 사용해 `openapi-k6/`로 이전합니다.');
+    expect(readme).toContain('작업공간 이름을 바꾸려면 처음 만들 때 `npx --yes openapi-k6 init --dir <path>`를 사용합니다.');
     expect(readme).toContain('defaultModule: default');
 
     expect(readme).toContain('## 2. Endpoint 고르기');
-    expect(readme).toContain('Catalog: load-tests/openapi/default.catalog.json');
+    expect(readme).toContain('Catalog: openapi-k6/openapi/default.catalog.json');
     expect(readme).toContain('AI에게 scenario 초안까지 맡길 때는 `npx --yes openapi-k6 catalog --query <검색어> --ai`를 사용합니다.');
     expect(readme).toContain('Swagger/OpenAPI 변경을 바로 반영하려면 `npx --yes openapi-k6 catalog --sync --query <검색어> --ai`를 사용합니다.');
     expect(readme).toContain('OpenAPI schema/example이 있으면 request body 초안과 response extract 후보도 함께 보여줍니다.');
@@ -82,37 +99,19 @@ describe('README usage guide', () => {
     expect(readme).toContain('### 제약');
 
     expect(readme).toContain('## 파일 규칙');
-    expect(readme).toContain('`load-tests/config.yaml`');
-    expect(readme).toContain('`load-tests/.env`');
-    expect(readme).toContain('`load-tests/scenarios/*.yaml`');
-    expect(readme).toContain('`load-tests/openapi/*.openapi.json`: `sync` 생성물');
-    expect(readme).toContain('`load-tests/generated/*.k6.js`: `generate` 생성물');
-    expect(readme).toContain('비밀값이 필요하면 `load-tests/.env.example`을 참고해 직접 만들고 commit하지 않습니다.');
+    expect(readme).toContain('`openapi-k6/config.yaml`');
+    expect(readme).toContain('`openapi-k6/.env`');
+    expect(readme).toContain('`openapi-k6/scenarios/*.yaml`');
+    expect(readme).toContain('`openapi-k6/openapi/*.openapi.json`: `sync` 생성물');
+    expect(readme).toContain('`openapi-k6/generated/*.k6.js`: `generate` 생성물');
+    expect(readme).toContain('비밀값이 필요하면 `openapi-k6/.env.example`을 참고해 직접 만들고 commit하지 않습니다.');
 
     expect(readme).toContain('## 지원 범위');
     expect(readme).toContain('Node.js 20 이상');
     expect(readme).toContain('OpenAPI 3.x 문서');
     expect(readme).toContain('Swagger/OpenAPI 2.0 문서는 지원하지 않습니다.');
 
-    expect(readme).toContain('## AI에게 맡기기');
-    expect(readme).toContain('먼저 이 openapi-k6 루트 README 전체를 읽어.');
-    expect(readme).toContain('접힌 고급 기능 예시도 읽고 진행해.');
-    expect(readme).toContain('모든 명령은 적용할 백엔드 프로젝트 루트에서 실행해.');
-    expect(readme).toContain('백엔드 프로젝트에 load-tests/README.md가 없으면 npx --yes openapi-k6 init을 실행해.');
-    expect(readme).toContain('이미 load-tests/README.md가 있으면 init을 다시 실행하지 말고 기존 문서를 먼저 읽어.');
-    expect(readme).toContain('CLI가 Scaffold update available을 표시하거나 scaffold README/runner를 최신화해야 하면 npx --yes openapi-k6 update를 실행해.');
-    expect(readme).toContain('init 또는 update 후 백엔드 프로젝트의 load-tests/README.md를 다시 읽고, 그 문서의 실제 경로와 명령을 기준으로 진행해.');
-    expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai로 endpoint 후보와 scenario step 초안을 확인해.');
-    expect(readme).toContain('출력의 scenario mapping에서 path/query/header/body/extract 후보가 scenario YAML의 어느 위치에 들어가는지 확인해.');
-    expect(readme).toContain('body fields의 required/optional, placeholder, env 표시를 보고 필수 값과 비밀 값 처리 방식을 정해.');
-    expect(readme).toContain('response extract candidates의 yaml과 likely next use를 보고 다음 step의 header/pathParams/query/body 참조를 설계해.');
-    expect(readme).toContain('출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.');
-    expect(readme).toContain('실패하면 Scenario validation failed의 각 항목과 Fix hints를 기준으로 scenario YAML을 수정해.');
-    expect(readme).toContain('operationId가 없거나 애매하면 api.method와 api.path를 사용해.');
-    expect(readme).toContain('여러 서버를 이어야 할 때만 module add와 api.module을 사용해.');
-    expect(readme).toContain('load-tests/openapi/*.openapi.json, load-tests/openapi/*.catalog.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.');
-    expect(readme).toContain('validate와 test가 통과하기 전에는 run이나 generate를 하지 마.');
-
+    expect(readme.indexOf('## AI agent로 시작하기')).toBeLessThan(readme.indexOf('## 빠른 시작'));
     expect(readme.indexOf('## 빠른 시작')).toBeLessThan(readme.indexOf('## 1. 작업 공간 만들기'));
     expect(readme.indexOf('## 4. 검증과 실행')).toBeLessThan(readme.indexOf('## 필요할 때만'));
     expect(readme.indexOf('## 필요할 때만')).toBeLessThan(readme.indexOf('## 파일 규칙'));
@@ -121,6 +120,7 @@ describe('README usage guide', () => {
     expect(readme.indexOf('<summary>고급 기능 예시 보기</summary>')).toBeLessThan(readme.indexOf('## 파일 규칙'));
 
     expect(readme).not.toContain('## 진행 방식 선택');
+    expect(readme).not.toContain('## AI에게 맡기기');
     expect(readme).not.toContain('### 4-4. 선택: 데이터와 공통 step');
     expect(readme).not.toContain('docs/advanced-usage.md');
     expect(readme).not.toContain('npx --yes openapi-k6 run -s smoke --log -- --vus 1 --iterations 1');

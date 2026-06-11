@@ -547,7 +547,7 @@ function renderMultipartFileVariable(stepIndex: number, fileIndex: number): stri
 function resolveMultipartOpenPath(ast: ASTScenario, filePath: string, options: K6GeneratorOptions): string {
   validateMultipartFilePath(filePath);
 
-  const fileRootDir = path.resolve(options.fileRootDir ?? 'load-tests');
+  const fileRootDir = path.resolve(options.fileRootDir ?? 'openapi-k6');
   const outputPath = options.outputPath === undefined
     ? path.join(fileRootDir, 'generated', `${ast.name}.k6.js`)
     : path.resolve(options.outputPath);
@@ -569,11 +569,11 @@ function validateMultipartFilePath(filePath: string): void {
   }
 
   if (path.isAbsolute(filePath)) {
-    throw new K6GenerationError('request.multipart file path must be relative to the load-tests directory');
+    throw new K6GenerationError('request.multipart file path must be relative to the workspace directory');
   }
 
   if (filePath.trim().split(/[\\/]+/).includes('..')) {
-    throw new K6GenerationError('request.multipart file path must stay inside the load-tests directory');
+    throw new K6GenerationError('request.multipart file path must stay inside the workspace directory');
   }
 }
 

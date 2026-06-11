@@ -11,24 +11,65 @@ OpenAPI에서 API 흐름을 **Scenario YAML**로 작성하고, k6 실행 전에 
 OpenAPI 가져오기 -> scenario 작성 -> validate/test -> run
 ```
 
-직접 실행하려면 [빠른 시작](#빠른-시작)을 보고, AI coding agent에게 맡기려면 [AI에게 맡기기](#ai에게-맡기기)를 복사합니다.
+AI coding agent에게 맡기려면 [AI agent로 시작하기](#ai-agent로-시작하기)를 먼저 보고, 직접 실행하려면 [빠른 시작](#빠른-시작)을 봅니다.
+
+## AI agent로 시작하기
+
+Codex를 사용한다면 `openapi-k6-scenario` 스킬을 설치한 뒤 시나리오를 요청하는 흐름을 권장합니다. 스킬은 Scenario YAML을 바로 쓰지 않고, 먼저 업무 프로세스와 호출할 API 순서를 정리한 뒤 사용자 확인을 받고 진행합니다.
+
+```bash
+npx --yes openapi-k6 install-skill --yes
+```
+
+설치 후에는 아래처럼 요청합니다.
+
+```text
+$openapi-k6-scenario 회원 로그인 시나리오
+```
+
+Codex에 스킬이 아직 설치되어 있지 않거나 새 프로젝트에서 처음 시작한다면 아래 프롬프트를 붙여넣습니다.
+
+```text
+이 백엔드 프로젝트에 openapi-k6 Codex 스킬을 사용해 Scenario YAML 검증과 k6 부하 테스트 준비를 적용해줘.
+
+1. `$openapi-k6-scenario` 스킬을 사용할 수 있는지 확인해.
+   사용할 수 없다면 나에게 설치할지 먼저 물어보고, 내가 동의하면 백엔드 프로젝트 루트에서 `npx --yes openapi-k6@latest install-skill --yes`를 실행해.
+   이 명령은 Codex 스킬만 설치하고, 프로젝트의 openapi-k6 작업공간은 만들지 않아.
+2. 모든 명령은 적용할 백엔드 프로젝트 루트에서 실행해.
+3. 기본 작업공간은 `openapi-k6/`야. 팀이나 프로젝트 규칙상 다른 이름이 필요하면 `init --dir <path>`를 사용해.
+4. 작업공간 README.md가 있으면 먼저 읽고 그 지침을 따라.
+   처음에는 `AI 작업 계약`, `프로젝트 값`, `명령` 섹션만 확인해.
+   같은 대화에서 최신 init, update, README 변경 이후 이미 읽었다면 전체를 다시 읽지 말고 필요한 섹션만 확인해.
+   없으면 npx --yes openapi-k6@latest init을 실행해.
+   baseUrl 또는 OpenAPI spec URL을 확실히 모르면 나에게 물어봐.
+5. 기존 `load-tests/config.yaml`이 있고 `openapi-k6/config.yaml`이 없으면 npx --yes openapi-k6@latest update로 `openapi-k6/`로 이전해.
+6. init 또는 update 후 생성된 작업공간 README.md의 `AI 작업 계약`, `프로젝트 값`, `명령` 섹션을 다시 읽어.
+   이 README는 AI 작업 지침이므로, 이후 작업은 그 문서를 기준으로 진행해.
+7. 시나리오 파일을 작성하거나 수정하기 전에는 먼저 업무 프로세스와 호출할 API 순서를 요약해서 내 확인을 받아.
+   요약에는 scenario 파일명, API 호출 순서, method/path 또는 operationId, 필요한 request 값, env/vars로 받을 값, response에서 extract할 값, 기존 partial include 여부를 포함해.
+8. 내가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 그때 Scenario YAML을 작성하거나 수정해.
+9. validate와 test가 통과하기 전에는 run이나 generate를 하지 마.
+10. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 확인 포인트만 알려줘.
+```
 
 ## 빠른 시작
 
 백엔드 프로젝트 루트에서 실행합니다.
-처음 적용하는 프로젝트는 `init`부터 실행하고, 이미 `load-tests/`가 있는 프로젝트는 `init`을 다시 실행하지 말고 `update`로 scaffold 안내만 갱신합니다.
+처음 적용하는 프로젝트는 `init`부터 실행합니다.
+기본 작업공간은 `openapi-k6/`이고, 팀이나 프로젝트 이름에 맞추려면 처음 만들 때 `npx --yes openapi-k6 init --dir <path>`를 사용합니다.
+기존 기본 작업공간인 `load-tests/`가 있는 프로젝트는 `npx --yes openapi-k6 update`로 `openapi-k6/`로 이전하고 scaffold 안내를 갱신합니다.
 
 ```bash
 npx --yes openapi-k6 init
 npx --yes openapi-k6 sync
 npx --yes openapi-k6 catalog --query <검색어>
-# load-tests/scenarios/<scenario-name>.yaml 작성
+# openapi-k6/scenarios/<scenario-name>.yaml 작성
 npx --yes openapi-k6 validate -s <scenario-name>
 npx --yes openapi-k6 test -s <scenario-name>
 npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1 --iterations 1
 ```
 
-`<검색어>`는 endpoint를 찾을 단어이고, `<scenario-name>`은 `load-tests/scenarios/<scenario-name>.yaml`에서 확장자를 뺀 이름입니다.
+`<검색어>`는 endpoint를 찾을 단어이고, `<scenario-name>`은 `openapi-k6/scenarios/<scenario-name>.yaml`에서 확장자를 뺀 이름입니다.
 아래 예시는 이해를 돕기 위한 값입니다. 실제 명령에는 위 placeholder를 프로젝트에 맞게 바꿔 넣습니다.
 
 `run`은 k6 설치가 필요합니다. 스크립트만 만들려면 아래 명령을 씁니다.
@@ -55,8 +96,9 @@ npx --yes openapi-k6 init --base-url <url> --openapi <path-or-url> --sync
 npx --yes openapi-k6 init
 ```
 
-`init`은 백엔드 프로젝트 안에 `load-tests/`를 만들고 API 기본 주소를 묻습니다.
-이미 `load-tests/`가 있으면 `init --force`로 덮어쓰지 말고 먼저 `npx --yes openapi-k6 update`를 사용합니다.
+`init`은 백엔드 프로젝트 안에 `openapi-k6/`를 만들고 API 기본 주소를 묻습니다.
+작업공간 이름을 바꾸려면 처음 만들 때 `npx --yes openapi-k6 init --dir <path>`를 사용합니다.
+이미 `load-tests/`가 있으면 `init --force`로 새로 만들지 말고 먼저 `npx --yes openapi-k6 update`를 사용해 `openapi-k6/`로 이전합니다.
 
 ```text
 API base URL [http://localhost:8080]: https://api.example.com
@@ -64,7 +106,7 @@ API base URL [http://localhost:8080]: https://api.example.com
 
 Swagger UI 주소가 아니라 실제 API 요청의 기본 주소를 입력합니다.
 OpenAPI 문서를 자동으로 찾지 못하면 OpenAPI JSON/YAML URL이나 파일 경로를 입력합니다.
-지금 모르면 `skip`으로 넘어간 뒤 `load-tests/config.yaml`을 직접 채웁니다.
+지금 모르면 `skip`으로 넘어간 뒤 `openapi-k6/config.yaml`을 직접 채웁니다.
 
 ```yaml
 baseUrl: https://api.example.com
@@ -90,7 +132,7 @@ OpenAPI schema/example이 있으면 request body 초안과 response extract 후�
 아래는 검색어 `login`을 사용한 출력 예시입니다.
 
 ```text
-Catalog: load-tests/openapi/default.catalog.json
+Catalog: openapi-k6/openapi/default.catalog.json
 Query: login
 Operations: 1
 
@@ -108,7 +150,7 @@ POST   /auth/login
 
 ## 3. Scenario 작성
 
-`init`은 기본 예시인 `load-tests/scenarios/smoke.yaml`을 만듭니다.
+`init`은 기본 예시인 `openapi-k6/scenarios/smoke.yaml`을 만듭니다.
 처음 확인은 이 파일을 수정해도 되고, 실제 흐름은 새 YAML 파일로 만들어도 됩니다.
 
 최소 필드는 `id`, `api`, `request`, `extract`, `condition`입니다.
@@ -138,7 +180,7 @@ steps:
     condition: status == 200
 ```
 
-`{{env.*}}` 값은 `test` 전에 `load-tests/.env`에 둡니다.
+`{{env.*}}` 값은 `test` 전에 `openapi-k6/.env`에 둡니다.
 비밀값은 scenario YAML에 직접 쓰지 않습니다.
 `catalog --ai` 초안의 `<...>` placeholder가 scenario에 남아 있으면 `validate`가 실패합니다.
 
@@ -205,7 +247,7 @@ fixtures:
 ```
 
 ```yaml
-# load-tests/scenarios/fixtures/dev.yaml
+# openapi-k6/scenarios/fixtures/dev.yaml
 sku: ABC-001
 tenantId: dev-tenant
 ```
@@ -213,7 +255,7 @@ tenantId: dev-tenant
 실행 시점 override도 가능합니다.
 
 ```bash
-npx --yes openapi-k6 test -s <scenario-name> --var-file load-tests/scenarios/fixtures/stage.yaml
+npx --yes openapi-k6 test -s <scenario-name> --var-file openapi-k6/scenarios/fixtures/stage.yaml
 npx --yes openapi-k6 test -s <scenario-name> --var sku=ABC-002
 ```
 
@@ -237,7 +279,7 @@ steps:
 partial 파일에는 `steps`만 둡니다.
 
 ```yaml
-# load-tests/scenarios/partials/login.yaml
+# openapi-k6/scenarios/partials/login.yaml
 steps:
   - id: login
     api:
@@ -316,13 +358,13 @@ npx --yes openapi-k6 generate -s <scenario-name>
 생성된 runner를 직접 쓰는 기존 흐름도 유지됩니다.
 
 ```bash
-./load-tests/run.sh <scenario-name> --log
+./openapi-k6/run.sh <scenario-name> --log
 ```
 
 k6 옵션은 scenario 이름 뒤에 붙입니다.
 
 ```bash
-./load-tests/run.sh <scenario-name> --log --vus 1 --iterations 1
+./openapi-k6/run.sh <scenario-name> --log --vus 1 --iterations 1
 ```
 
 ### 제약
@@ -339,20 +381,20 @@ k6 옵션은 scenario 이름 뒤에 붙입니다.
 
 보통 직접 수정하는 파일은 아래 세 가지입니다.
 
-- `load-tests/config.yaml`
-- `load-tests/.env`
-- `load-tests/scenarios/*.yaml`
+- `openapi-k6/config.yaml`
+- `openapi-k6/.env`
+- `openapi-k6/scenarios/*.yaml`
 
 아래 파일은 직접 고치기보다 명령으로 다시 만듭니다.
 
-- `load-tests/openapi/*.openapi.json`: `sync` 생성물
-- `load-tests/openapi/*.catalog.json`: `sync` 생성물
-- `load-tests/generated/*.k6.js`: `generate` 생성물
+- `openapi-k6/openapi/*.openapi.json`: `sync` 생성물
+- `openapi-k6/openapi/*.catalog.json`: `sync` 생성물
+- `openapi-k6/generated/*.k6.js`: `generate` 생성물
 
-`load-tests/.env`는 생성되지 않습니다.
-비밀값이 필요하면 `load-tests/.env.example`을 참고해 직접 만들고 commit하지 않습니다.
+`openapi-k6/.env`는 생성되지 않습니다.
+비밀값이 필요하면 `openapi-k6/.env.example`을 참고해 직접 만들고 commit하지 않습니다.
 
-기본 `load-tests/.gitignore`는 `scenarios/**`만 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.
+기본 `openapi-k6/.gitignore`는 `scenarios/**`만 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.
 전체 작업 공간을 git에 포함하려면 ignore 규칙을 조정합니다.
 
 ## 명령 모음
@@ -372,6 +414,7 @@ k6 옵션은 scenario 이름 뒤에 붙입니다.
 | 로컬 UI | `npx --yes openapi-k6 ui` |
 | 점검 | `npx --yes openapi-k6 doctor` |
 | scaffold 갱신 | `npx --yes openapi-k6 update` |
+| Codex 스킬 설치 | `npx --yes openapi-k6 install-skill --yes` |
 
 ## 지원 범위
 
@@ -383,47 +426,7 @@ k6 옵션은 scenario 이름 뒤에 붙입니다.
 
 이 도구의 목표는 범용 API 테스트 플랫폼이 아니라 OpenAPI 기반 scenario 검증과 k6 스크립트 생성입니다.
 
-## AI에게 맡기기
-
-AI coding agent에게는 아래처럼 요청하면 됩니다.
-
-```text
-이 백엔드 프로젝트에 openapi-k6 Scenario YAML 검증과 k6 부하 테스트 준비를 적용해줘.
-
-1. 먼저 이 openapi-k6 루트 README 전체를 읽어.
-   접힌 고급 기능 예시도 읽고 진행해.
-2. 모든 명령은 적용할 백엔드 프로젝트 루트에서 실행해.
-3. 백엔드 프로젝트에 load-tests/README.md가 없으면 npx --yes openapi-k6 init을 실행해.
-   baseUrl 또는 OpenAPI spec URL을 확실히 모르면 나에게 물어봐.
-   이미 load-tests/README.md가 있으면 init을 다시 실행하지 말고 기존 문서를 먼저 읽어.
-4. CLI가 Scaffold update available을 표시하거나 scaffold README/runner를 최신화해야 하면 npx --yes openapi-k6 update를 실행해.
-5. init 또는 update 후 백엔드 프로젝트의 load-tests/README.md를 다시 읽고, 그 문서의 실제 경로와 명령을 기준으로 진행해.
-6. load-tests/config.yaml에 TODO가 남아 있으면 실제 API 정보로 채워.
-7. npx --yes openapi-k6 sync로 OpenAPI snapshot과 catalog를 만들어.
-8. npx --yes openapi-k6 catalog --query <검색어> --ai로 endpoint 후보와 scenario step 초안을 확인해. 필요하면 load-tests/openapi/*.catalog.json도 열어봐.
-   출력의 scenario mapping에서 path/query/header/body/extract 후보가 scenario YAML의 어느 위치에 들어가는지 확인해.
-   body fields의 required/optional, placeholder, env 표시를 보고 필수 값과 비밀 값 처리 방식을 정해.
-   response extract candidates의 yaml과 likely next use를 보고 다음 step의 header/pathParams/query/body 참조를 설계해.
-   출력의 Suggested scenario step은 초안으로 사용하되, body: {}, <...> placeholder, 필요한 extract 경로는 OpenAPI schema와 실제 응답을 확인해서 채워. <...> placeholder가 남으면 validate가 실패해.
-9. 내가 원하는 API 흐름을 확인한 뒤 load-tests/scenarios/*.yaml을 작성하거나 수정해.
-   처음에는 id, api, request, extract, condition만 채워.
-   operationId가 없거나 애매하면 api.method와 api.path를 사용해.
-   같은 값이나 같은 step이 반복될 때만 vars, fixtures, include를 사용해.
-   include 파일에는 vars:나 fixtures:를 두지 말고, 변수는 실행하는 scenario 파일에서 관리해.
-   여러 서버를 이어야 할 때만 module add와 api.module을 사용해.
-10. 비밀값은 scenario YAML에 직접 쓰지 말고 {{env.NAME}}으로 참조해. 실제 값은 load-tests/.env에만 둬.
-11. npx --yes openapi-k6 validate -s <scenario-name>으로 YAML/OpenAPI 정합성을 먼저 확인해.
-    실패하면 Scenario validation failed의 각 항목과 Fix hints를 기준으로 scenario YAML을 수정해.
-12. npx --yes openapi-k6 test -s <scenario-name>으로 실제 API 흐름을 검증해.
-13. validate와 test가 통과하기 전에는 run이나 generate를 하지 마.
-14. 통과한 scenario만 npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1 --iterations 1로 짧게 실행해.
-    스크립트만 필요하면 npx --yes openapi-k6 generate -s <scenario-name>을 사용해.
-15. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 확인 포인트만 알려줘.
-16. load-tests/README.md, load-tests/run.sh, load-tests/.env.example, load-tests/.gitignore, load-tests/.openapi-k6.json은 scaffold 파일이므로 명시 요청 없이는 수정하지 마.
-    load-tests/openapi/*.openapi.json, load-tests/openapi/*.catalog.json, load-tests/generated/*.k6.js도 직접 수정하지 말고 sync/generate로 다시 만들어.
-```
-
-`init` 후 생성되는 `load-tests/README.md`에는 선택한 디렉터리와 module 이름이 반영된 작업 안내가 들어 있습니다.
+`init` 후 생성되는 작업공간 README.md에는 선택한 디렉터리와 module 이름이 반영된 작업 안내가 들어 있습니다.
 
 ## 참고문서
 

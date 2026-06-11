@@ -197,7 +197,7 @@ async function runMultiModuleFlow(projectDir, fixture, env, options) {
   assertRequestLog(fixture.requests.bos, 'GET /v3/api-docs', 'bos OpenAPI discovery should try the default path');
 
   await writeFile(
-    path.join(projectDir, 'load-tests/.env'),
+    path.join(projectDir, 'openapi-k6/.env'),
     [
       'SMOKE_SKU=fixture-sku',
       '',
@@ -205,20 +205,20 @@ async function runMultiModuleFlow(projectDir, fixture, env, options) {
     'utf8',
   );
   await writeFile(
-    path.join(projectDir, 'load-tests/scenarios/cross-module.yaml'),
+    path.join(projectDir, 'openapi-k6/scenarios/cross-module.yaml'),
     createCrossModuleScenario(),
     'utf8',
   );
   await writeFile(
-    path.join(projectDir, 'load-tests/scenarios/validation-errors.yaml'),
+    path.join(projectDir, 'openapi-k6/scenarios/validation-errors.yaml'),
     createValidationErrorsScenario(),
     'utf8',
   );
 
-  await assertFileContains(path.join(projectDir, 'load-tests/config.yaml'), `openapi: ${authBaseUrl}/api-docs`);
-  await assertFileContains(path.join(projectDir, 'load-tests/config.yaml'), `openapi: ${bosBaseUrl}/v3/api-docs`);
-  await assertFileContains(path.join(projectDir, 'load-tests/openapi/auth.openapi.json'), '"operationId": "login"');
-  await assertFileContains(path.join(projectDir, 'load-tests/openapi/bos.openapi.json'), '"operationId": "createOrder"');
+  await assertFileContains(path.join(projectDir, 'openapi-k6/config.yaml'), `openapi: ${authBaseUrl}/api-docs`);
+  await assertFileContains(path.join(projectDir, 'openapi-k6/config.yaml'), `openapi: ${bosBaseUrl}/v3/api-docs`);
+  await assertFileContains(path.join(projectDir, 'openapi-k6/openapi/auth.openapi.json'), '"operationId": "login"');
+  await assertFileContains(path.join(projectDir, 'openapi-k6/openapi/bos.openapi.json'), '"operationId": "createOrder"');
 
   const authCatalogAi = await runCli(['catalog', '--module', 'auth', '--query', 'login', '--ai'], projectDir, env);
   assertIncludes(authCatalogAi.stdout, 'response extract candidates:', 'auth catalog --ai should show extract candidates');
@@ -242,7 +242,7 @@ async function runMultiModuleFlow(projectDir, fixture, env, options) {
   assertModuleList(moduleList.stdout, ['seed', 'auth', 'bos'], 'auth');
 
   const validate = await runCli(['validate', '-s', 'cross-module'], projectDir, env);
-  assertIncludes(validate.stdout, 'Validated load-tests/scenarios/cross-module.yaml', 'cross-module validate should pass');
+  assertIncludes(validate.stdout, 'Validated openapi-k6/scenarios/cross-module.yaml', 'cross-module validate should pass');
 
   const test = await runCli(['test', '-s', 'cross-module', '--no-color'], projectDir, env);
   assertIncludes(test.stdout, 'summary:', 'cross-module scenario test should print a summary');
@@ -251,7 +251,7 @@ async function runMultiModuleFlow(projectDir, fixture, env, options) {
   assertRequestLog(fixture.requests.bos, 'POST /orders', 'cross-module test should call the bos server');
 
   await runCli(['generate', '-s', 'cross-module'], projectDir, env);
-  const generatedScript = path.join(projectDir, 'load-tests/generated/cross-module.k6.js');
+  const generatedScript = path.join(projectDir, 'openapi-k6/generated/cross-module.k6.js');
   await assertFileContains(generatedScript, `__ENV.BASE_URL_AUTH || __ENV.BASE_URL || ${JSON.stringify(authBaseUrl)}`);
   await assertFileContains(generatedScript, `__ENV.BASE_URL_BOS || __ENV.BASE_URL || ${JSON.stringify(bosBaseUrl)}`);
   await assertFileContains(generatedScript, '`/login`');
@@ -262,7 +262,7 @@ async function runMultiModuleFlow(projectDir, fixture, env, options) {
     '-s',
     'cross-module',
     '--write',
-    'load-tests/generated/cross-module-run.k6.js',
+    'openapi-k6/generated/cross-module-run.k6.js',
     '--log',
     '--trace',
     '--report',
@@ -276,8 +276,8 @@ async function runMultiModuleFlow(projectDir, fixture, env, options) {
   assertIncludes(run.stdout, 'Generated ', 'run should generate a k6 script before invoking k6');
   assertIncludes(run.stdout, 'fake k6 run ok', 'run should stream fake k6 output');
 
-  await assertFileContains(path.join(projectDir, 'load-tests/logs/cross-module.log'), 'fake k6 run ok');
-  await assertFileContains(path.join(projectDir, 'load-tests/logs/cross-module-report.html'), 'fake k6 report');
+  await assertFileContains(path.join(projectDir, 'openapi-k6/logs/cross-module.log'), 'fake k6 run ok');
+  await assertFileContains(path.join(projectDir, 'openapi-k6/logs/cross-module-report.html'), 'fake k6 report');
   await assertFileContains(options.k6EnvLogPath, 'OPENAPI_K6_TRACE=1');
   await assertFileContains(options.k6EnvLogPath, 'K6_WEB_DASHBOARD=true');
   await assertFileContains(options.k6EnvLogPath, 'K6_WEB_DASHBOARD_OPEN=true');
@@ -417,7 +417,7 @@ function assertK6Args(rawArgs) {
   }
 
   const scriptPath = args.at(-1);
-  if (scriptPath === undefined || !scriptPath.endsWith('load-tests/generated/cross-module-run.k6.js')) {
+  if (scriptPath === undefined || !scriptPath.endsWith('openapi-k6/generated/cross-module-run.k6.js')) {
     throw new Error(`expected fake k6 to receive the generated script path last; got ${JSON.stringify(args)}`);
   }
 }

@@ -94,12 +94,12 @@ async function runInitSmoke(projectDir, packageSpec, env) {
   await mkdir(projectDir, { recursive: true });
 
   await runCli(['init', '--no-input'], projectDir, packageSpec, env);
-  await assertFileContains(path.join(projectDir, 'load-tests/config.yaml'), 'defaultModule: default');
-  await assertFileContains(path.join(projectDir, 'load-tests/scenarios/smoke.yaml'), 'name: smoke');
-  await assertFileContains(path.join(projectDir, 'load-tests/scenarios/partials/login.yaml.example'), '{{vars.loginId}}');
-  await assertFileContains(path.join(projectDir, 'load-tests/scenarios/fixtures/dev.yaml.example'), 'sku: ABC-001');
-  await assertFileContains(path.join(projectDir, 'load-tests/README.md'), 'openapi-k6');
-  await assertFileContains(path.join(projectDir, 'load-tests/run.sh'), 'k6 run');
+  await assertFileContains(path.join(projectDir, 'openapi-k6/config.yaml'), 'defaultModule: default');
+  await assertFileContains(path.join(projectDir, 'openapi-k6/scenarios/smoke.yaml'), 'name: smoke');
+  await assertFileContains(path.join(projectDir, 'openapi-k6/scenarios/partials/login.yaml.example'), '{{vars.loginId}}');
+  await assertFileContains(path.join(projectDir, 'openapi-k6/scenarios/fixtures/dev.yaml.example'), 'sku: ABC-001');
+  await assertFileContains(path.join(projectDir, 'openapi-k6/README.md'), 'openapi-k6');
+  await assertFileContains(path.join(projectDir, 'openapi-k6/run.sh'), 'k6 run');
 }
 
 async function runStandaloneScenarioSmoke(projectDir, packageSpec, env) {

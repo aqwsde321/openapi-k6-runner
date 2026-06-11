@@ -693,6 +693,6 @@ describe('scenario parser', () => {
         '            path: ../secrets/file.bin',
         '',
       ].join('\n')),
-    ).toThrowError('<inline>: steps[0].request.multipart.files.file.path must stay inside the load-tests directory');
+    ).toThrowError('<inline>: steps[0].request.multipart.files.file.path must stay inside the workspace directory');
   });
 });

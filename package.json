@@ -1,6 +1,6 @@
 {
   "name": "openapi-k6",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "description": "Scenario-first OpenAPI CLI for validating API flows and generating k6 scripts",
   "repository": {
     "type": "git",
@@ -20,6 +20,7 @@
     "CHANGELOG.md",
     "docs/03-maintainer-notes.md",
     "docs/project-review.md",
+    "skills",
     ".env.example"
   ],
   "keywords": [
@@ -35,7 +36,7 @@
   "scripts": {
     "clean": "rm -rf dist",
     "build": "tsc -p tsconfig.build.json && pnpm run build:assets",
-    "build:assets": "mkdir -p dist/scaffold/templates && cp src/scaffold/templates/load-tests.README.md dist/scaffold/templates/load-tests.README.md",
+    "build:assets": "mkdir -p dist/scaffold/templates && rm -f dist/scaffold/templates/load-tests.README.md && cp src/scaffold/templates/openapi-k6.README.md dist/scaffold/templates/openapi-k6.README.md",
     "build:watch": "pnpm run build:assets && tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "test": "vitest run",
     "test:compat": "node scripts/backward-compat-smoke.mjs",

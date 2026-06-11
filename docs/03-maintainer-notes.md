@@ -4,12 +4,12 @@
 
 ## 역할
 
-이 저장소는 백엔드 프로젝트 안의 `load-tests/` 작업 폴더를 생성하고 갱신하는 CLI 원본입니다.
+이 저장소는 백엔드 프로젝트 안의 `openapi-k6/` 작업 폴더를 생성하고 갱신하는 CLI 원본입니다.
 
 즉:
 
 - 이 저장소 자체는 보통 테스트 결과물을 담지 않습니다.
-- 결과물은 대상 백엔드 프로젝트 안의 `load-tests/`에 생성됩니다.
+- 결과물은 대상 백엔드 프로젝트 안의 `openapi-k6/`에 생성됩니다.
 - npm 배포 버전 사용자는 보통 `npx --yes openapi-k6 ...`로 실행합니다.
 - 저장소 내부 개발/검증은 `pnpm install` 후 `pnpm test`, `pnpm run typecheck`, `pnpm run build`로 진행합니다.
 
@@ -22,7 +22,7 @@
 - Scenario 실행 검증: `src/executor/scenario.executor.ts`
 - k6 생성: `src/compiler/k6.generator.ts`
 - init scaffold: `src/scaffold/load-test.init.ts`
-- 생성 README 템플릿: `src/scaffold/templates/load-tests.README.md`
+- 생성 README 템플릿: `src/scaffold/templates/openapi-k6.README.md`
 
 ## 소스에서 직접 실행하기
 
@@ -139,7 +139,7 @@ pnpm run smoke:published -- "openapi-k6@$VERSION"
 
 ## bootstrap 시나리오
 
-새 빈 백엔드 프로젝트 디렉터리에서 `init`이 `load-tests/`를 만들고, 대화형 입력으로 `baseUrl`을 받은 뒤 OpenAPI URL을 자동 탐색해야 합니다. OpenAPI URL이 채워진 config로 `sync -> test -> generate -> run.sh`가 정상 진행해야 합니다.
+새 빈 백엔드 프로젝트 디렉터리에서 `init`이 `openapi-k6/`를 만들고, 대화형 입력으로 `baseUrl`을 받은 뒤 OpenAPI URL을 자동 탐색해야 합니다. OpenAPI URL이 채워진 config로 `sync -> test -> generate -> run.sh`가 정상 진행해야 합니다.
 
 예:
 
@@ -147,11 +147,11 @@ pnpm run smoke:published -- "openapi-k6@$VERSION"
 cd /tmp/smoke-backend
 node <openapi-k6-runner 저장소 루트>/dist/cli/index.js init
 # 대화형 init이 baseUrl만 묻고 /v3/api-docs, /api-docs, /openapi.json 등을 자동 탐색한다.
-# 비대화형 실행으로 TODO가 남았다면 load-tests/config.yaml의 baseUrl, modules.default.openapi 값을 설정한다.
+# 비대화형 실행으로 TODO가 남았다면 openapi-k6/config.yaml의 baseUrl, modules.default.openapi 값을 설정한다.
 node <openapi-k6-runner 저장소 루트>/dist/cli/index.js sync
 node <openapi-k6-runner 저장소 루트>/dist/cli/index.js test -s <scenario-name>
 node <openapi-k6-runner 저장소 루트>/dist/cli/index.js generate -s <scenario-name>
-./load-tests/run.sh <scenario-name> --log
+./openapi-k6/run.sh <scenario-name> --log
 ```
 
 기존 bootstrap 초기화가 필요할 때만 아래처럼 실행합니다.
@@ -164,7 +164,7 @@ node <openapi-k6-runner 저장소 루트>/dist/cli/index.js init --force
 
 - root `README.md`
   - npm 배포 버전을 사용하는 대상 프로젝트 사용자가 먼저 읽는 문서
-- `src/scaffold/templates/load-tests.README.md`
+- `src/scaffold/templates/openapi-k6.README.md`
   - `init` 후 대상 프로젝트에 생성되는 실제 작업 가이드
 - `docs/03-maintainer-notes.md`
   - 도구 저장소 수정, 로컬 checkout 실행, npm 배포용 문서

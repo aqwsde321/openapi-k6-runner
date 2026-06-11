@@ -54,17 +54,18 @@ export class InitLoadTestsError extends Error {
 }
 
 const README_TEMPLATE = readFileSync(
-  new URL('./templates/load-tests.README.md', import.meta.url),
+  new URL('./templates/openapi-k6.README.md', import.meta.url),
   'utf8',
 );
-export const CURRENT_SCAFFOLD_VERSION = '0.7.2';
+export const CURRENT_SCAFFOLD_VERSION = '0.8.0';
+export const DEFAULT_WORKSPACE_DIR = 'openapi-k6';
 export const SCAFFOLD_METADATA_FILENAME = '.openapi-k6.json';
 
 export async function initLoadTests(
   options: InitLoadTestsOptions,
 ): Promise<InitLoadTestsResult> {
   const moduleName = normalizeModuleName(options.module ?? 'default');
-  const directory = normalizeDirectory(options.directory ?? 'load-tests');
+  const directory = normalizeDirectory(options.directory ?? DEFAULT_WORKSPACE_DIR);
   const directoryPath = path.resolve(options.cwd, directory);
   const configPath = path.join(directoryPath, 'config.yaml');
   const envExamplePath = path.join(directoryPath, '.env.example');
@@ -126,7 +127,7 @@ export async function updateLoadTests(
   options: UpdateLoadTestsOptions,
 ): Promise<UpdateLoadTestsResult> {
   const moduleName = normalizeModuleName(options.module ?? 'default');
-  const directory = normalizeDirectory(options.directory ?? 'load-tests');
+  const directory = normalizeDirectory(options.directory ?? DEFAULT_WORKSPACE_DIR);
   const directoryPath = path.resolve(options.cwd, directory);
   const configPath = path.join(directoryPath, 'config.yaml');
   const envExamplePath = path.join(directoryPath, '.env.example');
@@ -140,7 +141,7 @@ export async function updateLoadTests(
   if (!(await pathExists(configPath))) {
     throw new InitLoadTestsError(
       [
-        'load-tests workspace was not found.',
+        'openapi-k6 workspace was not found.',
         `Missing: ${configPath}`,
         '',
         'Run this first:',
@@ -294,7 +295,7 @@ async function pathExists(filePath: string): Promise<boolean> {
 }
 
 function formatUpdateCommand(directory: string): string {
-  if (directory === 'load-tests') {
+  if (directory === DEFAULT_WORKSPACE_DIR) {
     return 'npx --yes openapi-k6 update';
   }
 
@@ -596,7 +597,7 @@ function renderReadme(
   const workflowScenarioArg = shellQuote(workflowScenarioPath);
   const workflowOutputArg = shellQuote(workflowOutputPath);
   const envArg = shellQuote(envPath);
-  const usesDefaultDirectory = directory === 'load-tests';
+  const usesDefaultDirectory = directory === DEFAULT_WORKSPACE_DIR;
   const shouldIncludeModuleOption = options.includeModuleOption === true || !usesDefaultDirectory;
   const cliCommand = 'npx --yes openapi-k6';
   const configOption = usesDefaultDirectory ? '' : ' --config ' + configArg;

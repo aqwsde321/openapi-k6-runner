@@ -9,8 +9,8 @@
 ```mermaid
 graph TD
     subgraph inputFiles["Input Files"]
-        C["load-tests/config.yaml"] --> Loader["Config Loader"]
-        S["load-tests/scenarios/*.yaml"] --> Parser["Scenario DSL Parser"]
+        C["openapi-k6/config.yaml"] --> Loader["Config Loader"]
+        S["openapi-k6/scenarios/*.yaml"] --> Parser["Scenario DSL Parser"]
         O["OpenAPI URL/File"] --> Sync["sync: Snapshot & Catalog"]
     end
 
@@ -26,7 +26,7 @@ graph TD
     end
 
     subgraph outputs["Output & Verification"]
-        Generator --> K6Script["load-tests/generated/*.k6.js"]
+        Generator --> K6Script["openapi-k6/generated/*.k6.js"]
         Executor --> Reporter["Console Reporter"]
         K6Script --> K6["k6 run"]
     end
@@ -68,7 +68,7 @@ src/
 │   └── k6.generator.ts
 ├── scaffold/
 │   ├── load-test.init.ts
-│   └── templates/load-tests.README.md
+│   └── templates/openapi-k6.README.md
 └── utils/
     └── jsonpath.ts
 ```
@@ -77,7 +77,7 @@ src/
 
 ### 설정과 module scoping
 
-- `load-tests/config.yaml`에서 root `baseUrl`, `defaultModule`, `modules.<name>`을 읽는다.
+- `openapi-k6/config.yaml`에서 root `baseUrl`, `defaultModule`, `modules.<name>`을 읽는다.
 - 단일 module은 기존 `--module`, `defaultModule`, 단일 module 추론 순서로 동작한다.
 - 멀티모듈 scenario는 step의 `api.module`로 module을 명시한다.
 - 생성된 k6 스크립트는 module 이름을 기준으로 `BASE_URL_AUTH`, `BASE_URL_BOS_API` 같은 환경변수를 우선 사용한다.
@@ -125,10 +125,10 @@ src/
 
 - 기존 공개 명령의 의미를 바꾸지 않는다: `init`, `update`, `sync`, `catalog`, `validate`, `test`, `generate`, `run`.
 - 기존 공개 옵션의 의미를 바꾸지 않는다: `-s/--scenario`, `-o/--openapi`, `-w/--write`, `--config`, `-m/--module`, `--no-input`, `--force`.
-- 기존 `load-tests/config.yaml`, `.env`, scenario YAML, scaffold 구조는 최신 버전에서도 그대로 동작해야 한다.
+- 기본 작업공간은 `openapi-k6/`이며, 기존 기본 `load-tests/config.yaml` workspace는 `update` 때 `openapi-k6/`로 이전한다.
 - 새 기능은 기본적으로 additive하게 추가한다.
 - compatibility가 흔들릴 수 있는 변경은 `pnpm run test:compat`와 published smoke 관점에서 검증한다.
-- `load-tests/.openapi-k6.json` metadata로 scaffold 버전을 기록하고, 오래된 scaffold에서 `validate`, `test`, `generate`, `run`을 실행하면 `Scaffold update available` 안내와 `update` 명령만 표시한다.
+- `openapi-k6/.openapi-k6.json` metadata로 scaffold 버전을 기록하고, 오래된 scaffold에서 `validate`, `test`, `generate`, `run`을 실행하면 `Scaffold update available` 안내와 `update` 명령만 표시한다.
 - breaking change가 필요하면 구현 전에 migration 방안과 문서 변경을 먼저 확정한다.
 
 ## 6. 현재 상태와 다음 후보

@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-11
+
+### Added
+
+- `openapi-k6 install-skill` 명령을 추가해 Codex용 `openapi-k6-scenario` 스킬을 설치할 수 있게 했습니다.
+- 스킬은 scenario YAML 작성 전에 업무 프로세스와 API 호출 계획을 사용자에게 확인받고, `validate`와 가능한 경우 `test`까지 수행하도록 안내합니다.
+
+### Changed
+
+- 신규 기본 작업공간을 `load-tests/`에서 `openapi-k6/`로 변경했습니다.
+- 기본 `update` 실행 시 기존 `load-tests/config.yaml` workspace를 감지하면 `load-tests/` 전체를 `openapi-k6/`로 이전한 뒤 scaffold를 갱신합니다.
+- `init` 생성 README를 AI agent용 작업 계약 중심으로 줄여 반복 컨텍스트 사용량을 낮췄습니다.
+- 루트 README 상단에 AI agent 시작 흐름과 스킬 설치 안내를 배치했습니다.
+
 ## [0.7.2] - 2026-06-08
 
 ### Changed
@@ -177,7 +191,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.6.0...v0.7.0

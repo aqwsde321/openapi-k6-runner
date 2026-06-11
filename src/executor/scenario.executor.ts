@@ -148,7 +148,7 @@ export async function executeAstScenario(
     secretValues: new Set(),
   };
   const fetchImpl = options.fetch ?? fetch;
-  const fileRootDir = path.resolve(options.fileRootDir ?? 'load-tests');
+  const fileRootDir = path.resolve(options.fileRootDir ?? 'openapi-k6');
   const scenarioStartedAt = performance.now();
   const reporter = options.reporter;
   const steps: StepExecutionResult[] = [];
@@ -515,11 +515,11 @@ function validateMultipartFilePath(filePath: string): void {
   }
 
   if (path.isAbsolute(filePath)) {
-    throw new ScenarioExecutionError('request.multipart file path must be relative to the load-tests directory');
+    throw new ScenarioExecutionError('request.multipart file path must be relative to the workspace directory');
   }
 
   if (filePath.trim().split(/[\\/]+/).includes('..')) {
-    throw new ScenarioExecutionError('request.multipart file path must stay inside the load-tests directory');
+    throw new ScenarioExecutionError('request.multipart file path must stay inside the workspace directory');
   }
 }
 

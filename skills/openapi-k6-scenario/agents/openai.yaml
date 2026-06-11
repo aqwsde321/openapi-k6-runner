@@ -1,0 +1,4 @@
+interface:
+  display_name: "openapi-k6 scenario"
+  short_description: "OpenAPI 기반 Scenario YAML 작성과 검증"
+  default_prompt: "Use $openapi-k6-scenario to create and verify an openapi-k6 Scenario YAML for the requested API flow."

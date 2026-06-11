@@ -576,11 +576,11 @@ function validateFixturePath(value: string, pathLabel: string): string {
   }
 
   if (path.isAbsolute(trimmed)) {
-    throw new ScenarioParseError(`${pathLabel} must be relative to the load-tests directory`);
+    throw new ScenarioParseError(`${pathLabel} must be relative to the workspace directory`);
   }
 
   if (trimmed.split(/[\\/]+/).includes('..')) {
-    throw new ScenarioParseError(`${pathLabel} must stay inside the load-tests directory`);
+    throw new ScenarioParseError(`${pathLabel} must stay inside the workspace directory`);
   }
 
   return trimmed;
