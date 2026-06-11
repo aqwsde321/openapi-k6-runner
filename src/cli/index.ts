@@ -1497,7 +1497,10 @@ async function findScenarioModuleReferences(
     const scenario = await parseScenarioFile(scenarioPath);
 
     for (const step of scenario.steps) {
-      if (step.api.module === moduleName) {
+      if (
+        step.api.module === moduleName ||
+        (step.api.module === undefined && config.defaultModule === moduleName)
+      ) {
         references.push({
           scenarioPath,
           stepId: step.id,
@@ -1528,6 +1531,10 @@ async function listScenarioFiles(directoryPath: string): Promise<string[]> {
     const entryPath = path.join(directoryPath, entry.name);
 
     if (entry.isDirectory()) {
+      if (entry.name === 'partials' || entry.name === 'fixtures') {
+        continue;
+      }
+
       files.push(...await listScenarioFiles(entryPath));
     } else if (entry.isFile() && isScenarioFile(entry.name)) {
       files.push(entryPath);
@@ -2359,6 +2366,11 @@ export async function runTestCommand(
     requireBaseUrl: true,
     runtimeEnv,
   });
+  validateScenarioAgainstOpenApi(
+    scenario,
+    openApiContext.registrySource,
+    { defaultModuleName: openApiContext.defaultModuleName },
+  );
   const scaffoldWarnings = await readScaffoldWarnings(cwd, config);
   const scaffoldUpdateCommand = resolveScaffoldUpdateCommand(cwd, config, scaffoldWarnings);
 

@@ -269,7 +269,14 @@ describe('openapi-k6 CLI', () => {
     const result = spawnSync(
       process.execPath,
       ['--import', 'tsx', binPath, '--version'],
-      { cwd: process.cwd(), encoding: 'utf8' },
+      {
+        cwd: process.cwd(),
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          NODE_NO_WARNINGS: '1',
+        },
+      },
     );
 
     expect(result.status, result.stderr).toBe(0);
@@ -2777,6 +2784,91 @@ describe('openapi-k6 CLI', () => {
     expect(config).not.toContain('  bos:');
   });
 
+  it('reports implicit default module references when removing the default module', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://app.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '  bos:',
+      '    openapi: https://bos.test.local/v3/api-docs',
+      '    snapshot: openapi/bos.openapi.json',
+      '    catalog: openapi/bos.catalog.json',
+      '',
+    ]);
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const stdout = createCapture();
+    await runCli(
+      ['module', 'remove', 'app', '--force'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    expect(stdout.output()).toContain('Module app removed from openapi-k6/config.yaml');
+    expect(stdout.output()).toContain('default   bos');
+    expect(stdout.output()).toContain('Forced removal; scenario references still exist:');
+    expect(stdout.output()).toContain('openapi-k6/scenarios/smoke.yaml step "health"');
+  });
+
+  it('ignores scenario partial and fixture helper files when removing modules', async () => {
+    await writeConfig([
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    openapi: https://app.test.local/v3/api-docs',
+      '    snapshot: openapi/app.openapi.json',
+      '    catalog: openapi/app.catalog.json',
+      '  bos:',
+      '    openapi: https://bos.test.local/v3/api-docs',
+      '    snapshot: openapi/bos.openapi.json',
+      '    catalog: openapi/bos.catalog.json',
+      '',
+    ]);
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios/partials'), { recursive: true });
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios/fixtures'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/partials/login.yaml'),
+      [
+        'steps:',
+        '  - id: login',
+        '    api:',
+        '      operationId: loginUser',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/fixtures/dev.yaml'),
+      [
+        'loginId: tester@example.com',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await runCli(
+      ['module', 'remove', 'bos'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const config = await readFile(path.join(workspace, 'openapi-k6/config.yaml'), 'utf8');
+    expect(config).not.toContain('  bos:');
+  });
+
   it('explains how to create the catalog when the configured catalog file is missing', async () => {
     await writeConfig([
       'defaultModule: app',
@@ -3497,6 +3589,59 @@ describe('openapi-k6 CLI', () => {
       '  - step "invalid-condition": unsupported condition "status <= 299"',
       '  - step "invalid-extract": extract.firstItem.from is invalid: Unsupported JSONPath "$.items[*].id"',
     ].join('\n'));
+  });
+
+  it('validates a scenario before test calls the API', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: get-order',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: []',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    let fetchCalled = false;
+
+    await expect(
+      runCli(
+        ['test', '-s', 'smoke'],
+        {
+          cwd: workspace,
+          stdout: createSink(),
+          stderr: createSink(),
+          env: {},
+          fetch: async () => {
+            fetchCalled = true;
+            return new Response(JSON.stringify({ ok: true }), { status: 200 });
+          },
+        },
+      ),
+    ).rejects.toThrow([
+      'Scenario validation failed:',
+      '  - step "get-order": missing request.pathParams.orderId for path /orders/{orderId}',
+      '  - step "get-order": missing request.query.includeItems required by GET /orders/{orderId}',
+      '  - step "get-order": missing request.headers.X-Tenant required by GET /orders/{orderId}',
+    ].join('\n'));
+
+    expect(fetchCalled).toBe(false);
   });
 
   it('reports missing required request body fields with fix hints', async () => {

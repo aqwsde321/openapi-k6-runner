@@ -584,18 +584,17 @@ function renderCondition(
   urlVariable: string,
   metadataVariable: string,
 ): string[] {
-  if (step.condition === undefined) {
-    return [];
-  }
-
-  const condition = compileCondition(step.condition, step.id);
+  const expression = step.condition ?? 'status < 400';
+  const condition = step.condition === undefined
+    ? { operator: '<', status: 400 }
+    : compileCondition(step.condition, step.id);
   const checkVariable = `check${index}`;
   return [
     `const ${checkVariable} = check(${responseVariable}, {`,
-    `  ${JSON.stringify(`${step.id} ${step.condition}`)}: (res) => res.status ${condition.operator} ${condition.status},`,
+    `  ${JSON.stringify(`${step.id} ${expression}`)}: (res) => res.status ${condition.operator} ${condition.status},`,
     '});',
     `if (!${checkVariable}) {`,
-    `  logFailedCheck(${metadataVariable}, ${JSON.stringify(step.condition)}, ${urlVariable}, ${responseVariable});`,
+    `  logFailedCheck(${metadataVariable}, ${JSON.stringify(expression)}, ${urlVariable}, ${responseVariable});`,
     '}',
   ];
 }
@@ -700,12 +699,8 @@ function hasExtract(ast: ASTScenario): boolean {
   return ast.steps.some((step) => step.extract && Object.keys(step.extract).length > 0);
 }
 
-function hasCondition(ast: ASTScenario): boolean {
-  return ast.steps.some((step) => step.condition !== undefined);
-}
-
 function hasChecks(ast: ASTScenario): boolean {
-  return hasCondition(ast) || hasExtract(ast);
+  return hasSteps(ast) || hasExtract(ast);
 }
 
 function hasSteps(ast: ASTScenario): boolean {

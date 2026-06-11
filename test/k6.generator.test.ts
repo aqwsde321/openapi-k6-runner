@@ -154,6 +154,29 @@ describe('k6 generator', () => {
     await expectValidJavaScript(workspace, script);
   });
 
+  it('generates default status checks for steps without explicit conditions', async () => {
+    const script = generateK6Script(
+      {
+        name: 'default-status',
+        steps: [
+          {
+            id: 'health',
+            method: 'GET',
+            path: '/health',
+            pathParameters: [],
+            request: {},
+          },
+        ],
+      },
+      { baseUrl: 'https://api.test.local' },
+    );
+
+    expect(script).toContain("import { check, group } from 'k6';");
+    expect(script).toContain('"health status < 400": (res) => res.status < 400,');
+    expect(script).toContain('logFailedCheck(metadata0, "status < 400", url0, res0);');
+    await expectValidJavaScript(workspace, script);
+  });
+
   it('generates module-specific base URL env fallbacks for multi-module scenarios', async () => {
     const script = generateK6Script({
       name: 'cross-module',
