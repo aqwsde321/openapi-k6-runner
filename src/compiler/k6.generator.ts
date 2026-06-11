@@ -54,6 +54,7 @@ export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions =
 
   lines.push(
     '',
+    ...renderK6Options(ast),
     ...baseUrlPlan.declarations,
     ...(needsVars ? [`const VARS = ${JSON.stringify(ast.vars ?? {})};`] : []),
     "const OPENAPI_K6_TRACE = __ENV.OPENAPI_K6_TRACE === '1';",
@@ -74,6 +75,21 @@ export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions =
 
   lines.push('}', '');
   return lines.join('\n');
+}
+
+function renderK6Options(ast: ASTScenario): string[] {
+  if (!hasChecks(ast)) {
+    return [];
+  }
+
+  return [
+    'export const options = {',
+    '  thresholds: {',
+    "    checks: ['rate==1.0'],",
+    '  },',
+    '};',
+    '',
+  ];
 }
 
 interface BaseUrlPlan {

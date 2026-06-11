@@ -1,6 +1,12 @@
 import http from 'k6/http';
 import { check, group } from 'k6';
 
+export const options = {
+  thresholds: {
+    checks: ['rate==1.0'],
+  },
+};
+
 const BASE_URL = __ENV.BASE_URL || "https://api.fixture.local";
 const OPENAPI_K6_TRACE = __ENV.OPENAPI_K6_TRACE === '1';
 const OPENAPI_K6_SECRET_ENV_NAMES = ["LOGIN_ID","LOGIN_PASSWORD"];

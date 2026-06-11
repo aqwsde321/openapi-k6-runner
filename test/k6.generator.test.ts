@@ -46,6 +46,12 @@ describe('k6 generator', () => {
       "import http from 'k6/http';
       import { check, group } from 'k6';
 
+      export const options = {
+        thresholds: {
+          checks: ['rate==1.0'],
+        },
+      };
+
       const BASE_URL = __ENV.BASE_URL || "https://api.test.local";
       const OPENAPI_K6_TRACE = __ENV.OPENAPI_K6_TRACE === '1';
 
@@ -174,6 +180,27 @@ describe('k6 generator', () => {
     expect(script).toContain("import { check, group } from 'k6';");
     expect(script).toContain('"health status < 400": (res) => res.status < 400,');
     expect(script).toContain('logFailedCheck(metadata0, "status < 400", url0, res0);');
+    await expectValidJavaScript(workspace, script);
+  });
+
+  it('configures k6 to fail when a generated check fails', async () => {
+    const script = generateK6Script(
+      {
+        name: 'threshold-policy',
+        steps: [
+          {
+            id: 'health',
+            method: 'GET',
+            path: '/health',
+            pathParameters: [],
+            request: {},
+          },
+        ],
+      },
+      { baseUrl: 'https://api.test.local' },
+    );
+
+    expect(script).toContain("checks: ['rate==1.0'],");
     await expectValidJavaScript(workspace, script);
   });
 
