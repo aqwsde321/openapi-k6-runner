@@ -78,9 +78,9 @@ describe('README usage guide', () => {
     expect(readme).toContain('## 4. 검증과 실행');
     expect(readme).toContain('| `validate` | 없음 | 없음 | YAML과 OpenAPI 정합성 확인 |');
     expect(readme).toContain('| `test` | 있음 | 없음 | 실제 API 흐름을 1회 실행 |');
-    expect(readme).toContain('| `generate` | 없음 | 없음 | k6 스크립트 생성 |');
+    expect(readme).toContain('| `generate` | 없음 | 없음 | YAML과 OpenAPI 정합성 확인 후 k6 스크립트 생성 |');
     expect(readme).toContain('| `run` | 있음 | 있음 | k6 실행 |');
-    expect(readme).toContain('`test`가 통과한 scenario만 `run`하거나 `generate`하는 흐름을 권장합니다.');
+    expect(readme).toContain('`validate`가 통과한 scenario만 `generate`하고, `test`가 통과한 scenario만 `run`하는 흐름을 권장합니다.');
 
     expect(readme).toContain('## 필요할 때만');
     expect(readme).toContain('`npx --yes openapi-k6 ui`');

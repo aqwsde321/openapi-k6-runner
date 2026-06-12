@@ -1875,6 +1875,11 @@ export async function runGenerateCommand(
   const scaffoldWarnings = await readScaffoldWarnings(cwd, config);
   const scaffoldUpdateCommand = resolveScaffoldUpdateCommand(cwd, config, scaffoldWarnings);
 
+  validateScenarioAgainstOpenApi(
+    scenario,
+    openApiContext.registrySource,
+    { defaultModuleName: openApiContext.defaultModuleName },
+  );
   const ast = buildAst(scenario, openApiContext.registrySource, {
     defaultModuleName: openApiContext.defaultModuleName,
   });

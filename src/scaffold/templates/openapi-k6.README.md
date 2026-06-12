@@ -26,7 +26,7 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 7. 처음에는 `id`, `api`, `request`, `extract`, `condition`만 채웁니다. 반복이 생길 때만 `vars`, `fixtures`, `include`를 사용합니다.
 8. 비밀 값은 scenario YAML에 직접 쓰지 말고 `{{env.NAME}}`으로 참조합니다. 실제 값은 `__ENV_PATH__`에만 둡니다.
 9. `__VALIDATE_NAME_COMMAND__`를 먼저 통과시킨 뒤, 가능한 경우 `__TEST_NAME_COMMAND__`로 실제 API 흐름을 1회 검증합니다.
-10. validate/test 전에는 `generate`, `run`, 장시간 k6 실행을 하지 않습니다.
+10. `generate`는 파일 쓰기 전에 정적 검증을 수행합니다. validate/test 전에는 `run`, 장시간 k6 실행을 하지 않습니다.
 11. CLI가 `Scaffold update available`을 표시하면 `__UPDATE_COMMAND__`를 실행하고 이 README를 다시 확인합니다. 기존 workspace에는 `init --force`를 쓰지 않습니다.
 
 ## 프로젝트 값
@@ -50,7 +50,7 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 | 최신 sync 후 AI 초안 | `__CATALOG_SYNC_AI_COMMAND__` |
 | 정적 검증 | `__VALIDATE_NAME_COMMAND__` |
 | 실행 검증 | `__TEST_NAME_COMMAND__` |
-| k6 스크립트 생성 | `__GENERATE_NAME_COMMAND__` |
+| 정적 검증 후 k6 스크립트 생성 | `__GENERATE_NAME_COMMAND__` |
 | 짧은 k6 실행 | `__RUN_NAME_COMMAND__ --log -- --vus 1 --iterations 1` |
 | 로컬 UI | `__UI_COMMAND__` |
 | scaffold 안전 갱신 | `__UPDATE_COMMAND__` |

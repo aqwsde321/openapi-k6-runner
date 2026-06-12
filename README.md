@@ -48,7 +48,7 @@ Codex에 스킬이 아직 설치되어 있지 않거나 새 프로젝트에서 �
 7. 시나리오 파일을 작성하거나 수정하기 전에는 먼저 업무 프로세스와 호출할 API 순서를 요약해서 내 확인을 받아.
    요약에는 scenario 파일명, API 호출 순서, method/path 또는 operationId, 필요한 request 값, env/vars로 받을 값, response에서 extract할 값, 기존 partial include 여부를 포함해.
 8. 내가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 그때 Scenario YAML을 작성하거나 수정해.
-9. validate와 test가 통과하기 전에는 run이나 generate를 하지 마.
+9. generate는 파일 쓰기 전에 정적 검증을 수행합니다. validate와 test가 통과하기 전에는 run이나 장시간 k6 실행을 하지 마.
 10. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 확인 포인트만 알려줘.
 ```
 
@@ -190,7 +190,7 @@ steps:
 | --- | --- | --- | --- |
 | `validate` | 없음 | 없음 | YAML과 OpenAPI 정합성 확인 |
 | `test` | 있음 | 없음 | 실제 API 흐름을 1회 실행 |
-| `generate` | 없음 | 없음 | k6 스크립트 생성 |
+| `generate` | 없음 | 없음 | YAML과 OpenAPI 정합성 확인 후 k6 스크립트 생성 |
 | `run` | 있음 | 있음 | k6 실행 |
 
 ```bash
@@ -199,7 +199,7 @@ npx --yes openapi-k6 test -s <scenario-name>
 npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1 --iterations 1
 ```
 
-`test`가 통과한 scenario만 `run`하거나 `generate`하는 흐름을 권장합니다.
+`validate`가 통과한 scenario만 `generate`하고, `test`가 통과한 scenario만 `run`하는 흐름을 권장합니다.
 
 ## 필요할 때만
 
@@ -349,7 +349,7 @@ CLI가 `Scaffold update available`을 표시하면 안내된 `update` 명령을 
 
 ### generate와 runner
 
-스크립트만 만들 때는 `generate`를 씁니다.
+스크립트만 만들 때는 `generate`를 씁니다. `generate`는 파일 쓰기 전에 OpenAPI 정합성을 검증합니다.
 
 ```bash
 npx --yes openapi-k6 generate -s <scenario-name>
@@ -409,7 +409,7 @@ k6 옵션은 scenario 이름 뒤에 붙입니다.
 | 최신 sync 후 AI용 scenario 초안 | `npx --yes openapi-k6 catalog --sync --query <검색어> --ai` |
 | 정적 검증 | `npx --yes openapi-k6 validate -s <scenario-name>` |
 | 실행 검증 | `npx --yes openapi-k6 test -s <scenario-name>` |
-| k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <scenario-name>` |
+| 정적 검증 후 k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <scenario-name>` |
 | k6 실행 | `npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1` |
 | 로컬 UI | `npx --yes openapi-k6 ui` |
 | 점검 | `npx --yes openapi-k6 doctor` |
