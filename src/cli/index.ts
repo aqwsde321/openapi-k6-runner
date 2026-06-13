@@ -421,6 +421,12 @@ interface ScenarioOpenApiContext {
   moduleNames?: string[];
 }
 
+interface GeneratedK6ScriptPlan {
+  outputPath: string;
+  script: string;
+  warnings: string[];
+}
+
 interface ScenarioModuleUse {
   moduleName: string;
   stepId: string;
@@ -1875,29 +1881,22 @@ export async function runGenerateCommand(
   });
   const scaffoldWarnings = await readScaffoldWarnings(cwd, config);
   const scaffoldUpdateCommand = resolveScaffoldUpdateCommand(cwd, config, scaffoldWarnings);
-
-  const validation = validateScenarioAgainstOpenApi(
+  const generated = prepareGeneratedK6Script({
+    cwd,
+    config,
     scenario,
-    openApiContext.registrySource,
-    { defaultModuleName: openApiContext.defaultModuleName },
-  );
-  const ast = buildAst(scenario, openApiContext.registrySource, {
-    defaultModuleName: openApiContext.defaultModuleName,
-  });
-  const outputPath = resolveOutputPath(cwd, config, options.scenario, options.write);
-  const script = generateK6Script(ast, {
-    baseUrl: openApiContext.baseUrl,
-    moduleBaseUrls: openApiContext.moduleBaseUrls,
+    scenarioInput: options.scenario,
+    write: options.write,
+    openApiContext,
     fileRootDir: resolveLoadTestDir(cwd, config),
-    outputPath,
   });
   const result: GenerateResult = {
-    outputPath,
+    outputPath: generated.outputPath,
     scenarioPath,
     openapiPath: openApiContext.openapiPath,
     ...(openApiContext.openapiPaths === undefined ? {} : { openapiPaths: openApiContext.openapiPaths }),
     baseUrl: openApiContext.baseUrl ?? '',
-    warnings: validation.warnings,
+    warnings: generated.warnings,
     ...(openApiContext.moduleName === undefined ? {} : { moduleName: openApiContext.moduleName }),
     ...(openApiContext.moduleNames === undefined ? {} : { moduleNames: openApiContext.moduleNames }),
     ...(scaffoldWarnings.length === 0 ? {} : { scaffoldWarnings }),
@@ -1905,9 +1904,41 @@ export async function runGenerateCommand(
   };
 
   await fs.mkdir(path.dirname(result.outputPath), { recursive: true });
-  await fs.writeFile(result.outputPath, script, 'utf8');
+  await fs.writeFile(result.outputPath, generated.script, 'utf8');
 
   return result;
+}
+
+function prepareGeneratedK6Script(options: {
+  cwd: string;
+  config: LoadTestConfig | undefined;
+  scenario: Scenario;
+  scenarioInput: string;
+  write: string | undefined;
+  openApiContext: ScenarioOpenApiContext;
+  fileRootDir: string;
+}): GeneratedK6ScriptPlan {
+  const validation = validateScenarioAgainstOpenApi(
+    options.scenario,
+    options.openApiContext.registrySource,
+    { defaultModuleName: options.openApiContext.defaultModuleName },
+  );
+  const ast = buildAst(options.scenario, options.openApiContext.registrySource, {
+    defaultModuleName: options.openApiContext.defaultModuleName,
+  });
+  const outputPath = resolveOutputPath(options.cwd, options.config, options.scenarioInput, options.write);
+  const script = generateK6Script(ast, {
+    baseUrl: options.openApiContext.baseUrl,
+    moduleBaseUrls: options.openApiContext.moduleBaseUrls,
+    fileRootDir: options.fileRootDir,
+    outputPath,
+  });
+
+  return {
+    outputPath,
+    script,
+    warnings: validation.warnings,
+  };
 }
 
 export async function runRunCommand(
@@ -1940,36 +1971,30 @@ export async function runRunCommand(
     requireBaseUrl: true,
     runtimeEnv,
   });
-  const validation = validateScenarioAgainstOpenApi(
-    scenario,
-    openApiContext.registrySource,
-    { defaultModuleName: openApiContext.defaultModuleName },
-  );
   const scaffoldWarnings = await readScaffoldWarnings(cwd, config);
   const scaffoldUpdateCommand = resolveScaffoldUpdateCommand(cwd, config, scaffoldWarnings);
-  const ast = buildAst(scenario, openApiContext.registrySource, {
-    defaultModuleName: openApiContext.defaultModuleName,
-  });
-  const outputPath = resolveOutputPath(cwd, config, options.scenario, options.write);
-  const script = generateK6Script(ast, {
-    baseUrl: openApiContext.baseUrl,
-    moduleBaseUrls: openApiContext.moduleBaseUrls,
+  const generated = prepareGeneratedK6Script({
+    cwd,
+    config,
+    scenario,
+    scenarioInput: options.scenario,
+    write: options.write,
+    openApiContext,
     fileRootDir: loadTestDir,
-    outputPath,
   });
 
-  await fs.mkdir(path.dirname(outputPath), { recursive: true });
-  await fs.writeFile(outputPath, script, 'utf8');
+  await fs.mkdir(path.dirname(generated.outputPath), { recursive: true });
+  await fs.writeFile(generated.outputPath, generated.script, 'utf8');
 
-  writeValidationWarnings(stdout, validation.warnings);
+  writeValidationWarnings(stdout, generated.warnings);
   writeScaffoldUpdateNotice(stdout, scaffoldWarnings, scaffoldUpdateCommand);
-  writeLine(stdout, `Generated ${outputPath}`);
+  writeLine(stdout, `Generated ${generated.outputPath}`);
 
   const k6Result = await runK6Script({
     cwd,
     loadTestDir,
     scenarioName: isScenarioName(options.scenario) ? options.scenario : resolveScenarioName(options.scenario),
-    scriptPath: outputPath,
+    scriptPath: generated.outputPath,
     runtimeEnv,
     k6Args: options.k6Args ?? [],
     log: options.log === true,
@@ -1981,7 +2006,7 @@ export async function runRunCommand(
   });
 
   return {
-    outputPath,
+    outputPath: generated.outputPath,
     scenarioPath,
     openapiPath: openApiContext.openapiPath,
     ...(openApiContext.openapiPaths === undefined ? {} : { openapiPaths: openApiContext.openapiPaths }),
