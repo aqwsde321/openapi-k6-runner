@@ -804,6 +804,55 @@ describe('openapi-k6 CLI', () => {
     await expect(readFile(argLogPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('preserves existing generated k6 output when run validation fails', async () => {
+    await writeRunFixtures();
+    await mkdir(path.join(workspace, 'openapi-k6/generated'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: missingOperation',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    const outputPath = path.join(workspace, 'openapi-k6/generated/smoke.k6.js');
+    const existingOutput = 'export default function () { console.log("keep me"); }\n';
+    await writeFile(outputPath, existingOutput, 'utf8');
+    const binDir = path.join(workspace, 'bin');
+    const argLogPath = path.join(workspace, 'k6-args.txt');
+    await writeFakeK6(binDir, [
+      'printf "%s\\n" "$@" > "$K6_ARG_LOG"',
+    ]);
+
+    await expect(
+      runCli(
+        ['run', '-s', 'smoke'],
+        {
+          cwd: workspace,
+          stdout: createSink(),
+          stderr: createSink(),
+          env: {
+            PATH: `${binDir}:${process.env.PATH ?? ''}`,
+            K6_ARG_LOG: argLogPath,
+          },
+        },
+      ),
+    ).rejects.toThrow([
+      'Scenario validation failed:',
+      '  - step "health": operationId "missingOperation" was not found',
+      '',
+      'Fix hints:',
+      '  - Find the endpoint with openapi-k6 catalog --query <keyword> --ai, then update api.operationId or use api.method/api.path.',
+    ].join('\n'));
+
+    await expect(readFile(outputPath, 'utf8')).resolves.toBe(existingOutput);
+    await expect(readFile(argLogPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('fails clearly when CLI run cannot find k6', async () => {
     await writeRunFixtures();
     const binDir = path.join(workspace, 'empty-bin');
