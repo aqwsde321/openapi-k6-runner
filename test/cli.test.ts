@@ -1878,6 +1878,48 @@ describe('openapi-k6 CLI', () => {
     await expect(stat(path.join(workspace, 'openapi-k6/generated/smoke.k6.js'))).rejects.toThrow();
   });
 
+  it('preserves existing generated k6 output when generate validation fails', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
+    await mkdir(path.join(workspace, 'openapi-k6/generated'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    const outputPath = path.join(workspace, 'openapi-k6/generated/smoke.k6.js');
+    const existingOutput = 'export default function () { console.log("keep me"); }\n';
+    await writeFile(outputPath, existingOutput, 'utf8');
+
+    await expect(
+      runCli(
+        ['generate', '-s', 'smoke'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow([
+      'Scenario validation failed:',
+      '  - step "create-order": request.body or request.multipart is required by POST /orders',
+    ].join('\n'));
+
+    await expect(readFile(outputPath, 'utf8')).resolves.toBe(existingOutput);
+  });
+
   it('prints validation warnings when generating k6 output', async () => {
     await writeValidationOpenApi(workspace);
     await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
