@@ -50,7 +50,10 @@ import {
   initLoadTests,
   updateLoadTests,
 } from '../scaffold/load-test.init.js';
-import { validateScenarioAgainstOpenApi } from '../validator/scenario.validator.js';
+import {
+  validateScenarioAgainstOpenApi,
+  type ScenarioValidationResult,
+} from '../validator/scenario.validator.js';
 import {
   createAnsiHtmlState,
   renderAnsiChunkToHtml,
@@ -1917,12 +1920,14 @@ function prepareGeneratedK6Script(options: {
   write: string | undefined;
   openApiContext: ScenarioOpenApiContext;
   fileRootDir: string;
+  validation?: ScenarioValidationResult;
 }): GeneratedK6ScriptPlan {
-  const validation = validateScenarioAgainstOpenApi(
-    options.scenario,
-    options.openApiContext.registrySource,
-    { defaultModuleName: options.openApiContext.defaultModuleName },
-  );
+  const validation = options.validation
+    ?? validateScenarioAgainstOpenApi(
+      options.scenario,
+      options.openApiContext.registrySource,
+      { defaultModuleName: options.openApiContext.defaultModuleName },
+    );
   const ast = buildAst(options.scenario, options.openApiContext.registrySource, {
     defaultModuleName: options.openApiContext.defaultModuleName,
   });
@@ -1971,6 +1976,11 @@ export async function runRunCommand(
     requireBaseUrl: true,
     runtimeEnv,
   });
+  const validation = validateScenarioAgainstOpenApi(
+    scenario,
+    openApiContext.registrySource,
+    { defaultModuleName: openApiContext.defaultModuleName },
+  );
   const scaffoldWarnings = await readScaffoldWarnings(cwd, config);
   const scaffoldUpdateCommand = resolveScaffoldUpdateCommand(cwd, config, scaffoldWarnings);
   const generated = prepareGeneratedK6Script({
@@ -1981,6 +1991,7 @@ export async function runRunCommand(
     write: options.write,
     openApiContext,
     fileRootDir: loadTestDir,
+    validation,
   });
 
   await fs.mkdir(path.dirname(generated.outputPath), { recursive: true });
