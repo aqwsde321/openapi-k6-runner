@@ -1878,6 +1878,52 @@ describe('openapi-k6 CLI', () => {
     await expect(stat(path.join(workspace, 'openapi-k6/generated/smoke.k6.js'))).rejects.toThrow();
   });
 
+  it('prints validation warnings when generating k6 output', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: get-order',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: order-1',
+        '        id: unused',
+        '      query:',
+        '        includeItems: true',
+        '      headers:',
+        '        X-Tenant: main',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const stdout = createCapture();
+    await runCli(
+      ['generate', '-s', 'smoke'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const output = stdout.output();
+    expect(output).toContain('Warnings:');
+    expect(output).toContain('  - step "get-order": request.pathParams.id is not used by path /orders/{orderId}');
+    expect(output).toContain(`Generated ${path.join(workspace, 'openapi-k6/generated/smoke.k6.js')}`);
+    await expect(stat(path.join(workspace, 'openapi-k6/generated/smoke.k6.js'))).resolves.toBeTruthy();
+  });
+
   it('keeps --openapi precedence over config snapshots for generate and validate', async () => {
     await writeGenerateFixtures(workspace, 'https://override-openapi.test.local');
     await writeConfig([

@@ -233,6 +233,7 @@ export interface GenerateResult {
   openapiPath: string;
   openapiPaths?: Record<string, string>;
   baseUrl: string;
+  warnings: string[];
   moduleName?: string;
   moduleNames?: string[];
   scaffoldWarnings?: string[];
@@ -1875,7 +1876,7 @@ export async function runGenerateCommand(
   const scaffoldWarnings = await readScaffoldWarnings(cwd, config);
   const scaffoldUpdateCommand = resolveScaffoldUpdateCommand(cwd, config, scaffoldWarnings);
 
-  validateScenarioAgainstOpenApi(
+  const validation = validateScenarioAgainstOpenApi(
     scenario,
     openApiContext.registrySource,
     { defaultModuleName: openApiContext.defaultModuleName },
@@ -1896,6 +1897,7 @@ export async function runGenerateCommand(
     openapiPath: openApiContext.openapiPath,
     ...(openApiContext.openapiPaths === undefined ? {} : { openapiPaths: openApiContext.openapiPaths }),
     baseUrl: openApiContext.baseUrl ?? '',
+    warnings: validation.warnings,
     ...(openApiContext.moduleName === undefined ? {} : { moduleName: openApiContext.moduleName }),
     ...(openApiContext.moduleNames === undefined ? {} : { moduleNames: openApiContext.moduleNames }),
     ...(scaffoldWarnings.length === 0 ? {} : { scaffoldWarnings }),
@@ -1959,7 +1961,7 @@ export async function runRunCommand(
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, script, 'utf8');
 
-  writeRunValidationWarnings(stdout, validation.warnings);
+  writeValidationWarnings(stdout, validation.warnings);
   writeScaffoldUpdateNotice(stdout, scaffoldWarnings, scaffoldUpdateCommand);
   writeLine(stdout, `Generated ${outputPath}`);
 
@@ -4400,7 +4402,7 @@ function collectDoctorK6Check(context: CliContext): DoctorCheck {
   };
 }
 
-function writeRunValidationWarnings(stdout: WritableLike, warnings: string[]): void {
+function writeValidationWarnings(stdout: WritableLike, warnings: string[]): void {
   if (warnings.length === 0) {
     return;
   }
@@ -4851,7 +4853,7 @@ function writeValidateSummary(stdout: WritableLike, result: ValidateResult, cwd:
     writeLine(stdout, '');
   }
 
-  writeRunValidationWarnings(stdout, validationWarnings);
+  writeValidationWarnings(stdout, validationWarnings);
   writeScaffoldUpdateNotice(stdout, scaffoldWarnings, result.scaffoldUpdateCommand);
 }
 
@@ -6234,6 +6236,7 @@ export function createProgram(context: CliContext = {}): Command {
     .option('--var <name=value>', 'Override one scenario var; repeatable and parsed as a YAML value', collectRepeatedOption)
     .action(async (options: GenerateOptions) => {
       const result = await runGenerateCommand(options, context);
+      writeValidationWarnings(stdout, result.warnings);
       writeScaffoldUpdateNotice(stdout, result.scaffoldWarnings ?? [], result.scaffoldUpdateCommand);
       writeLine(stdout, `Generated ${result.outputPath}`);
     });
