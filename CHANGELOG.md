@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- `auth/login` 같은 폴더형 scenario key를 지원해 `scenarios/auth/login.yaml`, `generated/auth/login.k6.js`, `logs/auth/login.log`처럼 시나리오, 생성물, 로그/리포트 경로를 같은 구조로 관리할 수 있게 했습니다.
+- Scenario YAML `steps`에서 `- use: auth/login`으로 scenario root 기준의 다른 시나리오 steps를 재사용할 수 있게 했습니다.
+- UI의 scenario 목록/상세에서 폴더형 시나리오와 `use` 재사용 참조를 확인할 수 있게 했습니다.
+
 ## [0.8.0] - 2026-06-11
 
 ### Added

@@ -46,7 +46,7 @@ Codex에 스킬이 아직 설치되어 있지 않거나 새 프로젝트에서 �
 6. init 또는 update 후 생성된 작업공간 README.md의 `AI 작업 계약`, `프로젝트 값`, `명령` 섹션을 다시 읽어.
    이 README는 AI 작업 지침이므로, 이후 작업은 그 문서를 기준으로 진행해.
 7. 시나리오 파일을 작성하거나 수정하기 전에는 먼저 업무 프로세스와 호출할 API 순서를 요약해서 내 확인을 받아.
-   요약에는 scenario 파일명, API 호출 순서, method/path 또는 operationId, 필요한 request 값, env/vars로 받을 값, response에서 extract할 값, 기존 partial include 또는 scenario use 재사용 여부를 포함해.
+   요약에는 scenario key와 파일 경로, API 호출 순서, method/path 또는 operationId, 필요한 request 값, env/vars로 받을 값, response에서 extract할 값, 기존 partial include 또는 scenario use 재사용 여부를 포함해.
 8. 내가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 그때 Scenario YAML을 작성하거나 수정해.
 9. generate는 파일 쓰기 전에 정적 검증을 수행합니다. run의 k6 check 실패는 명령 실패로 처리됩니다. validate와 test가 통과하기 전에는 run이나 장시간 k6 실행을 하지 마.
 10. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 확인 포인트만 알려줘.
@@ -63,20 +63,20 @@ Codex에 스킬이 아직 설치되어 있지 않거나 새 프로젝트에서 �
 npx --yes openapi-k6 init
 npx --yes openapi-k6 sync
 npx --yes openapi-k6 catalog --query <검색어>
-# openapi-k6/scenarios/<scenario-name>.yaml 작성
-npx --yes openapi-k6 validate -s <scenario-name>
-npx --yes openapi-k6 test -s <scenario-name>
-npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1 --iterations 1
+# openapi-k6/scenarios/<scenario-key>.yaml 작성
+npx --yes openapi-k6 validate -s <scenario-key>
+npx --yes openapi-k6 test -s <scenario-key>
+npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1 --iterations 1
 ```
 
-`<검색어>`는 endpoint를 찾을 단어이고, `<scenario-name>`은 `openapi-k6/scenarios/<scenario-name>.yaml`에서 확장자를 뺀 이름입니다.
+`<검색어>`는 endpoint를 찾을 단어이고, `<scenario-key>`는 `openapi-k6/scenarios/<scenario-key>.yaml`에서 확장자를 뺀 경로입니다.
 시나리오가 많아지면 `openapi-k6/scenarios/auth/login.yaml`처럼 폴더로 묶고, CLI에서는 `-s auth/login`으로 실행합니다.
 아래 예시는 이해를 돕기 위한 값입니다. 실제 명령에는 위 placeholder를 프로젝트에 맞게 바꿔 넣습니다.
 
 `run`은 k6 설치가 필요합니다. 스크립트만 만들려면 아래 명령을 씁니다.
 
 ```bash
-npx --yes openapi-k6 generate -s <scenario-name>
+npx --yes openapi-k6 generate -s <scenario-key>
 ```
 
 기존 프로젝트에서 CLI가 `Scaffold update available`을 표시하면 안내된 `update` 명령을 실행하면 됩니다.
@@ -198,9 +198,9 @@ steps:
 | `run` | 있음 | 있음 | k6 실행 |
 
 ```bash
-npx --yes openapi-k6 validate -s <scenario-name>
-npx --yes openapi-k6 test -s <scenario-name>
-npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1 --iterations 1
+npx --yes openapi-k6 validate -s <scenario-key>
+npx --yes openapi-k6 test -s <scenario-key>
+npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1 --iterations 1
 ```
 
 `validate`가 통과한 scenario만 `generate`하고, `test`가 통과한 scenario만 `run`하는 흐름을 권장합니다.
@@ -263,8 +263,8 @@ tenantId: dev-tenant
 실행 시점 override도 가능합니다.
 
 ```bash
-npx --yes openapi-k6 test -s <scenario-name> --var-file openapi-k6/scenarios/fixtures/stage.yaml
-npx --yes openapi-k6 test -s <scenario-name> --var sku=ABC-002
+npx --yes openapi-k6 test -s <scenario-key> --var-file openapi-k6/scenarios/fixtures/stage.yaml
+npx --yes openapi-k6 test -s <scenario-key> --var sku=ABC-002
 ```
 
 우선순위는 `fixtures:` < `vars:` < `--var-file` < `--var`입니다.
@@ -396,19 +396,19 @@ CLI가 `Scaffold update available`을 표시하면 안내된 `update` 명령을 
 스크립트만 만들 때는 `generate`를 씁니다. `generate`는 파일 쓰기 전에 OpenAPI 정합성을 검증합니다.
 
 ```bash
-npx --yes openapi-k6 generate -s <scenario-name>
+npx --yes openapi-k6 generate -s <scenario-key>
 ```
 
 생성된 runner를 직접 쓰는 기존 흐름도 유지됩니다.
 
 ```bash
-./openapi-k6/run.sh <scenario-name> --log
+./openapi-k6/run.sh <scenario-key> --log
 ```
 
-k6 옵션은 scenario 이름 뒤에 붙입니다.
+k6 옵션은 scenario key 뒤에 붙입니다.
 
 ```bash
-./openapi-k6/run.sh <scenario-name> --log --vus 1 --iterations 1
+./openapi-k6/run.sh <scenario-key> --log --vus 1 --iterations 1
 ```
 
 ### 제약
@@ -452,10 +452,10 @@ k6 옵션은 scenario 이름 뒤에 붙입니다.
 | endpoint 검색 | `npx --yes openapi-k6 catalog --query <검색어>` |
 | AI용 scenario 초안 | `npx --yes openapi-k6 catalog --query <검색어> --ai` |
 | 최신 sync 후 AI용 scenario 초안 | `npx --yes openapi-k6 catalog --sync --query <검색어> --ai` |
-| 정적 검증 | `npx --yes openapi-k6 validate -s <scenario-name>` |
-| 실행 검증 | `npx --yes openapi-k6 test -s <scenario-name>` |
-| 정적 검증 후 k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <scenario-name>` |
-| k6 실행 | `npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1` |
+| 정적 검증 | `npx --yes openapi-k6 validate -s <scenario-key>` |
+| 실행 검증 | `npx --yes openapi-k6 test -s <scenario-key>` |
+| 정적 검증 후 k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <scenario-key>` |
+| k6 실행 | `npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1` |
 | 로컬 UI | `npx --yes openapi-k6 ui` |
 | 점검 | `npx --yes openapi-k6 doctor` |
 | scaffold 갱신 | `npx --yes openapi-k6 update` |

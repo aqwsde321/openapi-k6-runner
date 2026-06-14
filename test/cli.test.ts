@@ -402,7 +402,7 @@ describe('openapi-k6 CLI', () => {
     expect(runScript).toContain('REPORT_ENABLED=false');
     expect(runScript).toContain('DASHBOARD_OPEN_ENABLED=false');
     expect(runScript).toContain('K6_ARGS=()');
-    expect(runScript).toContain('Usage: $0 [scenario] [run.sh flags] [k6 run options]');
+    expect(runScript).toContain('Usage: $0 [scenario-key] [run.sh flags] [k6 run options]');
     expect(runScript).toContain('This script loads only the .env file next to run.sh.');
     expect(runScript).toContain('It does not load the backend project root .env.');
     expect(runScript).toContain('See README.md in this directory for the full workflow.');
@@ -442,10 +442,10 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어>');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai');
     expect(readme).toContain('npx --yes openapi-k6 catalog --sync --query <검색어> --ai');
-    expect(readme).toContain('npx --yes openapi-k6 validate -s <name>');
-    expect(readme).toContain('npx --yes openapi-k6 test -s <name>');
-    expect(readme).toContain('npx --yes openapi-k6 run -s <name> --log -- --vus 1 --iterations 1');
-    expect(readme).toContain('npx --yes openapi-k6 generate -s <name>');
+    expect(readme).toContain('npx --yes openapi-k6 validate -s <scenario-key>');
+    expect(readme).toContain('npx --yes openapi-k6 test -s <scenario-key>');
+    expect(readme).toContain('npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1 --iterations 1');
+    expect(readme).toContain('npx --yes openapi-k6 generate -s <scenario-key>');
     expect(readme).toContain('npx --yes openapi-k6 ui');
 
     const commandSection = readme.slice(readme.indexOf('## 명령'), readme.indexOf('## Scenario 작성 규칙'));
@@ -454,18 +454,19 @@ describe('openapi-k6 CLI', () => {
     expect(commandSection).not.toContain('-s smoke');
 
     expect(readme).toContain('openapi-k6/config.yaml');
-    expect(readme).toContain('openapi-k6/scenarios/<name>.yaml');
+    expect(readme).toContain('openapi-k6/scenarios/<scenario-key>.yaml');
     expect(readme).toContain('openapi-k6/openapi/pharma.openapi.json');
     expect(readme).toContain('openapi-k6/openapi/pharma.catalog.json');
     expect(readme).toContain('openapi-k6/generated/**/*.k6.js');
 
-    expect(readme).toContain('./openapi-k6/run.sh <scenario-name>');
-    expect(readme).toContain('./openapi-k6/run.sh <scenario-name> --vus 1 --iterations 1');
-    expect(readme).toContain('./openapi-k6/run.sh <scenario-name> --log');
-    expect(readme).toContain('로그 파일: `openapi-k6/logs/<scenario-name>.log`');
+    expect(readme).toContain('./openapi-k6/run.sh <scenario-key>');
+    expect(readme).toContain('./openapi-k6/run.sh <scenario-key> --vus 1 --iterations 1');
+    expect(readme).toContain('./openapi-k6/run.sh <scenario-key> --log');
+    expect(readme).toContain('로그 파일: `openapi-k6/logs/<scenario-key>.log`');
 
     expect(readme).toContain('매번 전체를 다시 읽지 말고, 같은 대화에서 최신 `init`, `update`, README 변경 이후 이미 읽었다면 필요한 섹션만 확인합니다.');
     expect(readme).toContain('Scenario YAML을 쓰기 전에 사용자에게 아래 계획을 확인받습니다.');
+    expect(readme).toContain('scenario key와 파일 경로');
     expect(readme).toContain('업무 프로세스');
     expect(readme).toContain('API 호출 순서와 method/path 또는 operationId');
     expect(readme).toContain('기존 partial include 또는 scenario use 재사용 여부');
@@ -473,9 +474,10 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('폴더는 UI 카테고리로 사용합니다. 예: `openapi-k6/scenarios/auth/login.yaml`은 `-s auth/login`으로 실행합니다.');
     expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 남아 있으면 `validate`가 실패합니다.');
     expect(readme).toContain('값 우선순위는 `fixtures:` < `vars:` < CLI `--var-file` < CLI `--var`입니다.');
-    expect(readme).toContain('include 파일에는 `steps:`만 두고 `vars:`나 `fixtures:`는 entry scenario에서 관리합니다.');
+    expect(readme).toContain('include 파일에는 `steps:`만 둡니다.');
+    expect(readme).toContain('include 파일과 use 대상 파일에는 `vars:`나 `fixtures:`를 두지 않고 entry scenario에서 관리합니다.');
     expect(readme).toContain('다른 폴더의 scenario steps는 `steps` 안의 `- use: auth/login`처럼 scenario root 기준 key로 재사용합니다.');
-    expect(readme).toContain('`use` 값은 확장자 없는 scenario key여야 합니다.');
+    expect(readme).toContain('`use` 값은 `auth/login`처럼 확장자 없는 scenario key여야 하며, `auth/login.yaml`이나 `auth/login.v2`는 사용할 수 없습니다.');
     expect(readme).toContain('`use`로 펼친 step의 `extract` 값은 뒤 step에서 `{{variableName}}`으로 참조할 수 있습니다.');
     expect(readme).toContain('여러 OpenAPI 서버를 한 scenario에서 섞을 때만 `api.module`을 사용합니다.');
     expect(readme).toContain('openapi-k6/README.md');
@@ -656,11 +658,11 @@ describe('openapi-k6 CLI', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('Usage:');
     expect(result.stdout).toContain('run.sh flags:');
-    expect(result.stdout).toContain('run.sh <scenario-name>');
-    expect(result.stdout).toContain('run.sh <scenario-name> --log');
-    expect(result.stdout).toContain('run.sh <scenario-name> --trace --log --report --duration 10s --vus 1');
+    expect(result.stdout).toContain('run.sh <scenario-key>');
+    expect(result.stdout).toContain('run.sh <scenario-key> --log');
+    expect(result.stdout).toContain('run.sh <scenario-key> --trace --log --report --duration 10s --vus 1');
     expect(result.stdout).toContain('The default scenario is smoke.');
-    expect(result.stdout).toContain('k6 options must come after the scenario name.');
+    expect(result.stdout).toContain('k6 options must come after the scenario key.');
     expect(result.stdout).toContain('This script loads only the .env file next to run.sh.');
     expect(result.stdout).toContain('It does not load the backend project root .env.');
   });
@@ -1186,8 +1188,8 @@ describe('openapi-k6 CLI', () => {
     expect(output.output()).toContain('✓ Created openapi-k6');
     expect(output.output()).toContain('Next');
     expect(output.output()).toContain('npx --yes openapi-k6 sync');
-    expect(output.output()).toContain('npx --yes openapi-k6 validate -s <scenario-name>');
-    expect(output.output()).toContain('./openapi-k6/run.sh <scenario-name> --log');
+    expect(output.output()).toContain('npx --yes openapi-k6 validate -s <scenario-key>');
+    expect(output.output()).toContain('./openapi-k6/run.sh <scenario-key> --log');
   });
 
   it('discovers a common OpenAPI path from the entered base URL', async () => {
@@ -1396,12 +1398,12 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 ui --config perf-tests/config.yaml --module pharma');
     expect(readme).toContain('npx --yes openapi-k6 update --config perf-tests/config.yaml --module pharma');
     expect(readme).toContain('--config perf-tests/config.yaml');
-    expect(readme).toContain("--scenario 'perf-tests/scenarios/<name>.yaml'");
-    expect(readme).toContain("--write 'perf-tests/generated/<name>.k6.js'");
-    expect(readme).toContain('./perf-tests/run.sh <scenario-name>');
-    expect(readme).toContain('./perf-tests/run.sh <scenario-name> --vus 1 --iterations 1');
-    expect(readme).toContain('./perf-tests/run.sh <scenario-name> --log');
-    expect(readme).toContain('로그 파일: `perf-tests/logs/<scenario-name>.log`');
+    expect(readme).toContain("--scenario 'perf-tests/scenarios/<scenario-key>.yaml'");
+    expect(readme).toContain("--write 'perf-tests/generated/<scenario-key>.k6.js'");
+    expect(readme).toContain('./perf-tests/run.sh <scenario-key>');
+    expect(readme).toContain('./perf-tests/run.sh <scenario-key> --vus 1 --iterations 1');
+    expect(readme).toContain('./perf-tests/run.sh <scenario-key> --log');
+    expect(readme).toContain('로그 파일: `perf-tests/logs/<scenario-key>.log`');
     expect(readme).toContain('cp perf-tests/.env.example perf-tests/.env');
     expect(readme).not.toContain('openapi-k6/');
 
@@ -1436,10 +1438,10 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain("npx --yes openapi-k6 ui --config 'perf tests/config.yaml' --module pharma");
     expect(readme).toContain("npx --yes openapi-k6 update --config 'perf tests/config.yaml' --module pharma");
     expect(readme).toContain("--config 'perf tests/config.yaml'");
-    expect(readme).toContain("--scenario 'perf tests/scenarios/<name>.yaml'");
-    expect(readme).toContain("--write 'perf tests/generated/<name>.k6.js'");
-    expect(readme).toContain("'./perf tests/run.sh' <scenario-name>");
-    expect(readme).toContain("'./perf tests/run.sh' <scenario-name> --log");
+    expect(readme).toContain("--scenario 'perf tests/scenarios/<scenario-key>.yaml'");
+    expect(readme).toContain("--write 'perf tests/generated/<scenario-key>.k6.js'");
+    expect(readme).toContain("'./perf tests/run.sh' <scenario-key>");
+    expect(readme).toContain("'./perf tests/run.sh' <scenario-key> --log");
     expect(readme).toContain("cp 'perf tests/.env.example' 'perf tests/.env'");
 
     await writeFile(path.join(workspace, 'perf tests/README.md'), 'stale readme\n', 'utf8');
@@ -2060,9 +2062,9 @@ describe('openapi-k6 CLI', () => {
     const readme = await readFile(path.join(workspace, 'openapi-k6/README.md'), 'utf8');
 
     expect(readme).toContain('npx --yes openapi-k6 sync --module vendor');
-    expect(readme).toContain('npx --yes openapi-k6 test --module vendor -s <name>');
+    expect(readme).toContain('npx --yes openapi-k6 test --module vendor -s <scenario-key>');
     expect(readme).not.toContain('npx --yes openapi-k6 test --module vendor -s smoke');
-    expect(readme).toContain('npx --yes openapi-k6 generate --module vendor -s <name>');
+    expect(readme).toContain('npx --yes openapi-k6 generate --module vendor -s <scenario-key>');
     expect(readme).toContain('npx --yes openapi-k6 update --module vendor');
     expect(readme).toContain('openapi-k6/snapshots/vendor.snapshot.json');
     expect(readme).toContain('openapi-k6/catalogs/vendor.catalog.json');
@@ -2484,8 +2486,8 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('Catalog ');
     expect(output).toContain('Next');
     expect(output).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai --module app');
-    expect(output).toContain('npx --yes openapi-k6 validate -s <scenario-name> --module app');
-    expect(output).toContain('npx --yes openapi-k6 test -s <scenario-name> --module app');
+    expect(output).toContain('npx --yes openapi-k6 validate -s <scenario-key> --module app');
+    expect(output).toContain('npx --yes openapi-k6 test -s <scenario-key> --module app');
   });
 
   it('summarizes the configured catalog without dumping every operation', async () => {
@@ -3646,7 +3648,7 @@ describe('openapi-k6 CLI', () => {
     expect(output).toContain('const url0 = joinUrl(BASE_URL, `/app-health`);');
   });
 
-  it('generates by scenario name using default config and output paths', async () => {
+  it('generates by scenario key using default config and output paths', async () => {
     await mkdir(path.join(workspace, 'openapi-k6/openapi'), { recursive: true });
     await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
     await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');

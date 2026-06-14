@@ -1,6 +1,6 @@
 ---
 name: openapi-k6-scenario
-description: Use when the user asks to use $openapi-k6-scenario, create or update an openapi-k6 Scenario YAML after confirming the process and planned API calls, build API flow tests from OpenAPI, verify scenarios with validate/test, reuse login/auth/seed steps through include partials, or says requests like "[스킬] 회원 로그인 시나리오", "로그인 시나리오 만들어줘", "Scenario YAML 작성", "openapi-k6 시나리오 테스트까지".
+description: Use when the user asks to use $openapi-k6-scenario, create or update an openapi-k6 Scenario YAML after confirming the process and planned API calls, build API flow tests from OpenAPI, verify scenarios with validate/test, group scenarios in folders, reuse login/auth/seed steps through scenario use or include partials, or says requests like "[스킬] 회원 로그인 시나리오", "로그인 시나리오 만들어줘", "Scenario YAML 작성", "openapi-k6 시나리오 테스트까지".
 ---
 
 # openapi-k6-scenario
@@ -39,11 +39,11 @@ Do not edit scaffold-managed files unless the user explicitly asks: workspace `R
 3. Read the matching catalog output and, when needed, the workspace `openapi/*.catalog.json`.
 4. Resolve the API flow with the user only if multiple plausible endpoints or required business data cannot be inferred.
 5. Before writing or editing Scenario YAML, summarize the process and planned API calls, then get explicit user confirmation.
-6. After confirmation, write or update one scenario file under the workspace `scenarios/*.yaml`.
+6. After confirmation, write or update one scenario file under the workspace `scenarios/**/*.yaml`.
 7. Start with plain steps: `id`, `api`, `request`, `extract`, `condition`.
-8. Run `npx --yes openapi-k6@latest validate -s <scenario-name>`.
+8. Run `npx --yes openapi-k6@latest validate -s <scenario-key>`.
 9. Fix validation failures from the reported errors and fix hints.
-10. Run `npx --yes openapi-k6@latest test -s <scenario-name>` when the backend is reachable and required env/vars are available.
+10. Run `npx --yes openapi-k6@latest test -s <scenario-key>` when the backend is reachable and required env/vars are available.
 11. Fix API-flow failures by adjusting request data, extracts, headers, or endpoint selection based on the observed failure.
 
 Completion means the scenario exists and `validate` passes. If `test` cannot run because the backend, auth data, or env values are unavailable, report the exact blocker and leave the scenario in the best validated state.
@@ -54,11 +54,11 @@ Do not create or modify Scenario YAML until the user confirms the plan.
 
 The confirmation summary must include:
 
-- Scenario purpose and target scenario file name.
+- Scenario purpose, target scenario key, and target scenario file path.
 - API call sequence with method/path or operationId.
 - Required request data, including which values come from `{{env.*}}` or `{{vars.*}}`.
 - Values extracted from earlier responses and where they are reused.
-- Existing partials to include or new partials to create.
+- Existing scenarios to `use`, partials to include, or new reusable files to create.
 - Assumptions, ambiguous endpoint choices, and test data the user must provide.
 
 If the user replies with a short affirmative response such as `ㅇ`, `ok`, or `ㄱ`, treat that as confirmation and proceed. If the user changes the process or endpoint choice, update the plan and ask for confirmation again when the change affects the API call sequence or data dependencies.
@@ -73,13 +73,39 @@ If the user replies with a short affirmative response such as `ㅇ`, `ok`, or `�
 - Use `fixtures:` or `--var-file` for environment-specific non-secret data.
 - Use `--var name=value` only for one-off overrides.
 - Use the value precedence `fixtures:` < `vars:` < `--var-file` < `--var`.
+- Use folder-based scenario keys when they improve scanability, for example `auth/login` for `openapi-k6/scenarios/auth/login.yaml`.
+- Scenario keys must be extensionless and must not include `.yaml`, dotted filenames like `auth/login.v2`, empty path segments, `.`, or `..`.
+- Generated k6, log, and report paths preserve the scenario key folders, for example `generated/auth/login.k6.js` and `logs/auth/login.log`.
 - Do not run long load tests unless the user asks. After `validate`/`test`, suggest `run` or `generate` commands instead of running them automatically.
 
 ## Reusing Existing Steps
 
-Use include partials for repeated login, auth token, setup, seed, or cleanup steps.
+Use scenario-root `use` for reusable flows that are useful as named scenarios, and include partials for small local fragments.
 
-Before writing a repeated flow:
+For a reusable scenario in another folder:
+
+```yaml
+steps:
+  - use: auth/login
+  - id: get-me
+    api:
+      operationId: getMe
+    request:
+      headers:
+        Authorization: "Bearer {{token}}"
+```
+
+`use` rules:
+
+- Resolve from the workspace scenario root, for example `auth/login` -> `scenarios/auth/login.yaml`.
+- Use an extensionless key such as `auth/login`; do not use `auth/login.yaml` or `auth/login.v2`.
+- Keep the value static; do not use templates.
+- Keep shared data in the entry scenario. Reused files must not define `vars:` or `fixtures:`.
+- Ensure reused step ids do not duplicate local step ids.
+
+Use include partials for repeated login, auth token, setup, seed, or cleanup fragments that should stay relative to the entry scenario file.
+
+Before writing a repeated fragment:
 
 1. Look for reusable files under the workspace `scenarios/partials/*.yaml`.
 2. If a suitable partial exists, include it:

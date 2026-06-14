@@ -4851,7 +4851,7 @@ function initNextCommand(
   }
 
   if (command === 'validate' || command === 'test' || command === 'generate') {
-    parts.push('-s', '<scenario-name>');
+    parts.push('-s', '<scenario-key>');
   }
 
   if (path.resolve(configPath) !== defaultConfigPath) {
@@ -4863,7 +4863,7 @@ function initNextCommand(
   }
 
   return parts
-    .map((part) => part === '<scenario-name>' || part === '<검색어>' ? part : shellQuote(part))
+    .map((part) => part === '<scenario-key>' || part === '<검색어>' ? part : shellQuote(part))
     .join(' ');
 }
 
@@ -4903,7 +4903,7 @@ function writeInitSummary(
   writeLine(stdout, `  ${initNextCommand('validate', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${initNextCommand('test', result.configPath, moduleName, cwd)}`);
   writeLine(stdout, `  ${initNextCommand('generate', result.configPath, moduleName, cwd)}`);
-  writeLine(stdout, `  ${formatRunScriptCommand(cwd, result.runScriptPath)} <scenario-name> --log`);
+  writeLine(stdout, `  ${formatRunScriptCommand(cwd, result.runScriptPath)} <scenario-key> --log`);
 }
 
 function writeSyncSummary(
@@ -6406,9 +6406,9 @@ export function createProgram(context: CliContext = {}): Command {
   program
     .command('generate')
     .description('Generate a k6 script for the configured scenario.')
-    .requiredOption('-s, --scenario <path-or-name>', 'Scenario DSL file path or openapi-k6 scenario name')
+    .requiredOption('-s, --scenario <path-or-key>', 'Scenario DSL file path or openapi-k6 scenario key')
     .option('-o, --openapi <path>', 'OpenAPI spec file path')
-    .option('-w, --write <path>', `Output k6 script path (defaults to ${DEFAULT_LOAD_TEST_DIR}/generated/<scenario>.k6.js)`)
+    .option('-w, --write <path>', `Output k6 script path (defaults to ${DEFAULT_LOAD_TEST_DIR}/generated/<scenario-key>.k6.js)`)
     .option('--config <path>', 'Load test config file path')
     .option('-m, --module <name>', 'Module name from config')
     .option('--var-file <path>', 'Load scenario vars from a YAML object file; repeatable', collectRepeatedOption)
@@ -6423,15 +6423,15 @@ export function createProgram(context: CliContext = {}): Command {
   program
     .command('run')
     .description('Validate, generate, and run a scenario with k6.')
-    .requiredOption('-s, --scenario <path-or-name>', 'Scenario DSL file path or openapi-k6 scenario name')
-    .option('-w, --write <path>', `Output k6 script path (defaults to ${DEFAULT_LOAD_TEST_DIR}/generated/<scenario>.k6.js)`)
+    .requiredOption('-s, --scenario <path-or-key>', 'Scenario DSL file path or openapi-k6 scenario key')
+    .option('-w, --write <path>', `Output k6 script path (defaults to ${DEFAULT_LOAD_TEST_DIR}/generated/<scenario-key>.k6.js)`)
     .option('--config <path>', 'Load test config file path')
     .option('-m, --module <name>', 'Module name from config')
     .option('--var-file <path>', 'Load scenario vars from a YAML object file; repeatable', collectRepeatedOption)
     .option('--var <name=value>', 'Override one scenario var; repeatable and parsed as a YAML value', collectRepeatedOption)
-    .option('--log', `Save k6 output to ${DEFAULT_LOAD_TEST_DIR}/logs/<scenario>.log`)
+    .option('--log', `Save k6 output to ${DEFAULT_LOAD_TEST_DIR}/logs/<scenario-key>.log`)
     .option('--trace', 'Print OpenAPI step start/end logs from the generated k6 script')
-    .option('--report', `Export k6 Web Dashboard HTML to ${DEFAULT_LOAD_TEST_DIR}/logs/<scenario>-report.html`)
+    .option('--report', `Export k6 Web Dashboard HTML to ${DEFAULT_LOAD_TEST_DIR}/logs/<scenario-key>-report.html`)
     .option('--open-dashboard', 'Open the k6 Web Dashboard while the test is running')
     .argument('[k6Args...]', 'k6 run options after --')
     .action(async (k6Args: string[], options: RunOptions) => {
@@ -6532,7 +6532,7 @@ export function createProgram(context: CliContext = {}): Command {
   program
     .command('validate')
     .description('Validate a scenario YAML against the configured OpenAPI snapshot without calling the API.')
-    .requiredOption('-s, --scenario <path-or-name>', 'Scenario DSL file path or openapi-k6 scenario name')
+    .requiredOption('-s, --scenario <path-or-key>', 'Scenario DSL file path or openapi-k6 scenario key')
     .option('-o, --openapi <path>', 'OpenAPI spec file path')
     .option('--config <path>', 'Load test config file path')
     .option('-m, --module <name>', 'Module name from config')
@@ -6546,7 +6546,7 @@ export function createProgram(context: CliContext = {}): Command {
   program
     .command('test')
     .description('Run a scenario once with Node.js to validate API flow before generating k6.')
-    .requiredOption('-s, --scenario <path-or-name>', 'Scenario DSL file path or openapi-k6 scenario name')
+    .requiredOption('-s, --scenario <path-or-key>', 'Scenario DSL file path or openapi-k6 scenario key')
     .option('--config <path>', 'Load test config file path')
     .option('-m, --module <name>', 'Module name from config')
     .option('--var-file <path>', 'Load scenario vars from a YAML object file; repeatable', collectRepeatedOption)

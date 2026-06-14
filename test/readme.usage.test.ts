@@ -27,6 +27,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('같은 대화에서 최신 init, update, README 변경 이후 이미 읽었다면 전체를 다시 읽지 말고 필요한 섹션만 확인해.');
     expect(readme).toContain('이 README는 AI 작업 지침이므로, 이후 작업은 그 문서를 기준으로 진행해.');
     expect(readme).toContain('시나리오 파일을 작성하거나 수정하기 전에는 먼저 업무 프로세스와 호출할 API 순서를 요약해서 내 확인을 받아.');
+    expect(readme).toContain('요약에는 scenario key와 파일 경로, API 호출 순서');
     expect(readme).toContain('run의 k6 check 실패는 명령 실패로 처리됩니다.');
     expect(readme).toContain('## 빠른 시작');
     expect(readme).toContain('npx --yes openapi-k6 init');
@@ -34,10 +35,10 @@ describe('README usage guide', () => {
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어>');
     expect(readme).toContain('npx --yes openapi-k6 catalog --query <검색어> --ai');
     expect(readme).toContain('npx --yes openapi-k6 catalog --sync --query <검색어> --ai');
-    expect(readme).toContain('# openapi-k6/scenarios/<scenario-name>.yaml 작성');
-    expect(readme).toContain('npx --yes openapi-k6 validate -s <scenario-name>');
-    expect(readme).toContain('npx --yes openapi-k6 test -s <scenario-name>');
-    expect(readme).toContain('npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1 --iterations 1');
+    expect(readme).toContain('# openapi-k6/scenarios/<scenario-key>.yaml 작성');
+    expect(readme).toContain('npx --yes openapi-k6 validate -s <scenario-key>');
+    expect(readme).toContain('npx --yes openapi-k6 test -s <scenario-key>');
+    expect(readme).toContain('npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1 --iterations 1');
     expect(readme).toContain('시나리오가 많아지면 `openapi-k6/scenarios/auth/login.yaml`처럼 폴더로 묶고, CLI에서는 `-s auth/login`으로 실행합니다.');
     expect(readme).toContain('아래 예시는 이해를 돕기 위한 값입니다. 실제 명령에는 위 placeholder를 프로젝트에 맞게 바꿔 넣습니다.');
     expect(readme).toContain('처음 적용하는 프로젝트는 `init`부터 실행합니다.');

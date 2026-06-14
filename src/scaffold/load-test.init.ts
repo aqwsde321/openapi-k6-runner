@@ -436,24 +436,24 @@ function renderRunScript(): string {
     'print_usage() {',
     '  printf "\\n"',
     '  cat <<EOF',
-    'Usage: $0 [scenario] [run.sh flags] [k6 run options]',
+    'Usage: $0 [scenario-key] [run.sh flags] [k6 run options]',
     '',
     'Examples:',
-    '  $0 <scenario-name>',
-    '  $0 <scenario-name> --vus 1 --iterations 1',
-    '  $0 <scenario-name> --log',
-    '  $0 <scenario-name> --trace --log --report --duration 10s --vus 1',
+    '  $0 <scenario-key>',
+    '  $0 <scenario-key> --vus 1 --iterations 1',
+    '  $0 <scenario-key> --log',
+    '  $0 <scenario-key> --trace --log --report --duration 10s --vus 1',
     '',
     'run.sh flags:',
-    '  --log             Save console output to logs/<scenario>.log',
+    '  --log             Save console output to logs/<scenario-key>.log',
     '  --trace           Print OpenAPI step start/end logs',
-    '  --report          Export k6 Web Dashboard HTML to logs/<scenario>-report.html',
+    '  --report          Export k6 Web Dashboard HTML to logs/<scenario-key>-report.html',
     '  --open-dashboard  Open the k6 Web Dashboard while the test is running',
     '  -h, --help        Show this help',
     '',
     'Notes:',
     '  The default scenario is smoke.',
-    '  k6 options must come after the scenario name.',
+    '  k6 options must come after the scenario key.',
     '  This script loads only the .env file next to run.sh.',
     '  It does not load the backend project root .env.',
     '  Create it from .env.example when scenarios use {{env.NAME}}.',
@@ -586,8 +586,8 @@ function renderReadme(
     'openapi/' + moduleName + '.catalog.json',
   );
   const runScriptPath = directory + '/run.sh';
-  const scenarioTemplatePath = directory + '/scenarios/<name>.yaml';
-  const outputTemplatePath = directory + '/generated/<name>.k6.js';
+  const scenarioTemplatePath = directory + '/scenarios/<scenario-key>.yaml';
+  const outputTemplatePath = directory + '/generated/<scenario-key>.k6.js';
   const workflowScenarioPath = directory + '/scenarios/login-flow.yaml';
   const workflowOutputPath = directory + '/generated/login-flow.k6.js';
   const fixturesPath = directory + '/fixtures/';
@@ -610,16 +610,16 @@ function renderReadme(
   const uiCommand = cliCommand + ' ui' + configOption + moduleOption;
   const updateCommand = cliCommand + ' update' + configOption + moduleOption;
   const validateNameCommand = usesDefaultDirectory
-    ? cliCommand + ' validate' + moduleOption + ' -s <name>'
+    ? cliCommand + ' validate' + moduleOption + ' -s <scenario-key>'
     : cliCommand + ' validate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath);
   const testNameCommand = usesDefaultDirectory
-    ? cliCommand + ' test' + moduleOption + ' -s <name>'
+    ? cliCommand + ' test' + moduleOption + ' -s <scenario-key>'
     : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath);
   const runNameCommand = usesDefaultDirectory
-    ? cliCommand + ' run' + moduleOption + ' -s <name>'
+    ? cliCommand + ' run' + moduleOption + ' -s <scenario-key>'
     : cliCommand + ' run --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath) + ' --write ' + shellQuote(outputTemplatePath);
   const generateNameCommand = usesDefaultDirectory
-    ? cliCommand + ' generate' + moduleOption + ' -s <name>'
+    ? cliCommand + ' generate' + moduleOption + ' -s <scenario-key>'
     : cliCommand + ' generate --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath) + ' --write ' + shellQuote(outputTemplatePath);
   const testWorkflowCommand = usesDefaultDirectory
     ? cliCommand + ' test' + moduleOption + ' -s login-flow'

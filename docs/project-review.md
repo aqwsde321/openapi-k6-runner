@@ -10,7 +10,7 @@
 graph TD
     subgraph inputFiles["Input Files"]
         C["openapi-k6/config.yaml"] --> Loader["Config Loader"]
-        S["openapi-k6/scenarios/*.yaml"] --> Parser["Scenario DSL Parser"]
+        S["openapi-k6/scenarios/**/*.yaml"] --> Parser["Scenario DSL Parser"]
         O["OpenAPI URL/File"] --> Sync["sync: Snapshot & Catalog"]
     end
 
@@ -26,7 +26,7 @@ graph TD
     end
 
     subgraph outputs["Output & Verification"]
-        Generator --> K6Script["openapi-k6/generated/*.k6.js"]
+        Generator --> K6Script["openapi-k6/generated/**/*.k6.js"]
         Executor --> Reporter["Console Reporter"]
         K6Script --> K6["k6 run"]
     end
@@ -85,6 +85,8 @@ src/
 ### Scenario parsing과 정적 검증
 
 - YAML/JSON Scenario DSL을 파싱한다.
+- `auth/login` 같은 폴더형 scenario key는 `openapi-k6/scenarios/auth/login.yaml`로 해석하고, 생성물과 로그도 같은 하위 폴더 구조를 유지한다.
+- `steps` 안의 `- use: auth/login`을 scenario root 기준의 재사용 scenario steps로 펼친다.
 - `steps` 안의 `- include: ./partials/login.yaml`을 entry scenario 디렉터리 안의 공통 step 파일로 펼친다.
 - entry scenario의 `vars:`와 `fixtures:`, CLI `--var-file`/`--var` override를 `{{vars.NAME}}` template 값으로 제공해 include partial과 본문 step이 같은 테스트 데이터를 공유하게 한다.
 - `operationId` 또는 `method + path`가 OpenAPI snapshot에 존재하는지 확인한다.
@@ -133,7 +135,7 @@ src/
 
 ## 6. 현재 상태와 다음 후보
 
-현재 기능은 scenario-first CLI의 주요 흐름을 갖췄다. 특히 scenario vars/fixtures, reusable step include, `api.module`, module 관리 CLI, `doctor`, `run` 명령, 정적 template 검증, published smoke, 멀티서버 E2E smoke까지 연결되어 있다.
+현재 기능은 scenario-first CLI의 주요 흐름을 갖췄다. 특히 scenario vars/fixtures, 폴더형 scenario key, scenario-root `use`, reusable step include, `api.module`, module 관리 CLI, `doctor`, `run` 명령, 정적 template 검증, published smoke, 멀티서버 E2E smoke까지 연결되어 있다.
 
 남은 개선 후보는 다음과 같다.
 

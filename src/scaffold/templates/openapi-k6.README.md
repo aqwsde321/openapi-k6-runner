@@ -15,7 +15,7 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 3. snapshot/catalog가 없거나 최신 OpenAPI가 필요하면 `__SYNC_COMMAND__`를 실행합니다.
 4. endpoint 후보와 step 초안은 `__CATALOG_AI_COMMAND__`로 확인합니다. `<검색어>`는 실제 API 이름, path, tag로 바꿉니다.
 5. Scenario YAML을 쓰기 전에 사용자에게 아래 계획을 확인받습니다.
-   - scenario 파일명
+   - scenario key와 파일 경로
    - 업무 프로세스
    - API 호출 순서와 method/path 또는 operationId
    - request 값과 `{{env.*}}`, `{{vars.*}}` 처리
@@ -58,12 +58,12 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 자주 쓰는 runner:
 
 ```bash
-__RUN_SCRIPT_ARG__ <scenario-name>
-__RUN_SCRIPT_ARG__ <scenario-name> --log
-__RUN_SCRIPT_ARG__ <scenario-name> --vus 1 --iterations 1
+__RUN_SCRIPT_ARG__ <scenario-key>
+__RUN_SCRIPT_ARG__ <scenario-key> --log
+__RUN_SCRIPT_ARG__ <scenario-key> --vus 1 --iterations 1
 ```
 
-로그 파일: `__DIRECTORY__/logs/<scenario-name>.log`
+로그 파일: `__DIRECTORY__/logs/<scenario-key>.log`
 
 ## Scenario 작성 규칙
 
@@ -81,8 +81,9 @@ __RUN_SCRIPT_ARG__ <scenario-name> --vus 1 --iterations 1
 - 값 우선순위는 `fixtures:` < `vars:` < CLI `--var-file` < CLI `--var`입니다.
 - 공통 로그인/auth/seed step은 `steps` 안의 `- include: ./partials/login.yaml`로 재사용합니다.
 - 다른 폴더의 scenario steps는 `steps` 안의 `- use: auth/login`처럼 scenario root 기준 key로 재사용합니다.
-- `use` 값은 확장자 없는 scenario key여야 합니다.
-- include 파일에는 `steps:`만 두고 `vars:`나 `fixtures:`는 entry scenario에서 관리합니다.
+- `use` 값은 `auth/login`처럼 확장자 없는 scenario key여야 하며, `auth/login.yaml`이나 `auth/login.v2`는 사용할 수 없습니다.
+- include 파일에는 `steps:`만 둡니다.
+- include 파일과 use 대상 파일에는 `vars:`나 `fixtures:`를 두지 않고 entry scenario에서 관리합니다.
 - `use`로 펼친 step의 `extract` 값은 뒤 step에서 `{{variableName}}`으로 참조할 수 있습니다.
 - include와 fixture 경로는 entry scenario 파일 기준 상대 경로이며 scenario 디렉터리 밖으로 나갈 수 없습니다. use 경로는 `__DIRECTORY__/scenarios` 기준입니다.
 - 여러 OpenAPI 서버를 한 scenario에서 섞을 때만 `api.module`을 사용합니다.
