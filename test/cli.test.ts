@@ -1805,6 +1805,13 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('ansi-green');
       expect(html).toContain('.scenario-item-head');
       expect(html).toContain('.scenario-group-title');
+      expect(html).toContain('.scenario-group-caret');
+      expect(html).toContain('openapi-k6.ui.collapsedScenarioGroups');
+      expect(html).toContain('toggleScenarioGroup');
+      expect(html).toContain('const collapsed = !query && state.collapsedGroups.has(group.name);');
+      expect(html).toContain('aria-expanded');
+      expect(html).not.toContain('groups.sort(');
+      expect(html).not.toContain('group.scenarios.sort(');
       expect(html).toContain('text-overflow: ellipsis');
       expect(html).toContain('detail.includes.map');
       expect(html).toContain('reuse ');

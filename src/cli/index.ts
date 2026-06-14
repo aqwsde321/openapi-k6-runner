@@ -3666,13 +3666,44 @@ const UI_HTML = String.raw`<!doctype html>
       gap: 8px;
     }
     .scenario-group-title {
+      border: 0;
+      background: transparent;
       padding: 4px 2px 0;
       color: var(--muted);
+      display: grid;
+      grid-template-columns: 14px minmax(0, 1fr) max-content;
+      align-items: center;
+      gap: 6px;
       font-size: 12px;
       font-weight: 800;
       line-height: 1.2;
+      min-width: 0;
+      text-align: left;
       text-transform: uppercase;
+      width: 100%;
     }
+    .scenario-group-title:hover {
+      color: var(--text);
+      cursor: pointer;
+    }
+    .scenario-group-caret {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1;
+      text-align: center;
+    }
+    .scenario-group-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .scenario-group-count {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+    }
+    .scenario-group.collapsed .scenario-group-items { display: none; }
     .scenario-item {
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -3968,10 +3999,13 @@ const UI_HTML = String.raw`<!doctype html>
     </section>
   </main>
   <script>
+    const COLLAPSED_GROUPS_STORAGE_KEY = 'openapi-k6.ui.collapsedScenarioGroups';
+
     const state = {
       scenarios: [],
       selected: null,
       detail: null,
+      collapsedGroups: readCollapsedScenarioGroups(),
       lastRun: new Map(),
       serverSummary: { checked: false, failedServers: 0, missingSnapshots: 0 }
     };
@@ -4003,6 +4037,28 @@ const UI_HTML = String.raw`<!doctype html>
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+    }
+
+    function readCollapsedScenarioGroups() {
+      try {
+        if (typeof localStorage === 'undefined') return new Set();
+        const raw = localStorage.getItem(COLLAPSED_GROUPS_STORAGE_KEY);
+        if (!raw) return new Set();
+        const values = JSON.parse(raw);
+        if (!Array.isArray(values)) return new Set();
+        return new Set(values.filter((value) => typeof value === 'string'));
+      } catch {
+        return new Set();
+      }
+    }
+
+    function saveCollapsedScenarioGroups() {
+      try {
+        if (typeof localStorage === 'undefined') return;
+        localStorage.setItem(COLLAPSED_GROUPS_STORAGE_KEY, JSON.stringify(Array.from(state.collapsedGroups).sort()));
+      } catch {
+        // Ignore storage failures so the UI still works in restricted browsers.
+      }
     }
 
     function resetOutput() {
@@ -4092,15 +4148,34 @@ const UI_HTML = String.raw`<!doctype html>
         group.scenarios.push(scenario);
       }
       els.scenarioList.innerHTML = groups.map((group) => {
-        return '<div class="scenario-group">' +
-          '<div class="scenario-group-title">' + escapeHtml(group.name) + '</div>' +
-          group.scenarios.map(renderScenarioItem).join('') +
-          '</div>';
+        const collapsed = !query && state.collapsedGroups.has(group.name);
+        return '<div class="scenario-group ' + (collapsed ? 'collapsed' : '') + '" data-group="' + escapeHtml(group.name) + '">' +
+          '<button class="scenario-group-title" type="button" data-group="' + escapeHtml(group.name) + '" aria-expanded="' + String(!collapsed) + '">' +
+            '<span class="scenario-group-caret" aria-hidden="true">' + (collapsed ? '&gt;' : 'v') + '</span>' +
+            '<span class="scenario-group-label">' + escapeHtml(group.name) + '</span>' +
+            '<span class="scenario-group-count">' + group.scenarios.length + '</span>' +
+          '</button>' +
+          '<div class="scenario-group-items">' + group.scenarios.map(renderScenarioItem).join('') + '</div>' +
+        '</div>';
       }).join('');
 
+      for (const title of els.scenarioList.querySelectorAll('.scenario-group-title')) {
+        title.addEventListener('click', () => toggleScenarioGroup(title.getAttribute('data-group')));
+      }
       for (const item of els.scenarioList.querySelectorAll('.scenario-item')) {
         item.addEventListener('click', () => selectScenario(item.getAttribute('data-id')));
       }
+    }
+
+    function toggleScenarioGroup(groupName) {
+      if (!groupName) return;
+      if (state.collapsedGroups.has(groupName)) {
+        state.collapsedGroups.delete(groupName);
+      } else {
+        state.collapsedGroups.add(groupName);
+      }
+      saveCollapsedScenarioGroups();
+      renderScenarioList();
     }
 
     function renderScenarioItem(scenario) {
