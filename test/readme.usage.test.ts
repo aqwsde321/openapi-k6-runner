@@ -37,6 +37,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('npx --yes openapi-k6 validate -s <scenario-name>');
     expect(readme).toContain('npx --yes openapi-k6 test -s <scenario-name>');
     expect(readme).toContain('npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1 --iterations 1');
+    expect(readme).toContain('시나리오가 많아지면 `openapi-k6/scenarios/auth/login.yaml`처럼 폴더로 묶고, CLI에서는 `-s auth/login`으로 실행합니다.');
     expect(readme).toContain('아래 예시는 이해를 돕기 위한 값입니다. 실제 명령에는 위 placeholder를 프로젝트에 맞게 바꿔 넣습니다.');
     expect(readme).toContain('처음 적용하는 프로젝트는 `init`부터 실행합니다.');
     expect(readme).toContain('기본 작업공간은 `openapi-k6/`이고, 팀이나 프로젝트 이름에 맞추려면 처음 만들 때 `npx --yes openapi-k6 init --dir <path>`를 사용합니다.');
@@ -71,6 +72,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('`operationId`가 없거나 애매하면 `api.method`와 `api.path`를 쓸 수 있습니다.');
 
     expect(readme).toContain('## 3. Scenario 작성');
+    expect(readme).toContain('폴더는 UI의 카테고리로 쓰입니다. 예를 들어 `openapi-k6/scenarios/auth/login.yaml`은 UI에서 `auth` 그룹에 표시되고, CLI에서는 `-s auth/login`으로 실행합니다.');
     expect(readme).toContain('각 step에는 `id`와 `api`가 필요합니다.');
     expect(readme).toContain('`request`, `extract`, `condition`은 필요한 경우만 둡니다.');
     expect(readme).toContain('`condition`을 생략하면 `test`와 `run`은 HTTP status `< 400`을 성공으로 봅니다.');
@@ -105,9 +107,9 @@ describe('README usage guide', () => {
     expect(readme).toContain('## 파일 규칙');
     expect(readme).toContain('`openapi-k6/config.yaml`');
     expect(readme).toContain('`openapi-k6/.env`');
-    expect(readme).toContain('`openapi-k6/scenarios/*.yaml`');
+    expect(readme).toContain('`openapi-k6/scenarios/**/*.yaml`');
     expect(readme).toContain('`openapi-k6/openapi/*.openapi.json`: `sync` 생성물');
-    expect(readme).toContain('`openapi-k6/generated/*.k6.js`: `generate` 생성물');
+    expect(readme).toContain('`openapi-k6/generated/**/*.k6.js`: `generate` 생성물');
     expect(readme).toContain('비밀값이 필요하면 `openapi-k6/.env.example`을 참고해 직접 만들고 commit하지 않습니다.');
 
     expect(readme).toContain('## 지원 범위');

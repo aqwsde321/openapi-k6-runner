@@ -414,6 +414,7 @@ describe('openapi-k6 CLI', () => {
     expect(runScript).toContain('export K6_WEB_DASHBOARD_PERIOD="${K6_WEB_DASHBOARD_PERIOD:-1s}"');
     expect(runScript).toContain('export K6_WEB_DASHBOARD_EXPORT="${K6_WEB_DASHBOARD_EXPORT:-$REPORT_FILE}"');
     expect(runScript).toContain('export K6_WEB_DASHBOARD_OPEN=true');
+    expect(runScript).toContain('mkdir -p "$(dirname "$LOG_FILE")"');
     expect(runScript).toContain('k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH" 2>&1 | tee "$LOG_FILE"');
     expect(runScript).toContain('status="${PIPESTATUS[0]}"');
     expect(runScript).toContain('exec k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH"');
@@ -456,7 +457,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('openapi-k6/scenarios/<name>.yaml');
     expect(readme).toContain('openapi-k6/openapi/pharma.openapi.json');
     expect(readme).toContain('openapi-k6/openapi/pharma.catalog.json');
-    expect(readme).toContain('openapi-k6/generated/*.k6.js');
+    expect(readme).toContain('openapi-k6/generated/**/*.k6.js');
 
     expect(readme).toContain('./openapi-k6/run.sh <scenario-name>');
     expect(readme).toContain('./openapi-k6/run.sh <scenario-name> --vus 1 --iterations 1');
@@ -468,7 +469,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('업무 프로세스');
     expect(readme).toContain('API 호출 순서와 method/path 또는 operationId');
     expect(readme).toContain('기존 partial include 재사용 또는 새 partial 생성 여부');
-    expect(readme).toContain('사용자가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 `openapi-k6/scenarios/*.yaml`을 작성하거나 수정합니다.');
+    expect(readme).toContain('사용자가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 `openapi-k6/scenarios/**/*.yaml`을 작성하거나 수정합니다.');
+    expect(readme).toContain('폴더는 UI 카테고리로 사용합니다. 예: `openapi-k6/scenarios/auth/login.yaml`은 `-s auth/login`으로 실행합니다.');
     expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 남아 있으면 `validate`가 실패합니다.');
     expect(readme).toContain('값 우선순위는 `fixtures:` < `vars:` < CLI `--var-file` < CLI `--var`입니다.');
     expect(readme).toContain('include 파일에는 `steps:`만 두고 `vars:`나 `fixtures:`는 entry scenario에서 관리합니다.');
@@ -574,6 +576,59 @@ describe('openapi-k6 CLI', () => {
     expect(args).toBe([
       'run',
       path.join(workspace, 'openapi-k6/generated/smoke.k6.js'),
+      '',
+    ].join('\n'));
+  });
+
+  it('runs nested scenarios with the generated run.sh log flag', async () => {
+    await runCli(
+      ['init'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+    await mkdir(path.join(workspace, 'openapi-k6/generated/auth'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/generated/auth/login.k6.js'),
+      'export default function () {}\n',
+      'utf8',
+    );
+    const binDir = path.join(workspace, 'bin');
+    const argLogPath = path.join(workspace, 'k6-args.txt');
+    await mkdir(binDir, { recursive: true });
+    await writeFile(
+      path.join(binDir, 'k6'),
+      [
+        '#!/usr/bin/env bash',
+        'printf "%s\\n" "$@" > "$K6_ARG_LOG"',
+        'echo fake-k6-output',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await chmod(path.join(binDir, 'k6'), 0o755);
+
+    const result = spawnSync(
+      path.join(workspace, 'openapi-k6/run.sh'),
+      ['auth/login', '--log'],
+      {
+        cwd: workspace,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+          K6_ARG_LOG: argLogPath,
+        },
+      },
+    );
+    const log = await readFile(path.join(workspace, 'openapi-k6/logs/auth/login.log'), 'utf8');
+    const args = await readFile(argLogPath, 'utf8');
+
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(`Writing k6 output to ${path.join(workspace, 'openapi-k6/logs/auth/login.log')}`);
+    expect(log).toContain('fake-k6-output');
+    expect(args).toBe([
+      'run',
+      path.join(workspace, 'openapi-k6/generated/auth/login.k6.js'),
       '',
     ].join('\n'));
   });
@@ -714,6 +769,60 @@ describe('openapi-k6 CLI', () => {
       '--iterations',
       '1',
       path.join(workspace, 'openapi-k6/generated/smoke.k6.js'),
+      '',
+    ].join('\n'));
+  });
+
+  it('runs nested scenario keys with matching generated and log paths', async () => {
+    await writeRunFixtures();
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios/auth'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/auth/login.yaml'),
+      [
+        'name: login',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    const binDir = path.join(workspace, 'bin');
+    const argLogPath = path.join(workspace, 'k6-args.txt');
+    await writeFakeK6(binDir, [
+      'printf "%s\\n" "$@" > "$K6_ARG_LOG"',
+      'echo fake-k6-output',
+    ]);
+
+    const stdout = createCapture();
+    await runCli(
+      ['run', '--scenario', 'auth/login', '--log', '--report', '--', '--vus', '1'],
+      {
+        cwd: workspace,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        env: {
+          PATH: `${binDir}:${process.env.PATH ?? ''}`,
+          K6_ARG_LOG: argLogPath,
+        },
+      },
+    );
+
+    const output = stdout.output();
+    const args = await readFile(argLogPath, 'utf8');
+    const generatedPath = path.join(workspace, 'openapi-k6/generated/auth/login.k6.js');
+
+    expect(output).toContain(`Generated ${generatedPath}`);
+    expect(output).toContain(`Writing k6 output to ${path.join(workspace, 'openapi-k6/logs/auth/login.log')}`);
+    expect(output).toContain(`Writing k6 HTML report to ${path.join(workspace, 'openapi-k6/logs/auth/login-report.html')}`);
+    await expect(stat(generatedPath)).resolves.toBeTruthy();
+    expect(args).toBe([
+      'run',
+      '--vus',
+      '1',
+      generatedPath,
       '',
     ].join('\n'));
   });
@@ -1577,6 +1686,35 @@ describe('openapi-k6 CLI', () => {
       'steps:\n  - id: login\n    api:\n      operationId: getHealth\n',
       'utf8',
     );
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios/auth'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/auth/login.yaml'),
+      [
+        'name: login',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/auth/login.v2.yaml'),
+      [
+        'name: login-v2',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await mkdir(path.join(workspace, 'auth'), { recursive: true });
+    await writeFile(path.join(workspace, 'auth/login'), 'not a scenario file\n', 'utf8');
     const reportedScenarios: string[] = [];
 
     const ui = await runUiCommand(
@@ -1600,9 +1738,21 @@ describe('openapi-k6 CLI', () => {
       const scenarios = await (await fetch(`${ui.url}/api/scenarios`)).json() as {
         defaultModule?: string;
         moduleCount: number;
-        scenarios: Array<{ id: string; name: string; path: string; stepCount?: number }>;
+        scenarios: Array<{ id: string; name: string; group: string; path: string; stepCount?: number }>;
       };
       const detail = await (await fetch(`${ui.url}/api/scenario?scenario=smoke`)).json() as {
+        id: string;
+        name: string;
+        steps: Array<{ id: string; operationId?: string }>;
+      };
+      const nestedDetail = await (await fetch(`${ui.url}/api/scenario?scenario=${encodeURIComponent('auth/login')}`)).json() as {
+        id: string;
+        name: string;
+        steps: Array<{ id: string; operationId?: string }>;
+      };
+      const dottedScenarioId = 'openapi-k6/scenarios/auth/login.v2.yaml';
+      const dottedDetail = await (await fetch(`${ui.url}/api/scenario?scenario=${encodeURIComponent(dottedScenarioId)}`)).json() as {
+        id: string;
         name: string;
         steps: Array<{ id: string; operationId?: string }>;
       };
@@ -1612,6 +1762,12 @@ describe('openapi-k6 CLI', () => {
         body: JSON.stringify({ command: 'validate', scenario: 'smoke' }),
       })).json() as { runId: string };
       const events = await (await fetch(`${ui.url}/api/runs/${run.runId}/events`)).text();
+      const nestedRun = await (await fetch(`${ui.url}/api/run`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ command: 'validate', scenario: 'auth/login' }),
+      })).json() as { runId: string };
+      const nestedEvents = await (await fetch(`${ui.url}/api/runs/${nestedRun.runId}/events`)).text();
       const testRun = await (await fetch(`${ui.url}/api/run`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -1622,20 +1778,37 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('openapi-k6 UI');
       expect(html).toContain('ansi-green');
       expect(html).toContain('.scenario-item-head');
+      expect(html).toContain('.scenario-group-title');
       expect(html).toContain('text-overflow: ellipsis');
       expect(scenarios.defaultModule).toBe('app');
       expect(scenarios.moduleCount).toBe(1);
-      expect(scenarios.scenarios).toEqual([
-        expect.objectContaining({ id: 'smoke', name: 'smoke', stepCount: 1 }),
-      ]);
+      expect(scenarios.scenarios).toHaveLength(3);
+      expect(scenarios.scenarios).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'auth/login', name: 'login', group: 'auth', stepCount: 1 }),
+        expect.objectContaining({ id: dottedScenarioId, name: 'login-v2', group: 'auth', stepCount: 1 }),
+        expect.objectContaining({ id: 'smoke', name: 'smoke', group: 'root', stepCount: 1 }),
+      ]));
       expect(scenarios.scenarios.some((scenario) => scenario.path.includes('partials/login.yaml'))).toBe(false);
       expect(detail).toMatchObject({
+        id: 'smoke',
         name: 'smoke',
+        steps: [expect.objectContaining({ id: 'health', operationId: 'getHealth' })],
+      });
+      expect(nestedDetail).toMatchObject({
+        id: 'auth/login',
+        name: 'login',
+        steps: [expect.objectContaining({ id: 'health', operationId: 'getHealth' })],
+      });
+      expect(dottedDetail).toMatchObject({
+        id: dottedScenarioId,
+        name: 'login-v2',
         steps: [expect.objectContaining({ id: 'health', operationId: 'getHealth' })],
       });
       expect(events).toContain('$ openapi-k6 validate');
       expect(events).toContain('Validated openapi-k6/scenarios/smoke.yaml');
       expect(events).toContain('"status":"passed"');
+      expect(nestedEvents).toContain('Validated openapi-k6/scenarios/auth/login.yaml');
+      expect(nestedEvents).toContain('"status":"passed"');
       expect(testEvents).toContain('$ openapi-k6 test');
       expect(testEvents).not.toContain('--no-color');
       expect(testEvents).toContain('\\u001b[32m');
@@ -3356,6 +3529,76 @@ describe('openapi-k6 CLI', () => {
     const output = await readFile(path.join(workspace, 'openapi-k6/generated/smoke.k6.js'), 'utf8');
 
     expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://config-base.test.local";');
+    expect(output).toContain('const url0 = joinUrl(BASE_URL, `/app-health`);');
+  });
+
+  it('generates nested scenario keys into matching generated subdirectories', async () => {
+    await writeRunFixtures();
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios/auth'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/auth/login.yaml'),
+      [
+        'name: login',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const keyStdout = createCapture();
+    await runCli(
+      ['generate', '-s', 'auth/login'],
+      { cwd: workspace, stdout: keyStdout.stream, stderr: createSink() },
+    );
+
+    const outputPath = path.join(workspace, 'openapi-k6/generated/auth/login.k6.js');
+    const keyOutput = await readFile(outputPath, 'utf8');
+
+    expect(keyStdout.output()).toContain(`Generated ${outputPath}`);
+    expect(keyOutput).toContain('const BASE_URL = __ENV.BASE_URL || "https://app-api.test.local";');
+    expect(keyOutput).toContain('const url0 = joinUrl(BASE_URL, `/app-health`);');
+
+    const pathStdout = createCapture();
+    await runCli(
+      ['generate', '-s', 'openapi-k6/scenarios/auth/login.yaml'],
+      { cwd: workspace, stdout: pathStdout.stream, stderr: createSink() },
+    );
+
+    expect(pathStdout.output()).toContain(`Generated ${outputPath}`);
+  });
+
+  it('keeps existing slash-containing scenario paths ahead of nested scenario key resolution', async () => {
+    await writeRunFixtures();
+    await mkdir(path.join(workspace, 'custom'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'custom/scenario'),
+      [
+        'name: legacy-path',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const stdout = createCapture();
+    await runCli(
+      ['generate', '-s', 'custom/scenario'],
+      { cwd: workspace, stdout: stdout.stream, stderr: createSink() },
+    );
+
+    const outputPath = path.join(workspace, 'openapi-k6/generated/scenario.k6.js');
+    const output = await readFile(outputPath, 'utf8');
+
+    expect(stdout.output()).toContain(`Generated ${outputPath}`);
+    expect(output).toContain('const BASE_URL = __ENV.BASE_URL || "https://app-api.test.local";');
     expect(output).toContain('const url0 = joinUrl(BASE_URL, `/app-health`);');
   });
 

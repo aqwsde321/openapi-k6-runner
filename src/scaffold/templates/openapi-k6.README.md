@@ -22,7 +22,7 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
    - response extract 값과 다음 step 재사용 위치
    - 기존 partial include 재사용 또는 새 partial 생성 여부
    - 모호한 endpoint 선택지와 필요한 테스트 데이터
-6. 사용자가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 `__DIRECTORY__/scenarios/*.yaml`을 작성하거나 수정합니다.
+6. 사용자가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 `__DIRECTORY__/scenarios/**/*.yaml`을 작성하거나 수정합니다.
 7. 처음에는 `id`, `api`와 필요한 `request`, `extract`, `condition`만 채웁니다. 반복이 생길 때만 `vars`, `fixtures`, `include`를 사용합니다.
 8. 비밀 값은 scenario YAML에 직접 쓰지 말고 `{{env.NAME}}`으로 참조합니다. 실제 값은 `__ENV_PATH__`에만 둡니다.
 9. `__VALIDATE_NAME_COMMAND__`를 먼저 통과시킨 뒤, 가능한 경우 `__TEST_NAME_COMMAND__`로 실제 API 흐름을 1회 검증합니다.
@@ -37,7 +37,7 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 - catalog: `__CATALOG_PATH__`
 - scenario: `__SCENARIO_TEMPLATE_PATH__`
 - env: `__ENV_PATH__`
-- generated: `__DIRECTORY__/generated/*.k6.js`
+- generated: `__DIRECTORY__/generated/**/*.k6.js`
 - runner: `__RUN_SCRIPT_PATH__`
 
 ## 명령
@@ -69,6 +69,7 @@ __RUN_SCRIPT_ARG__ <scenario-name> --vus 1 --iterations 1
 
 - `operationId`가 유일하면 `api.operationId`를 우선 사용합니다.
 - `operationId`가 없거나 애매하면 `api.method`와 `api.path`를 사용합니다.
+- 폴더는 UI 카테고리로 사용합니다. 예: `__DIRECTORY__/scenarios/auth/login.yaml`은 `-s auth/login`으로 실행합니다.
 - `catalog --ai` 초안의 `<...>` placeholder가 남아 있으면 `validate`가 실패합니다.
 - `request.body`와 `request.multipart`는 같은 step에 함께 쓰지 않습니다.
 - `condition`은 검증식이지 분기 조건이 아닙니다.
@@ -89,7 +90,7 @@ __RUN_SCRIPT_ARG__ <scenario-name> --vus 1 --iterations 1
 
 - `__CONFIG_PATH__`
 - `__ENV_PATH__`
-- `__DIRECTORY__/scenarios/*.yaml`
+- `__DIRECTORY__/scenarios/**/*.yaml`
 
 직접 수정 금지:
 
@@ -100,7 +101,7 @@ __RUN_SCRIPT_ARG__ <scenario-name> --vus 1 --iterations 1
 - `__DIRECTORY__/.openapi-k6.json`
 - `__SNAPSHOT_PATH__`
 - `__CATALOG_PATH__`
-- `__DIRECTORY__/generated/*.k6.js`
+- `__DIRECTORY__/generated/**/*.k6.js`
 
 생성물은 `sync`, `generate`, `update`로 다시 만듭니다.
 

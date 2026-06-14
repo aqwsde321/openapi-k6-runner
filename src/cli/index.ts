@@ -2,7 +2,7 @@
 import { Command, CommanderError } from 'commander';
 import { parse as parseDotEnv } from 'dotenv';
 import { spawn, spawnSync } from 'node:child_process';
-import { createWriteStream, realpathSync, type Dirent, type WriteStream } from 'node:fs';
+import { createWriteStream, existsSync, realpathSync, type Dirent, type WriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -1134,8 +1134,14 @@ function normalizeConfiguredValue(value: string | undefined): string | undefined
 }
 
 function resolveScenarioPath(cwd: string, config: LoadTestConfig | undefined, value: string): string {
-  if (isScenarioName(value)) {
-    return path.join(resolveLoadTestDir(cwd, config), 'scenarios', `${value}.yaml`);
+  if (isScenarioKey(value)) {
+    const explicitPath = path.resolve(cwd, value);
+
+    if (hasScenarioKeySeparator(value) && existsSync(explicitPath)) {
+      return explicitPath;
+    }
+
+    return path.join(resolveLoadTestDir(cwd, config), 'scenarios', `${normalizeScenarioKey(value)}.yaml`);
   }
 
   return path.resolve(cwd, value);
@@ -1151,11 +1157,40 @@ function resolveOutputPath(
     return path.resolve(cwd, write);
   }
 
-  const scenarioName = isScenarioName(scenario)
-    ? scenario
-    : resolveScenarioName(scenario);
+  const scenarioName = resolveScenarioOutputStem(cwd, config, scenario);
 
-  return path.join(resolveLoadTestDir(cwd, config), 'generated', `${scenarioName}.k6.js`);
+  return resolveGeneratedK6Path(resolveLoadTestDir(cwd, config), scenarioName);
+}
+
+function resolveScenarioOutputStem(cwd: string, config: LoadTestConfig | undefined, scenario: string): string {
+  if (isScenarioKey(scenario)) {
+    const explicitPath = path.resolve(cwd, scenario);
+
+    if (hasScenarioKeySeparator(scenario) && existsSync(explicitPath)) {
+      return resolveScenarioOutputStemFromPath(cwd, config, explicitPath);
+    }
+
+    return normalizeScenarioKey(scenario);
+  }
+
+  return resolveScenarioOutputStemFromPath(cwd, config, path.resolve(cwd, scenario));
+}
+
+function resolveScenarioOutputStemFromPath(cwd: string, config: LoadTestConfig | undefined, scenarioPath: string): string {
+  const scenarioDir = path.join(resolveLoadTestDir(cwd, config), 'scenarios');
+  const relative = path.relative(scenarioDir, scenarioPath);
+
+  if (isLocalRelativePath(relative) && isScenarioFile(relative)) {
+    return formatScenarioKey(relative);
+  }
+
+  return resolveScenarioName(scenarioPath);
+}
+
+function resolveGeneratedK6Path(loadTestDir: string, scenarioKey: string): string {
+  const parts = scenarioKey.split('/');
+  const scriptName = `${parts.pop() ?? scenarioKey}.k6.js`;
+  return path.join(loadTestDir, 'generated', ...parts, scriptName);
 }
 
 function resolveScenarioName(scenario: string): string {
@@ -1270,11 +1305,45 @@ function resolveScaffoldUpdateCommand(
   return formatScaffoldUpdateCommand(cwd, config);
 }
 
-function isScenarioName(value: string): boolean {
-  return !path.isAbsolute(value) &&
-    !value.includes('/') &&
-    !value.includes('\\') &&
-    path.extname(value) === '';
+function isScenarioKey(value: string): boolean {
+  const trimmed = value.trim();
+
+  if (
+    trimmed === '' ||
+    path.isAbsolute(trimmed) ||
+    path.win32.isAbsolute(trimmed) ||
+    path.extname(trimmed) !== ''
+  ) {
+    return false;
+  }
+
+  const segments = splitScenarioKey(trimmed);
+  return segments.length > 0 && segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+}
+
+function normalizeScenarioKey(value: string): string {
+  return splitScenarioKey(value.trim()).join('/');
+}
+
+function splitScenarioKey(value: string): string[] {
+  return value.split(/[\\/]+/);
+}
+
+function hasScenarioKeySeparator(value: string): boolean {
+  return value.includes('/') || value.includes('\\');
+}
+
+function formatScenarioKey(relativeFilePath: string): string {
+  const parsed = path.parse(relativeFilePath);
+  return path.join(parsed.dir, parsed.name).split(path.sep).join('/');
+}
+
+function isLocalRelativePath(relativePath: string): boolean {
+  return relativePath !== '' &&
+    relativePath !== '..' &&
+    !relativePath.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relativePath) &&
+    !path.win32.isAbsolute(relativePath);
 }
 
 function normalizeModuleNameInput(value: string): string {
@@ -2015,7 +2084,7 @@ export async function runRunCommand(
   const k6Result = await runK6Script({
     cwd,
     loadTestDir,
-    scenarioName: isScenarioName(options.scenario) ? options.scenario : resolveScenarioName(options.scenario),
+    scenarioName: resolveScenarioOutputStem(cwd, config, options.scenario),
     scriptPath: generated.outputPath,
     runtimeEnv,
     k6Args: options.k6Args ?? [],
@@ -2571,6 +2640,7 @@ async function listUiScenarios(state: UiState): Promise<{
   scenarios: Array<{
     id: string;
     name: string;
+    group: string;
     path: string;
     stepCount?: number;
     modules?: string[];
@@ -2590,6 +2660,7 @@ async function listUiScenarios(state: UiState): Promise<{
       scenarios.push({
         id: formatUiScenarioOption(state.cwd, scenarioDir, filePath),
         name: scenario.name,
+        group: formatUiScenarioGroup(scenarioDir, filePath),
         path: formatDisplayPath(state.cwd, filePath),
         stepCount: scenario.steps.length,
         modules: analysis.modules,
@@ -2600,6 +2671,7 @@ async function listUiScenarios(state: UiState): Promise<{
       scenarios.push({
         id: formatDisplayPath(state.cwd, filePath),
         name: resolveScenarioName(filePath),
+        group: formatUiScenarioGroup(scenarioDir, filePath),
         path: formatDisplayPath(state.cwd, filePath),
         error: error instanceof Error ? error.message : String(error),
       });
@@ -2777,10 +2849,11 @@ async function runUiCliCommand(
   run: UiRunRecord,
   payload: { command: 'validate' | 'test'; scenario: string; varFile: string[]; vars: string[] },
 ): Promise<void> {
+  const scenarioPath = resolveUiScenarioPath(state, payload.scenario);
   const args = [
     payload.command,
     '--scenario',
-    payload.scenario,
+    formatDisplayPath(state.cwd, scenarioPath),
     '--config',
     formatDisplayPath(state.cwd, state.config.path),
     ...(state.options.module === undefined ? [] : ['--module', state.options.module]),
@@ -3208,13 +3281,22 @@ async function listUiScenarioFiles(directoryPath: string): Promise<string[]> {
 
 function formatUiScenarioOption(cwd: string, scenarioDir: string, filePath: string): string {
   const relative = path.relative(scenarioDir, filePath);
-  const topLevelName = resolveScenarioName(relative);
 
-  if (!relative.includes(path.sep) && isScenarioName(topLevelName)) {
-    return topLevelName;
+  if (isLocalRelativePath(relative) && path.extname(relative).toLowerCase() === '.yaml') {
+    const scenarioKey = formatScenarioKey(relative);
+
+    if (isScenarioKey(scenarioKey)) {
+      return scenarioKey;
+    }
   }
 
   return formatDisplayPath(cwd, filePath);
+}
+
+function formatUiScenarioGroup(scenarioDir: string, filePath: string): string {
+  const relative = path.relative(scenarioDir, filePath);
+  const group = path.dirname(relative).split(path.sep).join('/');
+  return group === '.' ? 'root' : group;
 }
 
 function validateUiScenarioOption(state: UiState, value: string): string {
@@ -3224,7 +3306,12 @@ function validateUiScenarioOption(state: UiState, value: string): string {
 
 function resolveUiScenarioPath(state: UiState, value: string): string {
   const scenarioDir = path.join(resolveLoadTestDir(state.cwd, state.config), 'scenarios');
-  const scenarioPath = resolveScenarioPath(state.cwd, state.config, value);
+  const keyedScenarioPath = isScenarioKey(value)
+    ? path.join(scenarioDir, `${normalizeScenarioKey(value)}.yaml`)
+    : undefined;
+  const scenarioPath = keyedScenarioPath !== undefined && existsSync(keyedScenarioPath)
+    ? keyedScenarioPath
+    : resolveScenarioPath(state.cwd, state.config, value);
   const relative = path.relative(scenarioDir, scenarioPath);
 
   if (
@@ -3553,6 +3640,19 @@ const UI_HTML = String.raw`<!doctype html>
       flex-direction: column;
       gap: 8px;
       margin-top: 12px;
+    }
+    .scenario-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .scenario-group-title {
+      padding: 4px 2px 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.2;
+      text-transform: uppercase;
     }
     .scenario-item {
       border: 1px solid var(--line);
@@ -3957,21 +4057,40 @@ const UI_HTML = String.raw`<!doctype html>
     function renderScenarioList() {
       const query = els.searchInput.value.trim().toLowerCase();
       const items = state.scenarios.filter((scenario) => {
-        return !query || scenario.name.toLowerCase().includes(query) || scenario.path.toLowerCase().includes(query);
+        return !query ||
+          scenario.name.toLowerCase().includes(query) ||
+          scenario.path.toLowerCase().includes(query) ||
+          scenario.group.toLowerCase().includes(query);
       });
       els.scenarioCount.textContent = String(items.length);
-      els.scenarioList.innerHTML = items.map((scenario) => {
+      const groups = [];
+      for (const scenario of items) {
+        let group = groups.find((candidate) => candidate.name === scenario.group);
+        if (!group) {
+          group = { name: scenario.group, scenarios: [] };
+          groups.push(group);
+        }
+        group.scenarios.push(scenario);
+      }
+      els.scenarioList.innerHTML = groups.map((group) => {
+        return '<div class="scenario-group">' +
+          '<div class="scenario-group-title">' + escapeHtml(group.name) + '</div>' +
+          group.scenarios.map(renderScenarioItem).join('') +
+          '</div>';
+      }).join('');
+
+      for (const item of els.scenarioList.querySelectorAll('.scenario-item')) {
+        item.addEventListener('click', () => selectScenario(item.getAttribute('data-id')));
+      }
+    }
+
+    function renderScenarioItem(scenario) {
         const status = state.lastRun.get(scenario.id) || (scenario.error ? 'failed' : 'not run');
         return '<button class="scenario-item ' + (state.selected === scenario.id ? 'active' : '') + '" data-id="' + escapeHtml(scenario.id) + '">' +
           '<div class="scenario-item-head"><span class="scenario-name">' + escapeHtml(scenario.name) + '</span><span class="pill ' + (status === 'passed' ? 'ok' : status === 'failed' ? 'bad' : '') + '">' + escapeHtml(status) + '</span></div>' +
           '<div class="scenario-path">' + escapeHtml(scenario.path) + '</div>' +
           '<div class="muted">' + (scenario.stepCount === undefined ? 'parse error' : scenario.stepCount + ' steps') + '</div>' +
           '</button>';
-      }).join('');
-
-      for (const item of els.scenarioList.querySelectorAll('.scenario-item')) {
-        item.addEventListener('click', () => selectScenario(item.getAttribute('data-id')));
-      }
     }
 
     async function selectScenario(id) {

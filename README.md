@@ -70,6 +70,7 @@ npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1 --iterations 1
 ```
 
 `<검색어>`는 endpoint를 찾을 단어이고, `<scenario-name>`은 `openapi-k6/scenarios/<scenario-name>.yaml`에서 확장자를 뺀 이름입니다.
+시나리오가 많아지면 `openapi-k6/scenarios/auth/login.yaml`처럼 폴더로 묶고, CLI에서는 `-s auth/login`으로 실행합니다.
 아래 예시는 이해를 돕기 위한 값입니다. 실제 명령에는 위 placeholder를 프로젝트에 맞게 바꿔 넣습니다.
 
 `run`은 k6 설치가 필요합니다. 스크립트만 만들려면 아래 명령을 씁니다.
@@ -152,6 +153,7 @@ POST   /auth/login
 
 `init`은 기본 예시인 `openapi-k6/scenarios/smoke.yaml`을 만듭니다.
 처음 확인은 이 파일을 수정해도 되고, 실제 흐름은 새 YAML 파일로 만들어도 됩니다.
+폴더는 UI의 카테고리로 쓰입니다. 예를 들어 `openapi-k6/scenarios/auth/login.yaml`은 UI에서 `auth` 그룹에 표시되고, CLI에서는 `-s auth/login`으로 실행합니다.
 
 각 step에는 `id`와 `api`가 필요합니다.
 `request`, `extract`, `condition`은 필요한 경우만 둡니다.
@@ -386,13 +388,13 @@ k6 옵션은 scenario 이름 뒤에 붙입니다.
 
 - `openapi-k6/config.yaml`
 - `openapi-k6/.env`
-- `openapi-k6/scenarios/*.yaml`
+- `openapi-k6/scenarios/**/*.yaml`
 
 아래 파일은 직접 고치기보다 명령으로 다시 만듭니다.
 
 - `openapi-k6/openapi/*.openapi.json`: `sync` 생성물
 - `openapi-k6/openapi/*.catalog.json`: `sync` 생성물
-- `openapi-k6/generated/*.k6.js`: `generate` 생성물
+- `openapi-k6/generated/**/*.k6.js`: `generate` 생성물
 
 `openapi-k6/.env`는 생성되지 않습니다.
 비밀값이 필요하면 `openapi-k6/.env.example`을 참고해 직접 만들고 commit하지 않습니다.
