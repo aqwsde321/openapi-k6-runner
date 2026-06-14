@@ -46,7 +46,7 @@ Codex에 스킬이 아직 설치되어 있지 않거나 새 프로젝트에서 �
 6. init 또는 update 후 생성된 작업공간 README.md의 `AI 작업 계약`, `프로젝트 값`, `명령` 섹션을 다시 읽어.
    이 README는 AI 작업 지침이므로, 이후 작업은 그 문서를 기준으로 진행해.
 7. 시나리오 파일을 작성하거나 수정하기 전에는 먼저 업무 프로세스와 호출할 API 순서를 요약해서 내 확인을 받아.
-   요약에는 scenario 파일명, API 호출 순서, method/path 또는 operationId, 필요한 request 값, env/vars로 받을 값, response에서 extract할 값, 기존 partial include 여부를 포함해.
+   요약에는 scenario 파일명, API 호출 순서, method/path 또는 operationId, 필요한 request 값, env/vars로 받을 값, response에서 extract할 값, 기존 partial include 또는 scenario use 재사용 여부를 포함해.
 8. 내가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 그때 Scenario YAML을 작성하거나 수정해.
 9. generate는 파일 쓰기 전에 정적 검증을 수행합니다. run의 k6 check 실패는 명령 실패로 처리됩니다. validate와 test가 통과하기 전에는 run이나 장시간 k6 실행을 하지 마.
 10. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 확인 포인트만 알려줘.
@@ -213,11 +213,14 @@ npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1 --iterations 1
 | 브라우저에서 scenario 선택/검증 | `npx --yes openapi-k6 ui` |
 | 반복 값 관리 | scenario `vars:` 또는 `--var-file`, `--var` |
 | 공통 step 재사용 | `steps` 안에서 `- include: ./partials/login.yaml` |
+| 다른 폴더 scenario 재사용 | `steps` 안에서 `- use: auth/login` |
 | 여러 서버 연결 | `npx --yes openapi-k6 module add auth --base-url <url> --sync` |
 | 작업 공간 점검 | `npx --yes openapi-k6 doctor` |
 | 기존 scaffold 안전 갱신 | CLI가 `Scaffold update available`을 표시하면 `npx --yes openapi-k6 update` |
 
 include와 fixture 경로는 실행하는 scenario 파일 기준 상대 경로이며, scenario 디렉터리 밖으로 나갈 수 없습니다.
+use 경로는 `openapi-k6/scenarios` 기준 scenario key이며, 다른 폴더의 steps를 같은 실행 context에 펼칩니다.
+`use`에는 확장자를 쓰지 않습니다. 점이 들어간 파일명은 scenario key가 아니므로 재사용 대상은 `auth/login.yaml`처럼 key-safe한 이름으로 둡니다.
 여러 OpenAPI module을 한 scenario에서 섞을 때는 step의 `api.module`을 지정합니다.
 
 <details>
@@ -302,6 +305,42 @@ steps:
 include 파일에는 `vars:`나 `fixtures:`를 두지 않습니다.
 변수는 실행하는 entry scenario에서 관리합니다.
 
+### 다른 scenario use
+
+다른 폴더의 scenario steps를 재사용할 때는 scenario root 기준 key를 씁니다.
+`use`로 펼친 step의 `extract` 값은 뒤 step에서 그대로 참조할 수 있습니다.
+`use` 값은 `auth/login`처럼 확장자 없는 scenario key여야 합니다.
+
+```yaml
+# openapi-k6/scenarios/order/get-me.yaml
+name: get-me
+
+steps:
+  - use: auth/login
+  - id: get-me
+    api:
+      operationId: getMe
+    request:
+      headers:
+        Authorization: "Bearer {{token}}"
+```
+
+```yaml
+# openapi-k6/scenarios/auth/login.yaml
+name: login
+
+steps:
+  - id: login
+    api:
+      operationId: loginUser
+    extract:
+      token:
+        from: $.token
+```
+
+`use` 대상 파일도 재사용될 때는 `vars:`나 `fixtures:`를 두지 않습니다.
+변수는 실행하는 entry scenario에서 관리합니다.
+
 ### 여러 서버 연결
 
 API 서버가 여러 개면 module을 추가합니다.
@@ -378,6 +417,7 @@ k6 옵션은 scenario 이름 뒤에 붙입니다.
 - `condition`은 분기가 아니라 검증식입니다.
 - `body`와 `multipart`는 같은 step에서 함께 쓰지 않습니다.
 - include와 fixture 경로는 entry scenario 디렉터리 밖으로 나갈 수 없습니다.
+- use 경로는 `openapi-k6/scenarios` 기준 확장자 없는 scenario key이며 scenario root 밖으로 나갈 수 없습니다.
 - 비밀값은 scenario YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조합니다.
 
 </details>

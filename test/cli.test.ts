@@ -468,12 +468,15 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('Scenario YAML을 쓰기 전에 사용자에게 아래 계획을 확인받습니다.');
     expect(readme).toContain('업무 프로세스');
     expect(readme).toContain('API 호출 순서와 method/path 또는 operationId');
-    expect(readme).toContain('기존 partial include 재사용 또는 새 partial 생성 여부');
+    expect(readme).toContain('기존 partial include 또는 scenario use 재사용 여부');
     expect(readme).toContain('사용자가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 `openapi-k6/scenarios/**/*.yaml`을 작성하거나 수정합니다.');
     expect(readme).toContain('폴더는 UI 카테고리로 사용합니다. 예: `openapi-k6/scenarios/auth/login.yaml`은 `-s auth/login`으로 실행합니다.');
     expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 남아 있으면 `validate`가 실패합니다.');
     expect(readme).toContain('값 우선순위는 `fixtures:` < `vars:` < CLI `--var-file` < CLI `--var`입니다.');
     expect(readme).toContain('include 파일에는 `steps:`만 두고 `vars:`나 `fixtures:`는 entry scenario에서 관리합니다.');
+    expect(readme).toContain('다른 폴더의 scenario steps는 `steps` 안의 `- use: auth/login`처럼 scenario root 기준 key로 재사용합니다.');
+    expect(readme).toContain('`use` 값은 확장자 없는 scenario key여야 합니다.');
+    expect(readme).toContain('`use`로 펼친 step의 `extract` 값은 뒤 step에서 `{{variableName}}`으로 참조할 수 있습니다.');
     expect(readme).toContain('여러 OpenAPI 서버를 한 scenario에서 섞을 때만 `api.module`을 사용합니다.');
     expect(readme).toContain('openapi-k6/README.md');
     expect(readme).toContain('openapi-k6/run.sh');
@@ -1713,6 +1716,21 @@ describe('openapi-k6 CLI', () => {
       ].join('\n'),
       'utf8',
     );
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios/order'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/order/use-login.yaml'),
+      [
+        'name: use-login',
+        'steps:',
+        '  - use: auth/login',
+        '  - id: second-health',
+        '    api:',
+        '      operationId: getHealth',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
     await mkdir(path.join(workspace, 'auth'), { recursive: true });
     await writeFile(path.join(workspace, 'auth/login'), 'not a scenario file\n', 'utf8');
     const reportedScenarios: string[] = [];
@@ -1750,6 +1768,12 @@ describe('openapi-k6 CLI', () => {
         name: string;
         steps: Array<{ id: string; operationId?: string }>;
       };
+      const useDetail = await (await fetch(`${ui.url}/api/scenario?scenario=${encodeURIComponent('order/use-login')}`)).json() as {
+        id: string;
+        name: string;
+        includes: string[];
+        steps: Array<{ id: string; operationId?: string }>;
+      };
       const dottedScenarioId = 'openapi-k6/scenarios/auth/login.v2.yaml';
       const dottedDetail = await (await fetch(`${ui.url}/api/scenario?scenario=${encodeURIComponent(dottedScenarioId)}`)).json() as {
         id: string;
@@ -1780,12 +1804,15 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('.scenario-item-head');
       expect(html).toContain('.scenario-group-title');
       expect(html).toContain('text-overflow: ellipsis');
+      expect(html).toContain('detail.includes.map');
+      expect(html).toContain('reuse ');
       expect(scenarios.defaultModule).toBe('app');
       expect(scenarios.moduleCount).toBe(1);
-      expect(scenarios.scenarios).toHaveLength(3);
+      expect(scenarios.scenarios).toHaveLength(4);
       expect(scenarios.scenarios).toEqual(expect.arrayContaining([
         expect.objectContaining({ id: 'auth/login', name: 'login', group: 'auth', stepCount: 1 }),
         expect.objectContaining({ id: dottedScenarioId, name: 'login-v2', group: 'auth', stepCount: 1 }),
+        expect.objectContaining({ id: 'order/use-login', name: 'use-login', group: 'order', stepCount: 2 }),
         expect.objectContaining({ id: 'smoke', name: 'smoke', group: 'root', stepCount: 1 }),
       ]));
       expect(scenarios.scenarios.some((scenario) => scenario.path.includes('partials/login.yaml'))).toBe(false);
@@ -1798,6 +1825,15 @@ describe('openapi-k6 CLI', () => {
         id: 'auth/login',
         name: 'login',
         steps: [expect.objectContaining({ id: 'health', operationId: 'getHealth' })],
+      });
+      expect(useDetail).toMatchObject({
+        id: 'order/use-login',
+        name: 'use-login',
+        includes: ['auth/login'],
+        steps: [
+          expect.objectContaining({ id: 'health', operationId: 'getHealth' }),
+          expect.objectContaining({ id: 'second-health', operationId: 'getHealth' }),
+        ],
       });
       expect(dottedDetail).toMatchObject({
         id: dottedScenarioId,
@@ -2148,6 +2184,112 @@ describe('openapi-k6 CLI', () => {
     ].join('\n'));
 
     await expect(stat(path.join(workspace, 'openapi-k6/generated/smoke.k6.js'))).rejects.toThrow();
+  });
+
+  it('validates, tests, and generates a scenario that uses reusable scenario-root steps from another folder', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios/auth'), { recursive: true });
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios/order'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/auth/create-order.yaml'),
+      [
+        'name: create-order',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        sku: SKU-001',
+        '        quantity: 1',
+        '    extract:',
+        '      orderId:',
+        '        from: $.data.id',
+        '    condition: status == 201',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/order/get-created.yaml'),
+      [
+        'name: get-created-order',
+        'steps:',
+        '  - use: auth/create-order',
+        '  - id: get-order',
+        '    api:',
+        '      operationId: getOrder',
+        '    request:',
+        '      pathParams:',
+        '        orderId: "{{orderId}}"',
+        '      query:',
+        '        includeItems: true',
+        '      headers:',
+        '        X-Tenant: main',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const validateOutput = createCapture();
+    await runCli(
+      ['validate', '-s', 'order/get-created'],
+      { cwd: workspace, stdout: validateOutput.stream, stderr: createSink() },
+    );
+
+    const requests: string[] = [];
+    const testOutput = createCapture();
+    await runCli(
+      ['test', '-s', 'order/get-created'],
+      {
+        cwd: workspace,
+        stdout: testOutput.stream,
+        stderr: createSink(),
+        env: {},
+        fetch: async (input, init) => {
+          const url = new URL(String(input));
+          const method = init?.method ?? 'GET';
+          requests.push(`${method} ${url.pathname}${url.search}`);
+
+          if (method === 'POST' && url.pathname === '/orders') {
+            return new Response(JSON.stringify({ data: { id: 'order-1' } }), { status: 201, statusText: 'Created' });
+          }
+
+          if (method === 'GET' && url.pathname === '/orders/order-1' && url.search === '?includeItems=true') {
+            return new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' });
+          }
+
+          return new Response(JSON.stringify({ message: 'not found' }), { status: 404, statusText: 'Not Found' });
+        },
+      },
+    );
+
+    expect(validateOutput.output()).toContain('Validated openapi-k6/scenarios/order/get-created.yaml');
+    expect(validateOutput.output()).toContain('  steps    2');
+    expect(testOutput.output()).toContain('scenario: get-created-order');
+    expect(testOutput.output()).toContain('summary: ✓ PASS');
+    expect(requests).toEqual([
+      'POST /orders',
+      'GET /orders/order-1?includeItems=true',
+    ]);
+
+    await runCli(
+      ['generate', '-s', 'order/get-created'],
+      { cwd: workspace, stdout: createSink(), stderr: createSink() },
+    );
+
+    const output = await readFile(path.join(workspace, 'openapi-k6/generated/order/get-created.k6.js'), 'utf8');
+    expect(output).toContain('context.orderId = extract0_0;');
+    expect(output).toContain('let url1 = joinUrl(BASE_URL, `/orders/${encodeURIComponent(String(context.orderId))}`);');
   });
 
   it('preserves existing generated k6 output when generate validation fails', async () => {
@@ -3146,16 +3288,26 @@ describe('openapi-k6 CLI', () => {
       '    catalog: openapi/bos.catalog.json',
       '',
     ]);
-    await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios/shared'), { recursive: true });
     await writeFile(
-      path.join(workspace, 'openapi-k6/scenarios/cross.yaml'),
+      path.join(workspace, 'openapi-k6/scenarios/shared/bos-step.yaml'),
       [
-        'name: cross',
+        'name: bos-step',
         'steps:',
         '  - id: create-order',
         '    api:',
         '      module: bos',
         '      operationId: createOrder',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/cross.yaml'),
+      [
+        'name: cross',
+        'steps:',
+        '  - use: shared/bos-step',
         '',
       ].join('\n'),
       'utf8',

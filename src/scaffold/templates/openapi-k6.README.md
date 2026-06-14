@@ -20,10 +20,10 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
    - API 호출 순서와 method/path 또는 operationId
    - request 값과 `{{env.*}}`, `{{vars.*}}` 처리
    - response extract 값과 다음 step 재사용 위치
-   - 기존 partial include 재사용 또는 새 partial 생성 여부
+   - 기존 partial include 또는 scenario use 재사용 여부
    - 모호한 endpoint 선택지와 필요한 테스트 데이터
 6. 사용자가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 `__DIRECTORY__/scenarios/**/*.yaml`을 작성하거나 수정합니다.
-7. 처음에는 `id`, `api`와 필요한 `request`, `extract`, `condition`만 채웁니다. 반복이 생길 때만 `vars`, `fixtures`, `include`를 사용합니다.
+7. 처음에는 `id`, `api`와 필요한 `request`, `extract`, `condition`만 채웁니다. 반복이 생길 때만 `vars`, `fixtures`, `include`, `use`를 사용합니다.
 8. 비밀 값은 scenario YAML에 직접 쓰지 말고 `{{env.NAME}}`으로 참조합니다. 실제 값은 `__ENV_PATH__`에만 둡니다.
 9. `__VALIDATE_NAME_COMMAND__`를 먼저 통과시킨 뒤, 가능한 경우 `__TEST_NAME_COMMAND__`로 실제 API 흐름을 1회 검증합니다.
 10. `generate`는 파일 쓰기 전에 정적 검증을 수행합니다. `run`의 k6 check 실패는 명령 실패로 처리됩니다. validate/test 전에는 `run`, 장시간 k6 실행을 하지 않습니다.
@@ -80,8 +80,11 @@ __RUN_SCRIPT_ARG__ <scenario-name> --vus 1 --iterations 1
 - 반복 값은 scenario `vars:` 또는 `--var-file`, `--var`로 관리합니다.
 - 값 우선순위는 `fixtures:` < `vars:` < CLI `--var-file` < CLI `--var`입니다.
 - 공통 로그인/auth/seed step은 `steps` 안의 `- include: ./partials/login.yaml`로 재사용합니다.
+- 다른 폴더의 scenario steps는 `steps` 안의 `- use: auth/login`처럼 scenario root 기준 key로 재사용합니다.
+- `use` 값은 확장자 없는 scenario key여야 합니다.
 - include 파일에는 `steps:`만 두고 `vars:`나 `fixtures:`는 entry scenario에서 관리합니다.
-- include와 fixture 경로는 entry scenario 파일 기준 상대 경로이며 scenario 디렉터리 밖으로 나갈 수 없습니다.
+- `use`로 펼친 step의 `extract` 값은 뒤 step에서 `{{variableName}}`으로 참조할 수 있습니다.
+- include와 fixture 경로는 entry scenario 파일 기준 상대 경로이며 scenario 디렉터리 밖으로 나갈 수 없습니다. use 경로는 `__DIRECTORY__/scenarios` 기준입니다.
 - 여러 OpenAPI 서버를 한 scenario에서 섞을 때만 `api.module`을 사용합니다.
 
 ## 파일 규칙

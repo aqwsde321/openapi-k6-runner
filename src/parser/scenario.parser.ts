@@ -12,8 +12,15 @@ interface ParsedStepEntry {
 const TEMPLATE_REFERENCE_NAME_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 const RESERVED_VAR_NAMES = new Set(['__proto__']);
 
+export interface ScenarioParseOptions {
+  scenarioRootDir?: string;
+}
+
 interface ScenarioFileParseContext {
   entryDir: string;
+  includeRootDir: string;
+  includeRootLabel: string;
+  scenarioRootDir?: string;
   stack: string[];
 }
 
@@ -24,12 +31,21 @@ export class ScenarioParseError extends Error {
   }
 }
 
-export async function parseScenarioFile(filePath: string): Promise<Scenario> {
+export async function parseScenarioFile(
+  filePath: string,
+  options: ScenarioParseOptions = {},
+): Promise<Scenario> {
   const resolvedPath = path.resolve(filePath);
+  const scenarioRootDir = options.scenarioRootDir === undefined
+    ? undefined
+    : path.resolve(options.scenarioRootDir);
   const parsed = await parseScenarioFileInternal(
     resolvedPath,
     {
       entryDir: path.dirname(resolvedPath),
+      includeRootDir: path.dirname(resolvedPath),
+      includeRootLabel: 'entry scenario directory',
+      ...(scenarioRootDir === undefined ? {} : { scenarioRootDir }),
       stack: [resolvedPath],
     },
     true,
@@ -274,11 +290,22 @@ async function parseFileStepEntries(
 
   for (const [index, stepValue] of value.entries()) {
     const stepPath = `${sourcePath}: steps[${index}]`;
-    const includePath = parseIncludeStep(stepValue, stepPath);
+    const stepReference = parseStepReference(stepValue, stepPath);
 
-    if (includePath !== undefined) {
-      const includedPath = resolveIncludePath(includePath, stepPath, sourcePath, context);
-      entries.push(...(await parseIncludedScenarioFile(includedPath, context)));
+    if (stepReference !== undefined) {
+      const referencedPath = stepReference.kind === 'include'
+        ? resolveIncludePath(stepReference.value, stepPath, sourcePath, context)
+        : resolveUsePath(stepReference.value, stepPath, context);
+      const includeRoot = stepReference.kind === 'include'
+        ? {
+            includeRootDir: context.includeRootDir,
+            includeRootLabel: context.includeRootLabel,
+          }
+        : {
+            includeRootDir: context.scenarioRootDir ?? context.includeRootDir,
+            includeRootLabel: 'scenario root directory',
+          };
+      entries.push(...(await parseIncludedScenarioFile(referencedPath, context, includeRoot)));
       continue;
     }
 
@@ -294,6 +321,7 @@ async function parseFileStepEntries(
 async function parseIncludedScenarioFile(
   filePath: string,
   context: ScenarioFileParseContext,
+  includeRoot: Pick<ScenarioFileParseContext, 'includeRootDir' | 'includeRootLabel'>,
 ): Promise<ParsedStepEntry[]> {
   if (context.stack.includes(filePath)) {
     const cycle = [...context.stack, filePath].map((entry) => path.relative(context.entryDir, entry) || '.').join(' -> ');
@@ -303,7 +331,9 @@ async function parseIncludedScenarioFile(
   const scenario = await parseScenarioFileInternal(
     filePath,
     {
+      ...includeRoot,
       entryDir: context.entryDir,
+      ...(context.scenarioRootDir === undefined ? {} : { scenarioRootDir: context.scenarioRootDir }),
       stack: [...context.stack, filePath],
     },
     false,
@@ -313,30 +343,56 @@ async function parseIncludedScenarioFile(
 }
 
 function parseStepOrRejectInclude(value: unknown, stepPath: string): Step {
-  if (parseIncludeStep(value, stepPath) !== undefined) {
-    throw new ScenarioParseError(`${stepPath}: include steps require parseScenarioFile`);
+  const stepReference = parseStepReference(value, stepPath);
+
+  if (stepReference !== undefined) {
+    throw new ScenarioParseError(`${stepPath}: ${stepReference.kind} steps require parseScenarioFile`);
   }
 
   return parseStep(value, stepPath);
 }
 
-function parseIncludeStep(value: unknown, stepPath: string): string | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !('include' in value)) {
+function parseStepReference(
+  value: unknown,
+  stepPath: string,
+): { kind: 'include' | 'use'; value: string } | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined;
   }
 
   const rawStep = value as Record<string, unknown>;
+  const hasInclude = 'include' in rawStep;
+  const hasUse = 'use' in rawStep;
+
+  if (!hasInclude && !hasUse) {
+    return undefined;
+  }
+
+  if (hasInclude && hasUse) {
+    throw new ScenarioParseError(`${stepPath}: step can contain only one of include or use`);
+  }
+
+  const kind = hasInclude ? 'include' : 'use';
   const keys = Object.keys(rawStep);
 
   if (keys.length !== 1) {
-    throw new ScenarioParseError(`${stepPath}: include step can only contain include`);
+    throw new ScenarioParseError(`${stepPath}: ${kind} step can only contain ${kind}`);
   }
 
-  return parseIncludePath(rawStep.include, `${stepPath}.include`);
+  return {
+    kind,
+    value: kind === 'include'
+      ? parseIncludePath(rawStep.include, `${stepPath}.include`)
+      : parseUsePath(rawStep.use, `${stepPath}.use`),
+  };
 }
 
 function parseIncludePath(value: unknown, pathLabel: string): string {
   return parseScenarioLocalPath(value, pathLabel);
+}
+
+function parseUsePath(value: unknown, pathLabel: string): string {
+  return parseScenarioRootPath(value, pathLabel);
 }
 
 function parseFixturePath(value: unknown, pathLabel: string): string {
@@ -374,6 +430,25 @@ function resolveIncludePath(
   return resolveScenarioLocalPath(includePath, `${stepPath}.include`, sourcePath, context);
 }
 
+function resolveUsePath(
+  usePath: string,
+  stepPath: string,
+  context: ScenarioFileParseContext,
+): string {
+  if (context.scenarioRootDir === undefined) {
+    throw new ScenarioParseError(`${stepPath}.use requires scenarioRootDir`);
+  }
+
+  const resolvedPath = path.resolve(context.scenarioRootDir, usePath);
+  const relativePath = path.relative(context.scenarioRootDir, resolvedPath);
+
+  if (!isLocalRelativePath(relativePath)) {
+    throw new ScenarioParseError(`${stepPath}.use must stay inside the scenario root directory`);
+  }
+
+  return resolvedPath;
+}
+
 function resolveScenarioLocalPath(
   localPath: string,
   pathLabel: string,
@@ -381,13 +456,53 @@ function resolveScenarioLocalPath(
   context: ScenarioFileParseContext,
 ): string {
   const resolvedPath = path.resolve(path.dirname(sourcePath), localPath);
-  const relativePath = path.relative(context.entryDir, resolvedPath);
+  const relativePath = path.relative(context.includeRootDir, resolvedPath);
 
-  if (relativePath === '' || relativePath.split(path.sep).includes('..') || path.isAbsolute(relativePath)) {
-    throw new ScenarioParseError(`${pathLabel} must stay inside the entry scenario directory`);
+  if (!isLocalRelativePath(relativePath)) {
+    throw new ScenarioParseError(`${pathLabel} must stay inside the ${context.includeRootLabel}`);
   }
 
   return resolvedPath;
+}
+
+function parseScenarioRootPath(value: unknown, pathLabel: string): string {
+  if (typeof value !== 'string') {
+    throw new ScenarioParseError(`${pathLabel} must be a string`);
+  }
+
+  const scenarioKey = value.trim();
+
+  if (!scenarioKey) {
+    throw new ScenarioParseError(`${pathLabel} must not be empty`);
+  }
+
+  if (scenarioKey.includes('{{')) {
+    throw new ScenarioParseError(`${pathLabel} must be a static path without templates`);
+  }
+
+  if (path.isAbsolute(scenarioKey) || path.win32.isAbsolute(scenarioKey)) {
+    throw new ScenarioParseError(`${pathLabel} must be relative to the scenario root directory`);
+  }
+
+  if (path.extname(scenarioKey) !== '') {
+    throw new ScenarioParseError(`${pathLabel} must be a scenario key without a file extension`);
+  }
+
+  const segments = scenarioKey.split(/[\\/]+/);
+
+  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..')) {
+    throw new ScenarioParseError(`${pathLabel} must be a scenario key without empty, . or .. segments`);
+  }
+
+  return `${segments.join(path.sep)}.yaml`;
+}
+
+function isLocalRelativePath(relativePath: string): boolean {
+  return relativePath !== '' &&
+    relativePath !== '..' &&
+    !relativePath.startsWith(`..${path.sep}`) &&
+    !path.isAbsolute(relativePath) &&
+    !path.win32.isAbsolute(relativePath);
 }
 
 function finalizeSteps(entries: ParsedStepEntry[]): Step[] {

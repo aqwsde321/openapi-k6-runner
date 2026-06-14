@@ -158,6 +158,97 @@ describe('scenario parser', () => {
     });
   });
 
+  it('expands scenario-root use steps from another folder', async () => {
+    const scenarioRootDir = path.join(workspace, 'scenarios');
+    const scenarioPath = path.join(scenarioRootDir, 'order/create.yaml');
+    await mkdir(path.join(scenarioRootDir, 'auth'), { recursive: true });
+    await mkdir(path.dirname(scenarioPath), { recursive: true });
+    await writeFile(
+      path.join(scenarioRootDir, 'auth/login.yaml'),
+      [
+        'name: login',
+        'steps:',
+        '  - id: login',
+        '    api:',
+        '      operationId: loginUser',
+        '    extract:',
+        '      token:',
+        '        from: $.token',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      scenarioPath,
+      [
+        'name: order-create',
+        'steps:',
+        '  - use: auth/login',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      headers:',
+        '        Authorization: "Bearer {{token}}"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const scenario = await parseScenarioFile(scenarioPath, { scenarioRootDir });
+
+    expect(scenario).toEqual({
+      name: 'order-create',
+      steps: [
+        {
+          id: 'login',
+          api: { operationId: 'loginUser' },
+          extract: { token: { from: '$.token' } },
+        },
+        {
+          id: 'create-order',
+          api: { operationId: 'createOrder' },
+          request: {
+            headers: { Authorization: 'Bearer {{token}}' },
+          },
+        },
+      ],
+    });
+  });
+
+  it('rejects dotted or extension-bearing scenario-root use keys', async () => {
+    const scenarioRootDir = path.join(workspace, 'scenarios');
+    const scenarioPath = path.join(scenarioRootDir, 'order/create.yaml');
+    await mkdir(path.dirname(scenarioPath), { recursive: true });
+    await writeFile(
+      scenarioPath,
+      [
+        'name: dotted-use',
+        'steps:',
+        '  - use: auth/login.v2',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(scenarioPath, { scenarioRootDir }))
+      .rejects.toThrowError('steps[0].use must be a scenario key without a file extension');
+
+    await writeFile(
+      scenarioPath,
+      [
+        'name: extension-use',
+        'steps:',
+        '  - use: auth/login.yaml',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(scenarioPath, { scenarioRootDir }))
+      .rejects.toThrowError('steps[0].use must be a scenario key without a file extension');
+  });
+
   it('fails when included and local steps duplicate an id', async () => {
     const scenarioPath = path.join(workspace, 'smoke.yaml');
     await writeFile(
@@ -219,6 +310,62 @@ describe('scenario parser', () => {
     await expect(parseScenarioFile(scenarioPath)).rejects.toThrowError('include must stay inside the entry scenario directory');
   });
 
+  it('rejects use cycles and paths outside the scenario root directory', async () => {
+    const scenarioRootDir = path.join(workspace, 'scenarios');
+    const scenarioPath = path.join(scenarioRootDir, 'order/create.yaml');
+    await mkdir(path.join(scenarioRootDir, 'auth'), { recursive: true });
+    await mkdir(path.dirname(scenarioPath), { recursive: true });
+    await writeFile(
+      scenarioPath,
+      [
+        'name: cycle',
+        'steps:',
+        '  - use: auth/login',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(scenarioRootDir, 'auth/login.yaml'),
+      [
+        'steps:',
+        '  - use: order/create',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(scenarioPath, { scenarioRootDir })).rejects.toThrowError('include cycle detected');
+
+    await writeFile(
+      scenarioPath,
+      [
+        'name: outside',
+        'steps:',
+        '  - use: ../auth/login',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(scenarioPath, { scenarioRootDir }))
+      .rejects.toThrowError('steps[0].use must be a scenario key without empty, . or .. segments');
+
+    await writeFile(
+      scenarioPath,
+      [
+        'name: absolute',
+        'steps:',
+        `  - use: ${path.join(scenarioRootDir, 'auth/login')}`,
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(scenarioPath, { scenarioRootDir }))
+      .rejects.toThrowError('steps[0].use must be relative to the scenario root directory');
+  });
+
   it('fails clearly when an included file is missing', async () => {
     const scenarioPath = path.join(workspace, 'smoke.yaml');
     await writeFile(
@@ -233,6 +380,22 @@ describe('scenario parser', () => {
     );
 
     await expect(parseScenarioFile(scenarioPath)).rejects.toThrowError('missing.yaml: scenario file was not found');
+  });
+
+  it('requires a scenario root for use steps', async () => {
+    const scenarioPath = path.join(workspace, 'smoke.yaml');
+    await writeFile(
+      scenarioPath,
+      [
+        'name: missing-root',
+        'steps:',
+        '  - use: auth/login',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(scenarioPath)).rejects.toThrowError('steps[0].use requires scenarioRootDir');
   });
 
   it('rejects include steps when parsing inline sources', () => {

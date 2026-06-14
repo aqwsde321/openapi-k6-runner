@@ -1201,6 +1201,20 @@ function resolveLoadTestDir(cwd: string, config: LoadTestConfig | undefined): st
   return config?.dir ?? path.resolve(cwd, DEFAULT_LOAD_TEST_DIR);
 }
 
+function resolveScenarioRootDir(cwd: string, config: LoadTestConfig | undefined): string {
+  return path.join(resolveLoadTestDir(cwd, config), 'scenarios');
+}
+
+function parseWorkspaceScenarioFile(
+  cwd: string,
+  config: LoadTestConfig | undefined,
+  scenarioPath: string,
+): Promise<Scenario> {
+  return parseScenarioFile(scenarioPath, {
+    scenarioRootDir: resolveScenarioRootDir(cwd, config),
+  });
+}
+
 async function readScaffoldWarnings(
   cwd: string,
   config: LoadTestConfig | undefined,
@@ -1579,7 +1593,9 @@ async function findScenarioModuleReferences(
   const references: ModuleScenarioReference[] = [];
 
   for (const scenarioPath of scenarioFiles) {
-    const scenario = await parseScenarioFile(scenarioPath);
+    const scenario = await parseScenarioFile(scenarioPath, {
+      scenarioRootDir: scenarioDir,
+    });
 
     for (const step of scenario.steps) {
       if (
@@ -1945,7 +1961,7 @@ export async function runGenerateCommand(
   const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
   const scenario = await applyScenarioVarOverrides(
     cwd,
-    await parseScenarioFile(scenarioPath),
+    await parseWorkspaceScenarioFile(cwd, config, scenarioPath),
     options,
   );
   const openApiContext = await loadScenarioOpenApiContext({
@@ -2042,7 +2058,7 @@ export async function runRunCommand(
   const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
   const scenario = await applyScenarioVarOverrides(
     cwd,
-    await parseScenarioFile(scenarioPath),
+    await parseWorkspaceScenarioFile(cwd, config, scenarioPath),
     options,
   );
   const loadTestDir = resolveLoadTestDir(cwd, config);
@@ -2122,7 +2138,7 @@ export async function runValidateCommand(
   const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
   const scenario = await applyScenarioVarOverrides(
     cwd,
-    await parseScenarioFile(scenarioPath),
+    await parseWorkspaceScenarioFile(cwd, config, scenarioPath),
     options,
   );
   const openApiContext = await loadScenarioOpenApiContext({
@@ -2471,7 +2487,7 @@ export async function runTestCommand(
   const scenarioPath = resolveScenarioPath(cwd, config, options.scenario);
   const scenario = await applyScenarioVarOverrides(
     cwd,
-    await parseScenarioFile(scenarioPath),
+    await parseWorkspaceScenarioFile(cwd, config, scenarioPath),
     options,
   );
   const loadTestDir = resolveLoadTestDir(cwd, config);
@@ -2655,7 +2671,7 @@ async function listUiScenarios(state: UiState): Promise<{
 
   for (const filePath of files) {
     try {
-      const scenario = await parseScenarioFile(filePath);
+      const scenario = await parseWorkspaceScenarioFile(state.cwd, state.config, filePath);
       const analysis = analyzeUiScenario(scenario);
       scenarios.push({
         id: formatUiScenarioOption(state.cwd, scenarioDir, filePath),
@@ -2711,7 +2727,7 @@ async function readUiScenarioDetail(
   }>;
 }> {
   const scenarioPath = resolveUiScenarioPath(state, scenarioOption);
-  const scenario = await parseScenarioFile(scenarioPath);
+  const scenario = await parseWorkspaceScenarioFile(state.cwd, state.config, scenarioPath);
   const analysis = analyzeUiScenario(scenario);
 
   return {
@@ -3363,8 +3379,11 @@ async function readScenarioIncludes(filePath: string): Promise<string[]> {
       return [];
     }
 
-    const include = (step as Record<string, unknown>).include;
-    return typeof include === 'string' ? [include] : [];
+    const record = step as Record<string, unknown>;
+    return [
+      typeof record.include === 'string' ? record.include : undefined,
+      typeof record.use === 'string' ? record.use : undefined,
+    ].filter((item): item is string => item !== undefined);
   });
 }
 
@@ -4119,7 +4138,8 @@ const UI_HTML = String.raw`<!doctype html>
       const referencePills = []
         .concat(detail.modules.map((item) => '<span class="pill">module ' + escapeHtml(item) + '</span>'))
         .concat(detail.env.map((item) => '<span class="pill">env.' + escapeHtml(item) + '</span>'))
-        .concat(detail.vars.map((item) => '<span class="pill">vars.' + escapeHtml(item) + '</span>'));
+        .concat(detail.vars.map((item) => '<span class="pill">vars.' + escapeHtml(item) + '</span>'))
+        .concat(detail.includes.map((item) => '<span class="pill">reuse ' + escapeHtml(item) + '</span>'));
       els.scenarioSummary.innerHTML =
         '<div class="stack" style="gap: 8px;">' +
           '<div><strong>' + escapeHtml(detail.name) + '</strong></div>' +
@@ -4133,7 +4153,7 @@ const UI_HTML = String.raw`<!doctype html>
       }).join('');
       const references = referencePills.length
         ? '<div><h3>References</h3><div class="row">' + referencePills.join('') + '</div></div>'
-        : '<div class="muted">No env/vars/module references detected.</div>';
+        : '<div class="muted">No env/vars/module/reuse references detected.</div>';
       els.detailBody.className = 'section-content stack';
       els.detailBody.innerHTML = references + '<div><h3>Steps</h3><div class="steps">' + steps + '</div></div>';
     }
