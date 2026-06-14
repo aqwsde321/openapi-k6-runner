@@ -48,7 +48,7 @@ Codex에 스킬이 아직 설치되어 있지 않거나 새 프로젝트에서 �
 7. 시나리오 파일을 작성하거나 수정하기 전에는 먼저 업무 프로세스와 호출할 API 순서를 요약해서 내 확인을 받아.
    요약에는 scenario 파일명, API 호출 순서, method/path 또는 operationId, 필요한 request 값, env/vars로 받을 값, response에서 extract할 값, 기존 partial include 여부를 포함해.
 8. 내가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 그때 Scenario YAML을 작성하거나 수정해.
-9. generate는 파일 쓰기 전에 정적 검증을 수행합니다. validate와 test가 통과하기 전에는 run이나 장시간 k6 실행을 하지 마.
+9. generate는 파일 쓰기 전에 정적 검증을 수행합니다. run의 k6 check 실패는 명령 실패로 처리됩니다. validate와 test가 통과하기 전에는 run이나 장시간 k6 실행을 하지 마.
 10. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 확인 포인트만 알려줘.
 ```
 
@@ -153,7 +153,9 @@ POST   /auth/login
 `init`은 기본 예시인 `openapi-k6/scenarios/smoke.yaml`을 만듭니다.
 처음 확인은 이 파일을 수정해도 되고, 실제 흐름은 새 YAML 파일로 만들어도 됩니다.
 
-최소 필드는 `id`, `api`, `request`, `extract`, `condition`입니다.
+각 step에는 `id`와 `api`가 필요합니다.
+`request`, `extract`, `condition`은 필요한 경우만 둡니다.
+`condition`을 생략하면 `test`와 `run`은 HTTP status `< 400`을 성공으로 봅니다.
 
 ```yaml
 name: smoke
@@ -200,6 +202,7 @@ npx --yes openapi-k6 run -s <scenario-name> --log -- --vus 1 --iterations 1
 ```
 
 `validate`가 통과한 scenario만 `generate`하고, `test`가 통과한 scenario만 `run`하는 흐름을 권장합니다.
+`run`으로 실행하는 k6 스크립트는 각 step의 `condition`을 k6 check로 검증하고, check 실패가 있으면 명령도 실패합니다.
 
 ## 필요할 때만
 

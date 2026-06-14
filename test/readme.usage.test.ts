@@ -26,6 +26,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('같은 대화에서 최신 init, update, README 변경 이후 이미 읽었다면 전체를 다시 읽지 말고 필요한 섹션만 확인해.');
     expect(readme).toContain('이 README는 AI 작업 지침이므로, 이후 작업은 그 문서를 기준으로 진행해.');
     expect(readme).toContain('시나리오 파일을 작성하거나 수정하기 전에는 먼저 업무 프로세스와 호출할 API 순서를 요약해서 내 확인을 받아.');
+    expect(readme).toContain('run의 k6 check 실패는 명령 실패로 처리됩니다.');
     expect(readme).toContain('## 빠른 시작');
     expect(readme).toContain('npx --yes openapi-k6 init');
     expect(readme).toContain('npx --yes openapi-k6 sync');
@@ -70,6 +71,9 @@ describe('README usage guide', () => {
     expect(readme).toContain('`operationId`가 없거나 애매하면 `api.method`와 `api.path`를 쓸 수 있습니다.');
 
     expect(readme).toContain('## 3. Scenario 작성');
+    expect(readme).toContain('각 step에는 `id`와 `api`가 필요합니다.');
+    expect(readme).toContain('`request`, `extract`, `condition`은 필요한 경우만 둡니다.');
+    expect(readme).toContain('`condition`을 생략하면 `test`와 `run`은 HTTP status `< 400`을 성공으로 봅니다.');
     expect(readme).toContain('name: smoke');
     expect(readme).toContain('Authorization: "Bearer {{token}}"');
     expect(readme).toContain('비밀값은 scenario YAML에 직접 쓰지 않습니다.');
