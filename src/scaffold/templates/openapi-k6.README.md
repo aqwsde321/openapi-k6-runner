@@ -56,7 +56,7 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 | scaffold 안전 갱신 | `__UPDATE_COMMAND__` |
 
 UI는 `scenarios/` 아래 폴더를 그룹으로 보여주고, Scenario details에서 각 step의 출처를 `direct`, `use auth/login`, `include ...`로 표시합니다.
-`test` 실행 결과는 Run Summary에서 step별 pass/fail, HTTP status, duration, source를 함께 보여줍니다.
+`test` 실행 결과는 Latest result에서 step별 pass/fail, HTTP status, duration, source를 함께 보여줍니다.
 
 자주 쓰는 runner:
 
@@ -73,7 +73,7 @@ __RUN_SCRIPT_ARG__ <scenario-key> --vus 1 --iterations 1
 - `operationId`가 유일하면 `api.operationId`를 우선 사용합니다.
 - `operationId`가 없거나 애매하면 `api.method`와 `api.path`를 사용합니다.
 - 폴더는 UI 카테고리로 사용합니다. 예: `__DIRECTORY__/scenarios/auth/login.yaml`은 `-s auth/login`으로 실행합니다.
-- UI에서 폴더는 접고 펼칠 수 있으며, 재사용된 step은 Scenario details와 Run Summary에서 `use auth/login` 또는 `include ...` 출처가 표시됩니다.
+- UI에서 폴더는 접고 펼칠 수 있으며, 재사용된 step은 Scenario details와 Latest result에서 `use auth/login` 또는 `include ...` 출처가 표시됩니다.
 - `catalog --ai` 초안의 `<...>` placeholder가 남아 있으면 `validate`가 실패합니다.
 - `request.body`와 `request.multipart`는 같은 step에 함께 쓰지 않습니다.
 - `condition`은 검증식이지 분기 조건이 아닙니다.

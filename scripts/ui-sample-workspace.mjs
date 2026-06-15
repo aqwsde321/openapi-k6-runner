@@ -358,7 +358,7 @@ function printSampleInstructions({ workspace, backendUrl, uiUrl }) {
   console.log('Try these scenarios in the UI:');
   console.log('  smoke                 passes with direct source');
   console.log('  order/include-health  passes and shows include ./partials/health.yaml');
-  console.log('  order/use-login       fails login on purpose and shows use auth/login in Run Summary');
+  console.log('  order/use-login       fails login on purpose and shows use auth/login in Latest result');
   console.log('');
   console.log('Press Ctrl+C to stop the UI. The workspace is left on disk for inspection.');
 }

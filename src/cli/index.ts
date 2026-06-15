@@ -4017,12 +4017,11 @@ const UI_HTML = String.raw`<!doctype html>
     .run-summary {
       background: transparent;
       border: 0;
-      border-top: 1px solid var(--line);
       border-radius: 0;
       display: grid;
       gap: 8px;
       min-width: 0;
-      padding: 8px 0 0;
+      padding: 0;
       width: 100%;
     }
     .run-summary-grid {
@@ -4266,6 +4265,12 @@ const UI_HTML = String.raw`<!doctype html>
         </div>
         <div class="section">
           <div class="section-heading">
+            <h3>Latest result</h3>
+          </div>
+          <div id="runSummary" class="run-summary"><div class="muted">No run selected.</div></div>
+        </div>
+        <div class="section">
+          <div class="section-heading">
             <h3>Target status</h3>
             <div class="section-actions">
               <button id="checkServersBtn">Check servers</button>
@@ -4291,7 +4296,6 @@ const UI_HTML = String.raw`<!doctype html>
           <button id="clearBtn">Clear</button>
         </div>
         <span id="runHint" class="hint">Select a scenario to start.</span>
-        <div id="runSummary" class="run-summary"><div class="muted">No run selected.</div></div>
         <div id="runHistory" class="run-history"><div class="run-history-empty">No runs yet.</div></div>
       </div>
       <pre id="output" class="terminal">Select a scenario and run validate/test.</pre>
@@ -4340,6 +4344,10 @@ const UI_HTML = String.raw`<!doctype html>
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+    }
+
+    function formatUiPath(value) {
+      return String(value || '').replace(/^openapi-k6\//, '');
     }
 
     function readCollapsedScenarioGroups() {
@@ -4429,7 +4437,7 @@ const UI_HTML = String.raw`<!doctype html>
     async function loadScenarios() {
       const data = await fetchJson('/api/scenarios');
       state.scenarios = data.scenarios;
-      els.configPath.textContent = data.configPath;
+      els.configPath.textContent = formatUiPath(data.configPath);
       renderScenarioList();
       if (!state.selected && state.scenarios.length > 0) {
         await selectScenario(state.scenarios[0].id);
@@ -4488,15 +4496,28 @@ const UI_HTML = String.raw`<!doctype html>
 
     function renderScenarioItem(scenario) {
         const status = state.lastRun.get(scenario.id) || (scenario.error ? 'failed' : 'not run');
-        return '<button class="scenario-item ' + (state.selected === scenario.id ? 'active' : '') + '" data-id="' + escapeHtml(scenario.id) + '">' +
+        return '<button class="scenario-item ' + (state.selected === scenario.id ? 'active' : '') + '" data-id="' + escapeHtml(scenario.id) + '" title="' + escapeHtml(scenario.path) + '">' +
           '<div class="scenario-item-head"><span class="scenario-name">' + escapeHtml(scenario.name) + '</span><span class="pill' + statusTone(status) + '">' + escapeHtml(status) + '</span></div>' +
-          '<div class="scenario-path">' + escapeHtml(scenario.path) + '</div>' +
+          '<div class="scenario-path">' + escapeHtml(formatUiPath(scenario.path)) + '</div>' +
           '<div class="muted">' + (scenario.stepCount === undefined ? 'parse error' : scenario.stepCount + ' steps') + '</div>' +
           '</button>';
     }
 
     async function selectScenario(id) {
       state.selected = id;
+      const activeItem = state.runHistory.find((candidate) => candidate.id === state.activeOutputRunId);
+      if (!activeItem || activeItem.scenario !== id) {
+        const latestItem = state.runHistory.find((candidate) => candidate.scenario === id);
+        state.activeOutputRunId = latestItem ? latestItem.id : null;
+        if (latestItem) {
+          els.output.innerHTML = latestItem.html || '';
+          els.output.scrollTop = els.output.scrollHeight;
+          setStatus(els.runStatus, latestItem.status);
+        } else {
+          resetOutput();
+          setStatus(els.runStatus, 'idle');
+        }
+      }
       renderScenarioList();
       try {
         state.detail = await fetchJson('/api/scenario?scenario=' + encodeURIComponent(id));
@@ -4511,6 +4532,7 @@ const UI_HTML = String.raw`<!doctype html>
         els.validateBtn.disabled = true;
         els.testBtn.disabled = true;
       }
+      renderRunSummary();
       updateRunHint();
     }
 
@@ -4525,7 +4547,7 @@ const UI_HTML = String.raw`<!doctype html>
         .concat(detail.includes.map((item) => '<span class="pill">reuse ' + escapeHtml(item) + '</span>'));
       els.scenarioSummary.innerHTML =
         '<div class="stack" style="gap: 6px;">' +
-          '<div class="muted">' + escapeHtml(detail.path) + '</div>' +
+          '<div class="muted">' + escapeHtml(formatUiPath(detail.path)) + '</div>' +
           '<div class="row"><span class="pill">' + detail.stepCount + (detail.stepCount === 1 ? ' step' : ' steps') + '</span></div>' +
         '</div>';
       const steps = detail.steps.map((step) => {
@@ -4593,7 +4615,7 @@ const UI_HTML = String.raw`<!doctype html>
 
     function formatSnapshotMeta(snapshot) {
       const parts = ['snapshot: ' + snapshot.status];
-      if (snapshot.path) parts.push(snapshot.path);
+      if (snapshot.path) parts.push(formatUiPath(snapshot.path));
       if (snapshot.error) parts.push(snapshot.error);
       return parts.join(' · ');
     }
@@ -4671,7 +4693,7 @@ const UI_HTML = String.raw`<!doctype html>
     function renderRunSummary() {
       const item = state.runHistory.find((candidate) => candidate.id === state.activeOutputRunId);
       if (!item) {
-        els.runSummary.innerHTML = '<div class="muted">No run selected.</div>';
+        els.runSummary.innerHTML = '<div class="muted">No run for this scenario.</div>';
         return;
       }
 
@@ -4717,19 +4739,23 @@ const UI_HTML = String.raw`<!doctype html>
       }).join('');
 
       for (const item of els.runHistory.querySelectorAll('.run-history-item')) {
-        item.addEventListener('click', () => showRunHistoryItem(item.getAttribute('data-run-id')));
+        item.addEventListener('click', () => { void showRunHistoryItem(item.getAttribute('data-run-id')); });
       }
     }
 
-    function showRunHistoryItem(runId) {
+    async function showRunHistoryItem(runId) {
       const item = state.runHistory.find((candidate) => candidate.id === runId);
       if (!item) return;
       state.activeOutputRunId = item.id;
       els.output.innerHTML = item.html || '';
       els.output.scrollTop = els.output.scrollHeight;
       setStatus(els.runStatus, item.status);
-      renderRunSummary();
-      renderRunHistory();
+      if (item.scenario !== state.selected) {
+        await selectScenario(item.scenario);
+      } else {
+        renderRunSummary();
+        renderRunHistory();
+      }
     }
 
     function clearRunOutput() {
