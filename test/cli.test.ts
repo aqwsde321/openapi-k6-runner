@@ -1812,6 +1812,12 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('aria-expanded');
       expect(html).not.toContain('groups.sort(');
       expect(html).not.toContain('group.scenarios.sort(');
+      expect(html).toContain('id="runHistory"');
+      expect(html).toContain('renderRunHistory');
+      expect(html).toContain('state.activeOutputRunId');
+      expect(html).toContain('state.runHistory = state.runHistory.slice(0, 20);');
+      expect(html).toContain('state.lastRun.set(runScenario, data.status);');
+      expect(html).not.toContain('state.lastRun.set(state.selected, data.status);');
       expect(html).toContain('text-overflow: ellipsis');
       expect(html).toContain('detail.includes.map');
       expect(html).toContain('reuse ');

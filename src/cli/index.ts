@@ -3865,6 +3865,55 @@ const UI_HTML = String.raw`<!doctype html>
       grid-template-columns: repeat(3, max-content);
       gap: 8px;
     }
+    .run-history {
+      display: grid;
+      gap: 6px;
+      max-height: 148px;
+      min-width: 0;
+      overflow: auto;
+      width: 100%;
+    }
+    .run-history-empty {
+      color: var(--muted);
+      font-size: 12px;
+      padding: 6px 0;
+    }
+    .run-history-item {
+      align-items: center;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      min-width: 0;
+      padding: 8px 9px;
+      text-align: left;
+      width: 100%;
+    }
+    .run-history-item.active {
+      border-color: var(--accent-2);
+      box-shadow: 0 0 0 3px var(--focus);
+    }
+    .run-history-main {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .run-history-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .run-history-meta {
+      color: var(--muted);
+      font-size: 11px;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .terminal {
       margin: 0;
       flex: 1;
@@ -3994,6 +4043,7 @@ const UI_HTML = String.raw`<!doctype html>
           <button id="clearBtn">Clear</button>
         </div>
         <span id="runHint" class="hint">Select a scenario to start.</span>
+        <div id="runHistory" class="run-history"><div class="run-history-empty">No runs yet.</div></div>
       </div>
       <pre id="output" class="terminal">Select a scenario and run validate/test.</pre>
     </section>
@@ -4007,6 +4057,8 @@ const UI_HTML = String.raw`<!doctype html>
       detail: null,
       collapsedGroups: readCollapsedScenarioGroups(),
       lastRun: new Map(),
+      runHistory: [],
+      activeOutputRunId: null,
       serverSummary: { checked: false, failedServers: 0, missingSnapshots: 0 }
     };
 
@@ -4028,7 +4080,8 @@ const UI_HTML = String.raw`<!doctype html>
       clearBtn: document.getElementById('clearBtn'),
       output: document.getElementById('output'),
       runStatus: document.getElementById('runStatus'),
-      runHint: document.getElementById('runHint')
+      runHint: document.getElementById('runHint'),
+      runHistory: document.getElementById('runHistory')
     };
 
     function escapeHtml(value) {
@@ -4067,6 +4120,11 @@ const UI_HTML = String.raw`<!doctype html>
 
     function appendOutputChunk(chunk) {
       els.output.insertAdjacentHTML('beforeend', chunk.html !== undefined ? chunk.html : escapeHtml(chunk.chunk || ''));
+      els.output.scrollTop = els.output.scrollHeight;
+    }
+
+    function appendOutputHtml(html) {
+      els.output.insertAdjacentHTML('beforeend', html);
       els.output.scrollTop = els.output.scrollHeight;
     }
 
@@ -4181,7 +4239,7 @@ const UI_HTML = String.raw`<!doctype html>
     function renderScenarioItem(scenario) {
         const status = state.lastRun.get(scenario.id) || (scenario.error ? 'failed' : 'not run');
         return '<button class="scenario-item ' + (state.selected === scenario.id ? 'active' : '') + '" data-id="' + escapeHtml(scenario.id) + '">' +
-          '<div class="scenario-item-head"><span class="scenario-name">' + escapeHtml(scenario.name) + '</span><span class="pill ' + (status === 'passed' ? 'ok' : status === 'failed' ? 'bad' : '') + '">' + escapeHtml(status) + '</span></div>' +
+          '<div class="scenario-item-head"><span class="scenario-name">' + escapeHtml(scenario.name) + '</span><span class="pill' + statusTone(status) + '">' + escapeHtml(status) + '</span></div>' +
           '<div class="scenario-path">' + escapeHtml(scenario.path) + '</div>' +
           '<div class="muted">' + (scenario.stepCount === undefined ? 'parse error' : scenario.stepCount + ' steps') + '</div>' +
           '</button>';
@@ -4279,30 +4337,142 @@ const UI_HTML = String.raw`<!doctype html>
       return parts.join(' · ');
     }
 
+    function findScenarioName(id) {
+      const scenario = state.scenarios.find((candidate) => candidate.id === id);
+      return scenario ? scenario.name : id;
+    }
+
+    function formatRunHistoryTime(value) {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString();
+    }
+
+    function renderRunHistory() {
+      if (state.runHistory.length === 0) {
+        els.runHistory.innerHTML = '<div class="run-history-empty">No runs yet.</div>';
+        return;
+      }
+
+      els.runHistory.innerHTML = state.runHistory.map((item) => {
+        const active = state.activeOutputRunId === item.id;
+        const title = item.command + ' ' + item.scenarioName;
+        const meta = item.scenario + ' - ' + formatRunHistoryTime(item.startedAt);
+        return '<button class="run-history-item ' + (active ? 'active' : '') + '" type="button" data-run-id="' + escapeHtml(item.id) + '" aria-current="' + String(active) + '">' +
+          '<span class="run-history-main">' +
+            '<span class="run-history-title">' + escapeHtml(title) + '</span>' +
+            '<span class="run-history-meta">' + escapeHtml(meta) + '</span>' +
+          '</span>' +
+          '<span class="pill' + statusTone(item.status) + '">' + escapeHtml(item.status) + '</span>' +
+        '</button>';
+      }).join('');
+
+      for (const item of els.runHistory.querySelectorAll('.run-history-item')) {
+        item.addEventListener('click', () => showRunHistoryItem(item.getAttribute('data-run-id')));
+      }
+    }
+
+    function showRunHistoryItem(runId) {
+      const item = state.runHistory.find((candidate) => candidate.id === runId);
+      if (!item) return;
+      state.activeOutputRunId = item.id;
+      els.output.innerHTML = item.html || '';
+      els.output.scrollTop = els.output.scrollHeight;
+      setStatus(els.runStatus, item.status);
+      renderRunHistory();
+    }
+
+    function clearRunOutput() {
+      state.activeOutputRunId = null;
+      resetOutput();
+      setStatus(els.runStatus, 'idle');
+      renderRunHistory();
+    }
+
     async function runCommand(command) {
-      if (!state.selected) return;
+      const runScenario = state.selected;
+      if (!runScenario) return;
       setStatus(els.runStatus, 'running');
       resetOutput();
-      const result = await fetchJson('/api/run', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ command: command, scenario: state.selected })
-      });
+      let result;
+      try {
+        result = await fetchJson('/api/run', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ command: command, scenario: runScenario })
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setStatus(els.runStatus, 'failed');
+        appendOutputHtml(escapeHtml(message + '\n'));
+        updateRunHint();
+        return;
+      }
+
+      const historyItem = {
+        id: result.runId,
+        command,
+        scenario: runScenario,
+        scenarioName: findScenarioName(runScenario),
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        exitCode: null,
+        html: ''
+      };
+      state.runHistory.unshift(historyItem);
+      state.runHistory = state.runHistory.slice(0, 20);
+      state.activeOutputRunId = result.runId;
+      state.lastRun.set(runScenario, 'running');
+      if (state.selected === runScenario) {
+        setStatus(els.detailStatus, 'running');
+      }
+      renderScenarioList();
+      renderRunHistory();
+
       const events = new EventSource('/api/runs/' + encodeURIComponent(result.runId) + '/events');
       events.addEventListener('chunk', (event) => {
         const data = JSON.parse(event.data);
-        appendOutputChunk(data);
+        const html = data.html !== undefined ? data.html : escapeHtml(data.chunk || '');
+        historyItem.html += html;
+        if (state.activeOutputRunId === result.runId) {
+          appendOutputChunk(data);
+        }
       });
       events.addEventListener('done', (event) => {
         const data = JSON.parse(event.data);
-        state.lastRun.set(state.selected, data.status);
-        setStatus(els.runStatus, data.status);
-        setStatus(els.detailStatus, data.status);
+        historyItem.status = data.status;
+        historyItem.finishedAt = new Date().toISOString();
+        historyItem.exitCode = data.exitCode;
+        state.lastRun.set(runScenario, data.status);
+        if (state.activeOutputRunId === result.runId) {
+          setStatus(els.runStatus, data.status);
+        }
+        if (state.selected === runScenario) {
+          setStatus(els.detailStatus, data.status);
+        }
         renderScenarioList();
+        renderRunHistory();
         updateRunHint();
         events.close();
       });
       events.onerror = () => {
+        if (historyItem.status === 'running') {
+          historyItem.status = 'failed';
+          historyItem.finishedAt = new Date().toISOString();
+          historyItem.exitCode = 1;
+          historyItem.html += escapeHtml('\nEvent stream disconnected.\n');
+          state.lastRun.set(runScenario, 'failed');
+          if (state.activeOutputRunId === result.runId) {
+            appendOutputHtml(escapeHtml('\nEvent stream disconnected.\n'));
+            setStatus(els.runStatus, 'failed');
+          }
+          if (state.selected === runScenario) {
+            setStatus(els.detailStatus, 'failed');
+          }
+          renderScenarioList();
+          renderRunHistory();
+          updateRunHint();
+        }
         events.close();
       };
     }
@@ -4312,7 +4482,7 @@ const UI_HTML = String.raw`<!doctype html>
     els.checkServersBtn.addEventListener('click', checkServers);
     els.validateBtn.addEventListener('click', () => runCommand('validate'));
     els.testBtn.addEventListener('click', () => runCommand('test'));
-    els.clearBtn.addEventListener('click', () => { resetOutput(); setStatus(els.runStatus, 'idle'); });
+    els.clearBtn.addEventListener('click', clearRunOutput);
 
     loadScenarios().then(checkServers).catch((error) => {
       els.scenarioList.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
