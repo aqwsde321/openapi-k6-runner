@@ -3785,8 +3785,7 @@ const UI_HTML = String.raw`<!doctype html>
     button.blue:hover:not(:disabled) { background: #104bc5; }
     button:disabled { opacity: 0.55; cursor: not-allowed; }
     button:focus-visible,
-    input:focus-visible,
-    summary:focus-visible {
+    input:focus-visible {
       outline: 3px solid var(--focus);
       outline-offset: 2px;
     }
@@ -3919,32 +3918,23 @@ const UI_HTML = String.raw`<!doctype html>
       margin: 0 0 6px;
       font-size: 12px;
     }
-    details.section {
-      padding: 0;
+    .section-heading {
+      align-items: center;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      margin-bottom: 8px;
     }
-    details.section summary {
-      cursor: pointer;
-      list-style: none;
-      padding: 0 0 9px;
-      font-size: 12px;
-      font-weight: 750;
+    .section-heading h3 {
+      margin: 0;
     }
-    details.section summary:hover {
-      background: var(--hover);
-    }
-    details.section summary::-webkit-details-marker { display: none; }
-    details.section summary::after {
-      content: "Show";
-      float: right;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 650;
-    }
-    details.section[open] summary {
-      border-bottom: 0;
-    }
-    details.section[open] summary::after {
-      content: "Hide";
+    .section-actions {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      min-width: 0;
     }
     .section-content {
       padding: 0;
@@ -4226,6 +4216,11 @@ const UI_HTML = String.raw`<!doctype html>
       }
       header { align-items: flex-start; flex-direction: column; gap: 10px; }
       .header-meta { justify-content: flex-start; }
+      .section-heading {
+        align-items: start;
+        grid-template-columns: 1fr;
+      }
+      .section-actions { justify-content: flex-start; }
       .terminal { min-height: 360px; }
     }
     @media (max-height: 560px) and (min-width: 1101px) {
@@ -4269,20 +4264,19 @@ const UI_HTML = String.raw`<!doctype html>
         <div id="scenarioSummary" class="section">
           <div class="empty">Choose a scenario from the left.</div>
         </div>
-        <details class="section">
-          <summary>Target status</summary>
-          <div class="section-content">
-            <div class="row" style="margin-bottom: 8px;">
+        <div class="section">
+          <div class="section-heading">
+            <h3>Target status</h3>
+            <div class="section-actions">
               <button id="checkServersBtn">Check servers</button>
               <span id="serverCheckedAt" class="muted"></span>
             </div>
-            <div id="serverList" class="server-grid"></div>
           </div>
-        </details>
-        <details class="section">
-          <summary>Scenario details</summary>
+          <div id="serverList" class="server-grid"></div>
+        </div>
+        <div class="section">
           <div id="detailBody" class="section-content empty">Choose a scenario from the left.</div>
-        </details>
+        </div>
       </div>
     </section>
     <section class="panel">
