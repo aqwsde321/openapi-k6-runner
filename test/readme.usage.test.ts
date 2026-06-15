@@ -109,8 +109,8 @@ describe('README usage guide', () => {
     expect(readme).toContain('### 여러 서버 연결');
     expect(readme).toContain('npx --yes openapi-k6 module add auth --base-url https://auth-api.example.com --sync');
     expect(readme).toContain('### UI, doctor, update');
-    expect(readme).toContain('폴더별 scenario는 접어서 볼 수 있고, Scenario details는 각 step이 `direct`, `use auth/login`, `include ...` 중 어디서 온 것인지 표시합니다.');
-    expect(readme).toContain('`test` 실행 결과는 Latest result에서 step별 pass/fail, HTTP status, duration, source를 함께 보여줍니다.');
+    expect(readme).toContain('폴더별 scenario는 접어서 볼 수 있고, 요청 단계는 각 step이 `직접 정의`, `시나리오 사용: auth/login`, `파일 포함: ...` 중 어디서 온 것인지 표시합니다.');
+    expect(readme).toContain('`test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다.');
     expect(readme).toContain('### generate와 runner');
     expect(readme).toContain('### 제약');
 

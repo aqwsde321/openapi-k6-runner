@@ -356,9 +356,9 @@ function printSampleInstructions({ workspace, backendUrl, uiUrl }) {
   console.log(`  Workspace: ${path.join(workspace, 'openapi-k6')}`);
   console.log('');
   console.log('Try these scenarios in the UI:');
-  console.log('  smoke                 passes with direct source');
-  console.log('  order/include-health  passes and shows include ./partials/health.yaml');
-  console.log('  order/use-login       fails login on purpose and shows use auth/login in Latest result');
+  console.log('  smoke                 passes and shows 직접 정의');
+  console.log('  order/include-health  passes and shows 파일 포함: ./partials/health.yaml');
+  console.log('  order/use-login       fails login on purpose and shows 시나리오 사용: auth/login in 최근 실행 결과');
   console.log('');
   console.log('Press Ctrl+C to stop the UI. The workspace is left on disk for inspection.');
 }

@@ -4236,69 +4236,69 @@ const UI_HTML = String.raw`<!doctype html>
   <header>
     <div class="brand">
       <h1>openapi-k6 UI</h1>
-      <div class="subtitle">Scenario validate/test runner</div>
+      <div class="subtitle">시나리오 검증/실행</div>
     </div>
     <div class="row header-meta">
-      <span id="configPath" class="pill">loading</span>
-      <button id="refreshBtn">Refresh</button>
+      <span id="configPath" class="pill">불러오는 중</span>
+      <button id="refreshBtn">새로고침</button>
     </div>
   </header>
   <main>
     <section class="panel">
       <div class="panel-head">
-        <h2 class="panel-title">Scenarios</h2>
+        <h2 class="panel-title">시나리오</h2>
         <span id="scenarioCount" class="pill">0</span>
       </div>
       <div class="panel-body">
-        <input id="searchInput" placeholder="Search scenarios">
+        <input id="searchInput" placeholder="시나리오 검색">
         <div id="scenarioList" class="scenario-list"></div>
       </div>
     </section>
     <section class="panel">
       <div class="panel-head">
-        <h2 class="panel-title" id="detailTitle">Scenario</h2>
-        <span id="detailStatus" class="pill">not run</span>
+        <h2 class="panel-title" id="detailTitle">시나리오</h2>
+        <span id="detailStatus" class="pill">미실행</span>
       </div>
       <div class="panel-body stack">
         <div id="scenarioSummary" class="section">
-          <div class="empty">Choose a scenario from the left.</div>
+          <div class="empty">왼쪽에서 시나리오를 선택하세요.</div>
         </div>
         <div class="section">
           <div class="section-heading">
-            <h3>Latest result</h3>
+            <h3>최근 실행 결과</h3>
           </div>
-          <div id="runSummary" class="run-summary"><div class="muted">No run selected.</div></div>
+          <div id="runSummary" class="run-summary"><div class="muted">실행 기록 없음</div></div>
         </div>
         <div class="section">
           <div class="section-heading">
-            <h3>Target status</h3>
+            <h3>대상 서버</h3>
             <div class="section-actions">
-              <button id="checkServersBtn">Check servers</button>
+              <button id="checkServersBtn">서버 확인</button>
               <span id="serverCheckedAt" class="muted"></span>
             </div>
           </div>
           <div id="serverList" class="server-grid"></div>
         </div>
         <div class="section">
-          <div id="detailBody" class="section-content empty">Choose a scenario from the left.</div>
+          <div id="detailBody" class="section-content empty">왼쪽에서 시나리오를 선택하세요.</div>
         </div>
       </div>
     </section>
     <section class="panel">
       <div class="panel-head">
-        <h2 class="panel-title">Run Output</h2>
-        <span id="runStatus" class="pill">idle</span>
+        <h2 class="panel-title">실행 로그</h2>
+        <span id="runStatus" class="pill">대기</span>
       </div>
       <div class="actions">
         <div class="button-row">
-          <button id="validateBtn" class="blue" disabled>Validate</button>
-          <button id="testBtn" class="primary" disabled>Test</button>
-          <button id="clearBtn">Clear</button>
+          <button id="validateBtn" class="blue" disabled>검증</button>
+          <button id="testBtn" class="primary" disabled>실행</button>
+          <button id="clearBtn">지우기</button>
         </div>
-        <span id="runHint" class="hint">Select a scenario to start.</span>
-        <div id="runHistory" class="run-history"><div class="run-history-empty">No runs yet.</div></div>
+        <span id="runHint" class="hint">시나리오를 선택하세요.</span>
+        <div id="runHistory" class="run-history"><div class="run-history-empty">실행 기록 없음</div></div>
       </div>
-      <pre id="output" class="terminal">Select a scenario and run validate/test.</pre>
+      <pre id="output" class="terminal">시나리오를 선택한 뒤 검증/실행하세요.</pre>
     </section>
   </main>
   <script>
@@ -4350,6 +4350,31 @@ const UI_HTML = String.raw`<!doctype html>
       return String(value || '').replace(/^openapi-k6\//, '');
     }
 
+    function formatStatusLabel(value) {
+      const normalized = String(value).toLowerCase();
+      if (normalized === 'passed') return '성공';
+      if (normalized === 'failed') return '실패';
+      if (normalized === 'running') return '실행 중';
+      if (normalized === 'not run') return '미실행';
+      if (normalized === 'idle') return '대기';
+      if (normalized === 'checking') return '확인 중';
+      if (normalized === 'reachable') return '연결됨';
+      if (normalized === 'unknown') return '알 수 없음';
+      if (normalized === 'missing') return '없음';
+      if (normalized === 'present') return '있음';
+      return String(value);
+    }
+
+    function formatCommandLabel(value) {
+      if (value === 'validate') return '검증';
+      if (value === 'test') return '실행';
+      return String(value);
+    }
+
+    function formatStepCount(value) {
+      return value === 1 ? '1단계' : value + '단계';
+    }
+
     function readCollapsedScenarioGroups() {
       try {
         if (typeof localStorage === 'undefined') return new Set();
@@ -4395,7 +4420,7 @@ const UI_HTML = String.raw`<!doctype html>
     }
 
     function setStatus(el, value) {
-      el.textContent = value;
+      el.textContent = formatStatusLabel(value);
       el.className = 'pill' + statusTone(value);
     }
 
@@ -4406,22 +4431,22 @@ const UI_HTML = String.raw`<!doctype html>
 
     function updateRunHint() {
       if (!state.selected) {
-        setHint('Select a scenario to start.', '');
+        setHint('시나리오를 선택하세요.', '');
       } else if (state.serverSummary.missingSnapshots > 0) {
-        setHint('Snapshot missing. Run openapi-k6 sync before validate/test.', 'bad');
+        setHint('OpenAPI 스냅샷이 없습니다. 먼저 openapi-k6 sync를 실행하세요.', 'bad');
       } else if (state.serverSummary.failedServers > 0) {
-        setHint('Some servers are unreachable. Validate can run; test may fail.', 'warn');
+        setHint('일부 서버에 연결할 수 없습니다. 검증은 가능하지만 실행은 실패할 수 있습니다.', 'warn');
       } else if (state.serverSummary.checked) {
-        setHint('Ready for validate/test.', '');
+        setHint('검증/실행 준비됨.', '');
       } else {
-        setHint('Check servers before test if the backend status is unclear.', 'warn');
+        setHint('백엔드 상태가 불확실하면 실행 전에 서버를 확인하세요.', 'warn');
       }
 
       els.validateBtn.title = state.serverSummary.missingSnapshots > 0
-        ? 'OpenAPI snapshot is missing. Run openapi-k6 sync first.'
+        ? 'OpenAPI 스냅샷이 없습니다. 먼저 openapi-k6 sync를 실행하세요.'
         : '';
       els.testBtn.title = state.serverSummary.failedServers > 0
-        ? 'One or more target servers are unreachable.'
+        ? '하나 이상의 대상 서버에 연결할 수 없습니다.'
         : els.validateBtn.title;
     }
 
@@ -4497,9 +4522,9 @@ const UI_HTML = String.raw`<!doctype html>
     function renderScenarioItem(scenario) {
         const status = state.lastRun.get(scenario.id) || (scenario.error ? 'failed' : 'not run');
         return '<button class="scenario-item ' + (state.selected === scenario.id ? 'active' : '') + '" data-id="' + escapeHtml(scenario.id) + '" title="' + escapeHtml(scenario.path) + '">' +
-          '<div class="scenario-item-head"><span class="scenario-name">' + escapeHtml(scenario.name) + '</span><span class="pill' + statusTone(status) + '">' + escapeHtml(status) + '</span></div>' +
+          '<div class="scenario-item-head"><span class="scenario-name">' + escapeHtml(scenario.name) + '</span><span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span></div>' +
           '<div class="scenario-path">' + escapeHtml(formatUiPath(scenario.path)) + '</div>' +
-          '<div class="muted">' + (scenario.stepCount === undefined ? 'parse error' : scenario.stepCount + ' steps') + '</div>' +
+          '<div class="muted">' + (scenario.stepCount === undefined ? '파싱 오류' : formatStepCount(scenario.stepCount)) + '</div>' +
           '</button>';
     }
 
@@ -4526,7 +4551,7 @@ const UI_HTML = String.raw`<!doctype html>
         els.testBtn.disabled = false;
       } catch (error) {
         state.detail = null;
-        els.detailTitle.textContent = 'Scenario error';
+        els.detailTitle.textContent = '시나리오 오류';
         els.scenarioSummary.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
         els.detailBody.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
         els.validateBtn.disabled = true;
@@ -4541,36 +4566,34 @@ const UI_HTML = String.raw`<!doctype html>
       els.detailTitle.textContent = detail.name;
       setStatus(els.detailStatus, state.lastRun.get(detail.id) || 'not run');
       const referencePills = []
-        .concat(detail.modules.map((item) => '<span class="pill">module ' + escapeHtml(item) + '</span>'))
+        .concat(detail.modules.map((item) => '<span class="pill">모듈 ' + escapeHtml(item) + '</span>'))
         .concat(detail.env.map((item) => '<span class="pill">env.' + escapeHtml(item) + '</span>'))
         .concat(detail.vars.map((item) => '<span class="pill">vars.' + escapeHtml(item) + '</span>'))
-        .concat(detail.includes.map((item) => '<span class="pill">reuse ' + escapeHtml(item) + '</span>'));
+        .concat(detail.includes.map((item) => '<span class="pill">재사용 ' + escapeHtml(item) + '</span>'));
       els.scenarioSummary.innerHTML =
         '<div class="stack" style="gap: 6px;">' +
           '<div class="muted">' + escapeHtml(formatUiPath(detail.path)) + '</div>' +
-          '<div class="row"><span class="pill">' + detail.stepCount + (detail.stepCount === 1 ? ' step' : ' steps') + '</span></div>' +
+          '<div class="row"><span class="pill">' + escapeHtml(formatStepCount(detail.stepCount)) + '</span></div>' +
         '</div>';
       const steps = detail.steps.map((step) => {
         const api = step.operationId || ((step.method || '') + ' ' + (step.path || '')).trim();
-        const extract = step.extract && step.extract.length ? '<div class="muted">extract: ' + escapeHtml(step.extract.join(', ')) + '</div>' : '';
-        const sourceText = step.source && step.source.kind !== 'direct'
-          ? step.source.kind + ' ' + (step.source.reference || '')
-          : 'direct';
+        const extract = step.extract && step.extract.length ? '<div class="muted">응답 저장: ' + escapeHtml(step.extract.join(', ')) + '</div>' : '';
+        const sourceText = formatStepSource(step.source);
         const reused = step.source && step.source.kind !== 'direct';
         return '<div class="step ' + (reused ? 'reused' : '') + '">' +
           '<div class="step-title-row"><div class="step-title">' + escapeHtml(step.id) + '</div><span class="pill step-source">' + escapeHtml(sourceText) + '</span></div>' +
           '<div class="muted">' + escapeHtml(api || 'api') + '</div>' + extract + '</div>';
       }).join('');
       const references = referencePills.length
-        ? '<div><h3>References</h3><div class="row">' + referencePills.join('') + '</div></div>'
+        ? '<div><h3>참조</h3><div class="row">' + referencePills.join('') + '</div></div>'
         : '';
       els.detailBody.className = 'section-content stack';
-      els.detailBody.innerHTML = references + '<div><h3>Steps</h3><div class="steps">' + steps + '</div></div>';
+      els.detailBody.innerHTML = references + '<div><h3>요청 단계</h3><div class="steps">' + steps + '</div></div>';
     }
 
     async function checkServers() {
       setStatus(els.runStatus, 'checking');
-      els.serverList.innerHTML = '<div class="empty">Checking servers...</div>';
+      els.serverList.innerHTML = '<div class="empty">서버 확인 중...</div>';
       try {
         const result = await fetchJson('/api/check-servers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
         els.serverCheckedAt.textContent = new Date(result.checkedAt).toLocaleTimeString();
@@ -4579,7 +4602,7 @@ const UI_HTML = String.raw`<!doctype html>
           const snapshot = module.snapshot || { status: 'missing', error: 'snapshot unknown' };
           const serverMeta = formatServerMeta(module);
           const snapshotMeta = formatSnapshotMeta(snapshot);
-          return '<div class="server"><strong>' + escapeHtml(module.name) + '</strong><div class="server-lines"><div>' + escapeHtml(module.baseUrl || 'baseUrl not configured') + '</div><div class="muted">' + escapeHtml(serverMeta) + '</div><div class="muted">' + escapeHtml(snapshotMeta) + '</div></div><span class="pill' + statusTone(module.status) + '">' + escapeHtml(module.status) + '</span></div>';
+          return '<div class="server"><strong>' + escapeHtml(module.name) + '</strong><div class="server-lines"><div>' + escapeHtml(module.baseUrl || 'baseUrl 미설정') + '</div><div class="muted">' + escapeHtml(serverMeta) + '</div><div class="muted">' + escapeHtml(snapshotMeta) + '</div></div><span class="pill' + statusTone(module.status) + '">' + escapeHtml(formatStatusLabel(module.status)) + '</span></div>';
         }).join('');
       } catch (error) {
         state.serverSummary = { checked: false, failedServers: 0, missingSnapshots: 0 };
@@ -4601,20 +4624,20 @@ const UI_HTML = String.raw`<!doctype html>
     function formatServerMeta(module) {
       const parts = [];
       if (module.status === 'reachable') {
-        parts.push('server reachable');
-        if (typeof module.httpStatus === 'number') parts.push('/ returned HTTP ' + module.httpStatus);
+        parts.push('서버 연결됨');
+        if (typeof module.httpStatus === 'number') parts.push('/ 응답 HTTP ' + module.httpStatus);
       } else if (module.status === 'unknown') {
-        parts.push('baseUrl not configured');
+        parts.push('baseUrl 미설정');
       }
       if (module.status !== 'reachable' && typeof module.httpStatus === 'number') parts.push('HTTP ' + module.httpStatus);
       if (typeof module.durationMs === 'number') parts.push(module.durationMs + 'ms');
       if (module.source) parts.push(module.source);
       if (module.error) parts.push(module.error);
-      return parts.join(' · ') || 'baseUrl not configured';
+      return parts.join(' · ') || 'baseUrl 미설정';
     }
 
     function formatSnapshotMeta(snapshot) {
-      const parts = ['snapshot: ' + snapshot.status];
+      const parts = ['스냅샷: ' + formatStatusLabel(snapshot.status)];
       if (snapshot.path) parts.push(formatUiPath(snapshot.path));
       if (snapshot.error) parts.push(snapshot.error);
       return parts.join(' · ');
@@ -4653,6 +4676,10 @@ const UI_HTML = String.raw`<!doctype html>
       const error = lines.find((line) => {
         return !line.startsWith('$ openapi-k6 ') &&
           !line.startsWith('Next:') &&
+          !line.startsWith('scenario:') &&
+          !line.startsWith('base url:') &&
+          !line.startsWith('steps:') &&
+          !line.startsWith('[') &&
           !line.startsWith('{') &&
           !line.startsWith('Validated ');
       }) || '';
@@ -4660,7 +4687,9 @@ const UI_HTML = String.raw`<!doctype html>
     }
 
     function formatStepSource(source) {
-      if (!source || source.kind === 'direct') return 'direct';
+      if (!source || source.kind === 'direct') return '직접 정의';
+      if (source.kind === 'use') return '시나리오 사용: ' + (source.reference || '');
+      if (source.kind === 'include') return '파일 포함: ' + (source.reference || '');
       return source.kind + ' ' + (source.reference || '');
     }
 
@@ -4682,7 +4711,7 @@ const UI_HTML = String.raw`<!doctype html>
         const status = step.status || 'unknown';
         return '<div class="run-step-result">' +
           '<span class="run-step-result-main">' +
-            '<span class="run-step-result-title">' + escapeHtml(title) + ' <span class="pill' + statusTone(status) + '">' + escapeHtml(status) + '</span></span>' +
+            '<span class="run-step-result-title">' + escapeHtml(title) + ' <span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span></span>' +
             '<span class="run-step-result-meta">' + escapeHtml(formatStepResultMeta(step)) + '</span>' +
           '</span>' +
           '<span class="pill run-step-result-source">' + escapeHtml(formatStepSource(step.source)) + '</span>' +
@@ -4690,30 +4719,42 @@ const UI_HTML = String.raw`<!doctype html>
       }).join('') + '</div>';
     }
 
+    function renderRunMessage(item, summary) {
+      const failedSteps = (item.stepResults || []).filter((step) => step.status === 'failed');
+      if (failedSteps.length > 0) {
+        return '<div class="run-summary-message">' + failedSteps.map((step) => {
+          const source = formatStepSource(step.source);
+          return '<div class="error">실패 지점: ' + escapeHtml(step.id) + (source ? ' · ' + escapeHtml(source) : '') + '</div>';
+        }).join('') + '</div>';
+      }
+
+      if (item.status !== 'failed' || (!summary.error && !summary.next)) return '';
+
+      return '<div class="run-summary-message">' +
+        (summary.error ? '<div class="error">' + escapeHtml(summary.error) + '</div>' : '') +
+        (summary.next ? '<div class="next">' + escapeHtml(summary.next) + '</div>' : '') +
+      '</div>';
+    }
+
     function renderRunSummary() {
       const item = state.runHistory.find((candidate) => candidate.id === state.activeOutputRunId);
       if (!item) {
-        els.runSummary.innerHTML = '<div class="muted">No run for this scenario.</div>';
+        els.runSummary.innerHTML = '<div class="muted">이 시나리오 실행 기록 없음</div>';
         return;
       }
 
       const summary = summarizeRunText(item.text);
       const duration = formatRunDuration(item);
       const exitCode = item.exitCode === null || item.exitCode === undefined ? '-' : String(item.exitCode);
-      const message = item.status === 'failed' && (summary.error || summary.next)
-        ? '<div class="run-summary-message">' +
-            (summary.error ? '<div class="error">' + escapeHtml(summary.error) + '</div>' : '') +
-            (summary.next ? '<div class="next">' + escapeHtml(summary.next) + '</div>' : '') +
-          '</div>'
-        : '';
+      const message = renderRunMessage(item, summary);
 
       els.runSummary.innerHTML =
         '<div class="run-summary-grid">' +
-          '<div class="run-summary-cell"><div class="run-summary-label">Scenario</div><div class="run-summary-value">' + escapeHtml(item.scenario) + '</div></div>' +
-          '<div class="run-summary-cell"><div class="run-summary-label">Command</div><div class="run-summary-value">' + escapeHtml(item.command) + '</div></div>' +
-          '<div class="run-summary-cell"><div class="run-summary-label">Status</div><div class="run-summary-value">' + escapeHtml(item.status) + '</div></div>' +
-          '<div class="run-summary-cell"><div class="run-summary-label">Exit</div><div class="run-summary-value">' + escapeHtml(exitCode) + '</div></div>' +
-          '<div class="run-summary-cell"><div class="run-summary-label">Duration</div><div class="run-summary-value">' + escapeHtml(duration) + '</div></div>' +
+          '<div class="run-summary-cell"><div class="run-summary-label">시나리오</div><div class="run-summary-value">' + escapeHtml(item.scenario) + '</div></div>' +
+          '<div class="run-summary-cell"><div class="run-summary-label">작업</div><div class="run-summary-value">' + escapeHtml(formatCommandLabel(item.command)) + '</div></div>' +
+          '<div class="run-summary-cell"><div class="run-summary-label">결과</div><div class="run-summary-value">' + escapeHtml(formatStatusLabel(item.status)) + '</div></div>' +
+          '<div class="run-summary-cell"><div class="run-summary-label">종료코드</div><div class="run-summary-value">' + escapeHtml(exitCode) + '</div></div>' +
+          '<div class="run-summary-cell"><div class="run-summary-label">소요시간</div><div class="run-summary-value">' + escapeHtml(duration) + '</div></div>' +
         '</div>' +
         message +
         renderRunStepResults(item);
@@ -4721,20 +4762,20 @@ const UI_HTML = String.raw`<!doctype html>
 
     function renderRunHistory() {
       if (state.runHistory.length === 0) {
-        els.runHistory.innerHTML = '<div class="run-history-empty">No runs yet.</div>';
+        els.runHistory.innerHTML = '<div class="run-history-empty">실행 기록 없음</div>';
         return;
       }
 
       els.runHistory.innerHTML = state.runHistory.map((item) => {
         const active = state.activeOutputRunId === item.id;
-        const title = item.command + ' ' + item.scenarioName;
+        const title = formatCommandLabel(item.command) + ' ' + item.scenarioName;
         const meta = item.scenario + ' - ' + formatRunHistoryTime(item.startedAt);
         return '<button class="run-history-item ' + (active ? 'active' : '') + '" type="button" data-run-id="' + escapeHtml(item.id) + '" aria-current="' + String(active) + '">' +
           '<span class="run-history-main">' +
             '<span class="run-history-title">' + escapeHtml(title) + '</span>' +
             '<span class="run-history-meta">' + escapeHtml(meta) + '</span>' +
           '</span>' +
-          '<span class="pill' + statusTone(item.status) + '">' + escapeHtml(item.status) + '</span>' +
+          '<span class="pill' + statusTone(item.status) + '">' + escapeHtml(formatStatusLabel(item.status)) + '</span>' +
         '</button>';
       }).join('');
 

@@ -103,7 +103,7 @@ pnpm run build
 pnpm run sample:ui
 ```
 
-`sample:ui`는 임시 `openapi-k6/` workspace와 로컬 fixture 백엔드를 만들고, 빌드된 `dist/cli/index.js ui`를 실행합니다. UI에서 `smoke`, `order/include-health`, `order/use-login`을 선택해 폴더 그룹, `include`/`use` step 출처, 실패 step Latest result를 확인합니다. 서버는 `Ctrl+C`로 종료하고, workspace는 파일 확인을 위해 출력된 경로에 남습니다.
+`sample:ui`는 임시 `openapi-k6/` workspace와 로컬 fixture 백엔드를 만들고, 빌드된 `dist/cli/index.js ui`를 실행합니다. UI에서 `smoke`, `order/include-health`, `order/use-login`을 선택해 폴더 그룹, 파일 포함/시나리오 사용 step 출처, 실패 step 최근 실행 결과를 확인합니다. 서버는 `Ctrl+C`로 종료하고, workspace는 파일 확인을 위해 출력된 경로에 남습니다.
 
 로컬 npm 캐시 권한 문제로 `npm pack --dry-run`이 실패하면 임시 캐시를 지정해 패키지 내용을 확인할 수 있습니다.
 
