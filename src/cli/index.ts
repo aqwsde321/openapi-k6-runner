@@ -3865,6 +3865,53 @@ const UI_HTML = String.raw`<!doctype html>
       grid-template-columns: repeat(3, max-content);
       gap: 8px;
     }
+    .run-summary {
+      background: #fbfcfe;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+      padding: 9px;
+      width: 100%;
+    }
+    .run-summary-grid {
+      display: grid;
+      gap: 6px;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      min-width: 0;
+    }
+    .run-summary-cell {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .run-summary-label {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .run-summary-value {
+      font-size: 12px;
+      font-weight: 700;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .run-summary-message {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .run-summary-message div {
+      font-size: 12px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .run-summary-message .error { color: var(--bad); }
+    .run-summary-message .next { color: var(--warn); }
     .run-history {
       display: grid;
       gap: 6px;
@@ -4043,6 +4090,7 @@ const UI_HTML = String.raw`<!doctype html>
           <button id="clearBtn">Clear</button>
         </div>
         <span id="runHint" class="hint">Select a scenario to start.</span>
+        <div id="runSummary" class="run-summary"><div class="muted">No run selected.</div></div>
         <div id="runHistory" class="run-history"><div class="run-history-empty">No runs yet.</div></div>
       </div>
       <pre id="output" class="terminal">Select a scenario and run validate/test.</pre>
@@ -4081,6 +4129,7 @@ const UI_HTML = String.raw`<!doctype html>
       output: document.getElementById('output'),
       runStatus: document.getElementById('runStatus'),
       runHint: document.getElementById('runHint'),
+      runSummary: document.getElementById('runSummary'),
       runHistory: document.getElementById('runHistory')
     };
 
@@ -4347,6 +4396,63 @@ const UI_HTML = String.raw`<!doctype html>
       return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString();
     }
 
+    function formatRunDuration(item) {
+      const startedAt = Date.parse(item.startedAt);
+      const finishedAt = item.finishedAt ? Date.parse(item.finishedAt) : Date.now();
+      if (!Number.isFinite(startedAt) || !Number.isFinite(finishedAt)) return '';
+      const durationMs = Math.max(0, finishedAt - startedAt);
+      if (durationMs < 1000) return durationMs + 'ms';
+      if (durationMs < 10000) return (durationMs / 1000).toFixed(1) + 's';
+      return Math.round(durationMs / 1000) + 's';
+    }
+
+    function stripAnsi(value) {
+      return String(value).replace(/\u001b\[[0-9;]*m/g, '');
+    }
+
+    function summarizeRunText(value) {
+      const lines = stripAnsi(value)
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const next = lines.find((line) => line.startsWith('Next:')) || '';
+      const error = lines.find((line) => {
+        return !line.startsWith('$ openapi-k6 ') &&
+          !line.startsWith('Next:') &&
+          !line.startsWith('{') &&
+          !line.startsWith('Validated ');
+      }) || '';
+      return { error, next };
+    }
+
+    function renderRunSummary() {
+      const item = state.runHistory.find((candidate) => candidate.id === state.activeOutputRunId);
+      if (!item) {
+        els.runSummary.innerHTML = '<div class="muted">No run selected.</div>';
+        return;
+      }
+
+      const summary = summarizeRunText(item.text);
+      const duration = formatRunDuration(item);
+      const exitCode = item.exitCode === null || item.exitCode === undefined ? '-' : String(item.exitCode);
+      const message = item.status === 'failed' && (summary.error || summary.next)
+        ? '<div class="run-summary-message">' +
+            (summary.error ? '<div class="error">' + escapeHtml(summary.error) + '</div>' : '') +
+            (summary.next ? '<div class="next">' + escapeHtml(summary.next) + '</div>' : '') +
+          '</div>'
+        : '';
+
+      els.runSummary.innerHTML =
+        '<div class="run-summary-grid">' +
+          '<div class="run-summary-cell"><div class="run-summary-label">Scenario</div><div class="run-summary-value">' + escapeHtml(item.scenario) + '</div></div>' +
+          '<div class="run-summary-cell"><div class="run-summary-label">Command</div><div class="run-summary-value">' + escapeHtml(item.command) + '</div></div>' +
+          '<div class="run-summary-cell"><div class="run-summary-label">Status</div><div class="run-summary-value">' + escapeHtml(item.status) + '</div></div>' +
+          '<div class="run-summary-cell"><div class="run-summary-label">Exit</div><div class="run-summary-value">' + escapeHtml(exitCode) + '</div></div>' +
+          '<div class="run-summary-cell"><div class="run-summary-label">Duration</div><div class="run-summary-value">' + escapeHtml(duration) + '</div></div>' +
+        '</div>' +
+        message;
+    }
+
     function renderRunHistory() {
       if (state.runHistory.length === 0) {
         els.runHistory.innerHTML = '<div class="run-history-empty">No runs yet.</div>';
@@ -4378,6 +4484,7 @@ const UI_HTML = String.raw`<!doctype html>
       els.output.innerHTML = item.html || '';
       els.output.scrollTop = els.output.scrollHeight;
       setStatus(els.runStatus, item.status);
+      renderRunSummary();
       renderRunHistory();
     }
 
@@ -4385,6 +4492,7 @@ const UI_HTML = String.raw`<!doctype html>
       state.activeOutputRunId = null;
       resetOutput();
       setStatus(els.runStatus, 'idle');
+      renderRunSummary();
       renderRunHistory();
     }
 
@@ -4417,7 +4525,8 @@ const UI_HTML = String.raw`<!doctype html>
         startedAt: new Date().toISOString(),
         finishedAt: null,
         exitCode: null,
-        html: ''
+        html: '',
+        text: ''
       };
       state.runHistory.unshift(historyItem);
       state.runHistory = state.runHistory.slice(0, 20);
@@ -4427,6 +4536,7 @@ const UI_HTML = String.raw`<!doctype html>
         setStatus(els.detailStatus, 'running');
       }
       renderScenarioList();
+      renderRunSummary();
       renderRunHistory();
 
       const events = new EventSource('/api/runs/' + encodeURIComponent(result.runId) + '/events');
@@ -4434,8 +4544,10 @@ const UI_HTML = String.raw`<!doctype html>
         const data = JSON.parse(event.data);
         const html = data.html !== undefined ? data.html : escapeHtml(data.chunk || '');
         historyItem.html += html;
+        historyItem.text += data.chunk || '';
         if (state.activeOutputRunId === result.runId) {
           appendOutputChunk(data);
+          renderRunSummary();
         }
       });
       events.addEventListener('done', (event) => {
@@ -4446,6 +4558,7 @@ const UI_HTML = String.raw`<!doctype html>
         state.lastRun.set(runScenario, data.status);
         if (state.activeOutputRunId === result.runId) {
           setStatus(els.runStatus, data.status);
+          renderRunSummary();
         }
         if (state.selected === runScenario) {
           setStatus(els.detailStatus, data.status);
@@ -4461,10 +4574,12 @@ const UI_HTML = String.raw`<!doctype html>
           historyItem.finishedAt = new Date().toISOString();
           historyItem.exitCode = 1;
           historyItem.html += escapeHtml('\nEvent stream disconnected.\n');
+          historyItem.text += '\nEvent stream disconnected.\n';
           state.lastRun.set(runScenario, 'failed');
           if (state.activeOutputRunId === result.runId) {
             appendOutputHtml(escapeHtml('\nEvent stream disconnected.\n'));
             setStatus(els.runStatus, 'failed');
+            renderRunSummary();
           }
           if (state.selected === runScenario) {
             setStatus(els.detailStatus, 'failed');

@@ -1818,6 +1818,13 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('state.runHistory = state.runHistory.slice(0, 20);');
       expect(html).toContain('state.lastRun.set(runScenario, data.status);');
       expect(html).not.toContain('state.lastRun.set(state.selected, data.status);');
+      expect(html).toContain('id="runSummary"');
+      expect(html).toContain('renderRunSummary');
+      expect(html).toContain('summarizeRunText');
+      expect(html).toContain('formatRunDuration');
+      expect(html).toContain('historyItem.text += data.chunk ||');
+      expect(html).toContain('run-summary-label">Status');
+      expect(html).toContain("line.startsWith('Next:')");
       expect(html).toContain('text-overflow: ellipsis');
       expect(html).toContain('detail.includes.map');
       expect(html).toContain('reuse ');
