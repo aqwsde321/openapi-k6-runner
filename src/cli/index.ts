@@ -3686,7 +3686,7 @@ const UI_HTML = String.raw`<!doctype html>
       --warn: #a15c07;
       --focus: rgba(21, 94, 239, 0.18);
       --hover: #f7f9fc;
-      --shadow: 0 8px 24px rgba(16, 24, 40, 0.06);
+      --shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
       --terminal: #101828;
       --terminal-line: #243047;
     }
@@ -3702,8 +3702,8 @@ const UI_HTML = String.raw`<!doctype html>
       display: flex;
       align-items: center;
       justify-content: space-between;
-      min-height: 72px;
-      padding: 12px 22px;
+      min-height: 60px;
+      padding: 10px 18px;
       border-bottom: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.9);
       position: sticky;
@@ -3711,8 +3711,8 @@ const UI_HTML = String.raw`<!doctype html>
       z-index: 2;
       backdrop-filter: blur(10px);
     }
-    h1 { margin: 0; font-size: 18px; letter-spacing: 0; }
-    .subtitle { color: var(--muted); font-size: 13px; }
+    h1 { margin: 0; font-size: 17px; letter-spacing: 0; }
+    .subtitle { color: var(--muted); font-size: 12px; }
     .brand { min-width: 220px; }
     .header-meta {
       justify-content: flex-end;
@@ -3721,23 +3721,23 @@ const UI_HTML = String.raw`<!doctype html>
     }
     main {
       display: grid;
-      grid-template-columns: minmax(260px, 320px) minmax(420px, 1fr) minmax(420px, 0.95fr);
-      gap: 16px;
-      padding: 16px;
-      height: calc(100vh - 72px);
+      grid-template-columns: minmax(250px, 300px) minmax(430px, 1fr) minmax(390px, 0.9fr);
+      gap: 12px;
+      padding: 12px;
+      height: calc(100vh - 60px);
     }
     .panel {
       min-height: 0;
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 6px;
       box-shadow: var(--shadow);
       overflow: hidden;
       display: flex;
       flex-direction: column;
     }
     .panel-head {
-      padding: 14px;
+      padding: 10px 12px;
       border-bottom: 1px solid var(--line);
       display: flex;
       align-items: center;
@@ -3745,15 +3745,15 @@ const UI_HTML = String.raw`<!doctype html>
       gap: 10px;
       background: #fbfcfe;
     }
-    .panel-title { margin: 0; font-size: 14px; font-weight: 700; }
-    .panel-body { padding: 14px; overflow: auto; min-height: 0; }
+    .panel-title { margin: 0; font-size: 13px; font-weight: 750; }
+    .panel-body { padding: 12px; overflow: auto; min-height: 0; }
     input, button {
       font: inherit;
       border-radius: 6px;
     }
     input {
       width: 100%;
-      padding: 9px 10px;
+      padding: 8px 9px;
       border: 1px solid var(--line);
       background: #fff;
       color: var(--text);
@@ -3762,7 +3762,7 @@ const UI_HTML = String.raw`<!doctype html>
       border: 1px solid var(--line);
       background: #fff;
       color: var(--text);
-      padding: 8px 11px;
+      padding: 7px 10px;
       cursor: pointer;
       font-weight: 650;
       white-space: nowrap;
@@ -3793,18 +3793,18 @@ const UI_HTML = String.raw`<!doctype html>
     .scenario-list {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-top: 12px;
+      gap: 4px;
+      margin-top: 10px;
     }
     .scenario-group {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 0;
     }
     .scenario-group-title {
       border: 0;
       background: transparent;
-      padding: 4px 2px 0;
+      padding: 7px 2px 5px;
       color: var(--muted);
       display: grid;
       grid-template-columns: 14px minmax(0, 1fr) max-content;
@@ -3840,35 +3840,40 @@ const UI_HTML = String.raw`<!doctype html>
       font-weight: 750;
     }
     .scenario-group.collapsed .scenario-group-items { display: none; }
+    .scenario-group-items {
+      border-left: 1px solid var(--line);
+      margin-left: 6px;
+      padding-left: 7px;
+    }
     .scenario-item {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px;
-      background: #fff;
+      border: 0;
+      border-left: 3px solid transparent;
+      border-radius: 0;
+      padding: 7px 7px 7px 9px;
+      background: transparent;
       display: block;
       text-align: left;
       width: 100%;
       min-width: 0;
       white-space: normal;
       overflow: hidden;
-      transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+      transition: border-color 120ms ease, background 120ms ease;
     }
     .scenario-item:hover { background: var(--hover); }
     .scenario-item.active {
       border-color: var(--accent);
-      background: #f8fdfa;
-      box-shadow: inset 3px 0 0 var(--accent);
+      background: #f4fbf8;
     }
     .scenario-item-head {
       display: grid;
       grid-template-columns: minmax(0, 1fr) max-content;
       align-items: start;
-      gap: 8px;
+      gap: 6px;
     }
     .scenario-name {
       display: block;
       min-width: 0;
-      font-weight: 750;
+      font-weight: 760;
       line-height: 1.25;
       white-space: nowrap;
       overflow: hidden;
@@ -3877,7 +3882,7 @@ const UI_HTML = String.raw`<!doctype html>
     .scenario-path, .muted {
       min-width: 0;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
       line-height: 1.3;
       overflow-wrap: anywhere;
       word-break: break-word;
@@ -3896,22 +3901,23 @@ const UI_HTML = String.raw`<!doctype html>
       gap: 8px;
       flex-wrap: wrap;
     }
-    .stack { display: flex; flex-direction: column; gap: 12px; }
+    .stack { display: flex; flex-direction: column; gap: 10px; }
     .section {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 12px;
-      background: #fbfcfe;
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+      padding: 10px 0 0;
+      background: transparent;
     }
     #scenarioSummary.section {
       border: 0;
       border-radius: 0;
-      padding: 2px 2px 8px;
+      padding: 0 0 2px;
       background: transparent;
     }
     .section h3 {
-      margin: 0 0 8px;
-      font-size: 13px;
+      margin: 0 0 6px;
+      font-size: 12px;
     }
     details.section {
       padding: 0;
@@ -3919,8 +3925,8 @@ const UI_HTML = String.raw`<!doctype html>
     details.section summary {
       cursor: pointer;
       list-style: none;
-      padding: 12px;
-      font-size: 13px;
+      padding: 0 0 9px;
+      font-size: 12px;
       font-weight: 750;
     }
     details.section summary:hover {
@@ -3935,23 +3941,23 @@ const UI_HTML = String.raw`<!doctype html>
       font-weight: 650;
     }
     details.section[open] summary {
-      border-bottom: 1px solid var(--line);
+      border-bottom: 0;
     }
     details.section[open] summary::after {
       content: "Hide";
     }
     .section-content {
-      padding: 12px;
+      padding: 0;
     }
     .pill {
       display: inline-flex;
       align-items: center;
       min-width: 0;
       max-width: 100%;
-      padding: 3px 8px;
+      padding: 2px 7px;
       border-radius: 999px;
       background: var(--panel-2);
-      font-size: 12px;
+      font-size: 11px;
       color: #344054;
       font-weight: 650;
       white-space: normal;
@@ -3971,29 +3977,32 @@ const UI_HTML = String.raw`<!doctype html>
     .hint.bad { color: var(--bad); }
     .steps {
       display: grid;
-      gap: 8px;
+      gap: 0;
     }
     .step {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px;
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-left: 3px solid transparent;
+      border-radius: 0;
+      padding: 8px 0 8px 9px;
       display: grid;
-      gap: 6px;
+      gap: 4px;
       min-width: 0;
     }
     .step.reused {
-      border-left: 4px solid var(--accent-2);
+      border-left-color: var(--accent-2);
+      background: #f7faff;
     }
     .step-title-row {
       align-items: start;
       display: grid;
-      gap: 8px;
+      gap: 6px;
       grid-template-columns: minmax(0, 1fr) max-content;
       min-width: 0;
     }
     .step-title {
       min-width: 0;
-      font-weight: 750;
+      font-weight: 760;
       overflow-wrap: anywhere;
       word-break: break-word;
     }
@@ -4005,8 +4014,8 @@ const UI_HTML = String.raw`<!doctype html>
       display: flex;
       align-items: flex-start;
       flex-direction: column;
-      gap: 8px;
-      padding: 12px 14px;
+      gap: 7px;
+      padding: 10px 12px;
       border-bottom: 1px solid var(--line);
       background: #fff;
     }
@@ -4016,13 +4025,14 @@ const UI_HTML = String.raw`<!doctype html>
       gap: 8px;
     }
     .run-summary {
-      background: #fbfcfe;
-      border: 1px solid var(--line);
-      border-radius: 8px;
+      background: transparent;
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
       display: grid;
       gap: 8px;
       min-width: 0;
-      padding: 9px;
+      padding: 8px 0 0;
       width: 100%;
     }
     .run-summary-grid {
@@ -4065,9 +4075,9 @@ const UI_HTML = String.raw`<!doctype html>
     .run-step-results {
       border-top: 1px solid var(--line);
       display: grid;
-      gap: 6px;
+      gap: 0;
       min-width: 0;
-      padding-top: 8px;
+      padding-top: 2px;
     }
     .run-step-result {
       align-items: start;
@@ -4075,7 +4085,9 @@ const UI_HTML = String.raw`<!doctype html>
       gap: 8px;
       grid-template-columns: minmax(0, 1fr) max-content;
       min-width: 0;
+      padding: 6px 0;
     }
+    .run-step-result + .run-step-result { border-top: 1px solid var(--line); }
     .run-step-result-main {
       display: grid;
       gap: 2px;
@@ -4101,11 +4113,12 @@ const UI_HTML = String.raw`<!doctype html>
     }
     .run-history {
       display: grid;
-      gap: 6px;
-      max-height: 148px;
+      gap: 0;
+      max-height: 122px;
       min-width: 0;
       overflow: auto;
       width: 100%;
+      border-top: 1px solid var(--line);
     }
     .run-history-empty {
       color: var(--muted);
@@ -4114,20 +4127,22 @@ const UI_HTML = String.raw`<!doctype html>
     }
     .run-history-item {
       align-items: center;
-      background: var(--panel-2);
-      border: 1px solid var(--line);
-      border-radius: 8px;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
       display: grid;
       gap: 8px;
       grid-template-columns: minmax(0, 1fr) max-content;
       min-width: 0;
-      padding: 8px 9px;
+      padding: 7px 0;
       text-align: left;
       width: 100%;
     }
+    .run-history-item + .run-history-item { border-top: 1px solid var(--line); }
     .run-history-item.active {
-      border-color: var(--accent-2);
-      box-shadow: 0 0 0 3px var(--focus);
+      background: #f7faff;
+      box-shadow: inset 3px 0 0 var(--accent-2);
+      padding-left: 8px;
     }
     .run-history-main {
       display: grid;
@@ -4153,7 +4168,7 @@ const UI_HTML = String.raw`<!doctype html>
       flex: 1;
       min-height: 0;
       overflow: auto;
-      padding: 14px;
+      padding: 12px;
       background: var(--terminal);
       color: #f3f7ff;
       font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
@@ -4168,15 +4183,20 @@ const UI_HTML = String.raw`<!doctype html>
     .terminal .ansi-green { color: #86efac; }
     .terminal .ansi-yellow { color: #fde68a; }
     .terminal .ansi-red { color: #fda4af; }
-    .server-grid { display: grid; gap: 8px; }
+    .server-grid {
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 0;
+    }
     .server {
       display: grid;
-      grid-template-columns: minmax(64px, 90px) minmax(0, 1fr) auto;
+      grid-template-columns: minmax(54px, 78px) minmax(0, 1fr) auto;
       gap: 8px;
       align-items: center;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 9px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      padding: 8px 0;
       min-width: 0;
     }
     .server > strong {
@@ -4194,9 +4214,9 @@ const UI_HTML = String.raw`<!doctype html>
     }
     .empty {
       color: var(--muted);
-      border: 1px dashed var(--line);
-      border-radius: 8px;
-      padding: 18px;
+      border: 0;
+      border-radius: 0;
+      padding: 10px 0;
       text-align: center;
     }
     @media (max-width: 1100px) {
@@ -4510,8 +4530,7 @@ const UI_HTML = String.raw`<!doctype html>
         .concat(detail.vars.map((item) => '<span class="pill">vars.' + escapeHtml(item) + '</span>'))
         .concat(detail.includes.map((item) => '<span class="pill">reuse ' + escapeHtml(item) + '</span>'));
       els.scenarioSummary.innerHTML =
-        '<div class="stack" style="gap: 8px;">' +
-          '<div><strong>' + escapeHtml(detail.name) + '</strong></div>' +
+        '<div class="stack" style="gap: 6px;">' +
           '<div class="muted">' + escapeHtml(detail.path) + '</div>' +
           '<div class="row"><span class="pill">' + detail.stepCount + (detail.stepCount === 1 ? ' step' : ' steps') + '</span></div>' +
         '</div>';
@@ -4528,7 +4547,7 @@ const UI_HTML = String.raw`<!doctype html>
       }).join('');
       const references = referencePills.length
         ? '<div><h3>References</h3><div class="row">' + referencePills.join('') + '</div></div>'
-        : '<div class="muted">No env/vars/module/reuse references detected.</div>';
+        : '';
       els.detailBody.className = 'section-content stack';
       els.detailBody.innerHTML = references + '<div><h3>Steps</h3><div class="steps">' + steps + '</div></div>';
     }
@@ -4565,9 +4584,15 @@ const UI_HTML = String.raw`<!doctype html>
 
     function formatServerMeta(module) {
       const parts = [];
-      if (module.source) parts.push(module.source);
-      if (module.httpStatus) parts.push('HTTP ' + module.httpStatus);
+      if (module.status === 'reachable') {
+        parts.push('server reachable');
+        if (typeof module.httpStatus === 'number') parts.push('/ returned HTTP ' + module.httpStatus);
+      } else if (module.status === 'unknown') {
+        parts.push('baseUrl not configured');
+      }
+      if (module.status !== 'reachable' && typeof module.httpStatus === 'number') parts.push('HTTP ' + module.httpStatus);
       if (typeof module.durationMs === 'number') parts.push(module.durationMs + 'ms');
+      if (module.source) parts.push(module.source);
       if (module.error) parts.push(module.error);
       return parts.join(' · ') || 'baseUrl not configured';
     }
