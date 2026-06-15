@@ -1774,7 +1774,11 @@ describe('openapi-k6 CLI', () => {
         id: string;
         name: string;
         includes: string[];
-        steps: Array<{ id: string; operationId?: string }>;
+        steps: Array<{
+          id: string;
+          operationId?: string;
+          source: { kind: 'direct' | 'use' | 'include'; reference?: string };
+        }>;
       };
       const dottedScenarioId = 'openapi-k6/scenarios/auth/login.v2.yaml';
       const dottedDetail = await (await fetch(`${ui.url}/api/scenario?scenario=${encodeURIComponent(dottedScenarioId)}`)).json() as {
@@ -1825,6 +1829,8 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('historyItem.text += data.chunk ||');
       expect(html).toContain('run-summary-label">Status');
       expect(html).toContain("line.startsWith('Next:')");
+      expect(html).toContain('step-source');
+      expect(html).toContain("step.source.kind !== 'direct'");
       expect(html).toContain('text-overflow: ellipsis');
       expect(html).toContain('detail.includes.map');
       expect(html).toContain('reuse ');
@@ -1853,8 +1859,16 @@ describe('openapi-k6 CLI', () => {
         name: 'use-login',
         includes: ['auth/login'],
         steps: [
-          expect.objectContaining({ id: 'health', operationId: 'getHealth' }),
-          expect.objectContaining({ id: 'second-health', operationId: 'getHealth' }),
+          expect.objectContaining({
+            id: 'health',
+            operationId: 'getHealth',
+            source: { kind: 'use', reference: 'auth/login' },
+          }),
+          expect.objectContaining({
+            id: 'second-health',
+            operationId: 'getHealth',
+            source: { kind: 'direct' },
+          }),
         ],
       });
       expect(dottedDetail).toMatchObject({

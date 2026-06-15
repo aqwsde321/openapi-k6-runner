@@ -2718,6 +2718,10 @@ async function readUiScenarioDetail(
   fixtures: string[];
   steps: Array<{
     id: string;
+    source: {
+      kind: 'direct' | 'use' | 'include';
+      reference?: string;
+    };
     module?: string;
     operationId?: string;
     method?: string;
@@ -2729,6 +2733,7 @@ async function readUiScenarioDetail(
   const scenarioPath = resolveUiScenarioPath(state, scenarioOption);
   const scenario = await parseWorkspaceScenarioFile(state.cwd, state.config, scenarioPath);
   const analysis = analyzeUiScenario(scenario);
+  const stepSources = await readUiScenarioStepSources(state, scenarioPath);
 
   return {
     id: formatUiScenarioOption(state.cwd, path.join(resolveLoadTestDir(state.cwd, state.config), 'scenarios'), scenarioPath),
@@ -2740,8 +2745,9 @@ async function readUiScenarioDetail(
     vars: analysis.vars,
     includes: await readScenarioIncludes(scenarioPath),
     fixtures: await readTopLevelStringArray(scenarioPath, 'fixtures'),
-    steps: scenario.steps.map((step) => ({
+    steps: scenario.steps.map((step, index) => ({
       id: step.id,
+      source: stepSources[index] ?? { kind: 'direct' },
       ...(step.api.module === undefined ? {} : { module: step.api.module }),
       ...(step.api.operationId === undefined ? {} : { operationId: step.api.operationId }),
       ...(step.api.method === undefined ? {} : { method: step.api.method }),
@@ -3387,6 +3393,75 @@ async function readScenarioIncludes(filePath: string): Promise<string[]> {
   });
 }
 
+interface UiScenarioStepSource {
+  kind: 'direct' | 'use' | 'include';
+  reference?: string;
+}
+
+async function readUiScenarioStepSources(state: UiState, filePath: string): Promise<UiScenarioStepSource[]> {
+  try {
+    return await readUiScenarioStepSourcesInternal(state, path.resolve(filePath), new Set());
+  } catch {
+    return [];
+  }
+}
+
+async function readUiScenarioStepSourcesInternal(
+  state: UiState,
+  filePath: string,
+  stack: Set<string>,
+): Promise<UiScenarioStepSource[]> {
+  if (stack.has(filePath)) {
+    return [];
+  }
+
+  const raw = await fs.readFile(filePath, 'utf8');
+  const parsed = parseYaml(raw);
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return [];
+  }
+
+  const steps = (parsed as Record<string, unknown>).steps;
+
+  if (!Array.isArray(steps)) {
+    return [];
+  }
+
+  const nextStack = new Set(stack);
+  nextStack.add(filePath);
+  const sources: UiScenarioStepSource[] = [];
+
+  for (const step of steps) {
+    if (!step || typeof step !== 'object' || Array.isArray(step)) {
+      sources.push({ kind: 'direct' });
+      continue;
+    }
+
+    const record = step as Record<string, unknown>;
+    const useReference = typeof record.use === 'string' ? record.use : undefined;
+    const includeReference = typeof record.include === 'string' ? record.include : undefined;
+
+    if (useReference !== undefined) {
+      const nestedPath = resolveUiScenarioPath(state, useReference);
+      const nestedSources = await readUiScenarioStepSourcesInternal(state, nestedPath, nextStack);
+      sources.push(...nestedSources.map(() => ({ kind: 'use' as const, reference: useReference })));
+      continue;
+    }
+
+    if (includeReference !== undefined) {
+      const nestedPath = path.resolve(path.dirname(filePath), includeReference);
+      const nestedSources = await readUiScenarioStepSourcesInternal(state, nestedPath, nextStack);
+      sources.push(...nestedSources.map(() => ({ kind: 'include' as const, reference: includeReference })));
+      continue;
+    }
+
+    sources.push({ kind: 'direct' });
+  }
+
+  return sources;
+}
+
 async function readUiJsonBody(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   let totalLength = 0;
@@ -3845,11 +3920,25 @@ const UI_HTML = String.raw`<!doctype html>
       gap: 6px;
       min-width: 0;
     }
+    .step.reused {
+      border-left: 4px solid var(--accent-2);
+    }
+    .step-title-row {
+      align-items: start;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      min-width: 0;
+    }
     .step-title {
       min-width: 0;
       font-weight: 750;
       overflow-wrap: anywhere;
       word-break: break-word;
+    }
+    .step-source {
+      align-self: start;
+      font-size: 11px;
     }
     .actions {
       display: flex;
@@ -4331,7 +4420,13 @@ const UI_HTML = String.raw`<!doctype html>
       const steps = detail.steps.map((step) => {
         const api = step.operationId || ((step.method || '') + ' ' + (step.path || '')).trim();
         const extract = step.extract && step.extract.length ? '<div class="muted">extract: ' + escapeHtml(step.extract.join(', ')) + '</div>' : '';
-        return '<div class="step"><div class="step-title">' + escapeHtml(step.id) + '</div><div class="muted">' + escapeHtml(api || 'api') + '</div>' + extract + '</div>';
+        const sourceText = step.source && step.source.kind !== 'direct'
+          ? step.source.kind + ' ' + (step.source.reference || '')
+          : 'direct';
+        const reused = step.source && step.source.kind !== 'direct';
+        return '<div class="step ' + (reused ? 'reused' : '') + '">' +
+          '<div class="step-title-row"><div class="step-title">' + escapeHtml(step.id) + '</div><span class="pill step-source">' + escapeHtml(sourceText) + '</span></div>' +
+          '<div class="muted">' + escapeHtml(api || 'api') + '</div>' + extract + '</div>';
       }).join('');
       const references = referencePills.length
         ? '<div><h3>References</h3><div class="row">' + referencePills.join('') + '</div></div>'
