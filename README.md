@@ -385,6 +385,8 @@ npx --yes openapi-k6 update
 ```
 
 - `ui`: 브라우저에서 scenario를 고르고 `validate`/`test`를 실행합니다.
+  폴더별 scenario는 접어서 볼 수 있고, Scenario details는 각 step이 `direct`, `use auth/login`, `include ...` 중 어디서 온 것인지 표시합니다.
+  `test` 실행 결과는 Run Summary에서 step별 pass/fail, HTTP status, duration, source를 함께 보여줍니다.
 - `doctor`: config, snapshot, catalog, scaffold metadata, module env 충돌, k6 설치 여부를 점검합니다.
 - `update`: 기존 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog, `generated/`, `logs/`를 보존하고 scaffold 파일만 갱신합니다.
 

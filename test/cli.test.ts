@@ -472,6 +472,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('기존 partial include 또는 scenario use 재사용 여부');
     expect(readme).toContain('사용자가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 `openapi-k6/scenarios/**/*.yaml`을 작성하거나 수정합니다.');
     expect(readme).toContain('폴더는 UI 카테고리로 사용합니다. 예: `openapi-k6/scenarios/auth/login.yaml`은 `-s auth/login`으로 실행합니다.');
+    expect(readme).toContain('UI는 `scenarios/` 아래 폴더를 그룹으로 보여주고, Scenario details에서 각 step의 출처를 `direct`, `use auth/login`, `include ...`로 표시합니다.');
+    expect(readme).toContain('`test` 실행 결과는 Run Summary에서 step별 pass/fail, HTTP status, duration, source를 함께 보여줍니다.');
+    expect(readme).toContain('UI에서 폴더는 접고 펼칠 수 있으며, 재사용된 step은 Scenario details와 Run Summary에서 `use auth/login` 또는 `include ...` 출처가 표시됩니다.');
     expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 남아 있으면 `validate`가 실패합니다.');
     expect(readme).toContain('값 우선순위는 `fixtures:` < `vars:` < CLI `--var-file` < CLI `--var`입니다.');
     expect(readme).toContain('include 파일에는 `steps:`만 둡니다.');
