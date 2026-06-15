@@ -42,6 +42,7 @@
     "test:compat": "node scripts/backward-compat-smoke.mjs",
     "smoke:e2e": "node scripts/e2e-local-backend-smoke.mjs",
     "smoke:published": "node scripts/published-smoke.mjs",
+    "sample:ui": "node scripts/ui-sample-workspace.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
