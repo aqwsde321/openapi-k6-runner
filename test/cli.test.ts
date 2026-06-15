@@ -1700,7 +1700,7 @@ describe('openapi-k6 CLI', () => {
         '  - id: health',
         '    api:',
         '      operationId: getHealth',
-        '    condition: status == 200',
+        '    condition: status == 201',
         '',
       ].join('\n'),
       'utf8',
@@ -1804,6 +1804,12 @@ describe('openapi-k6 CLI', () => {
         body: JSON.stringify({ command: 'test', scenario: 'smoke' }),
       })).json() as { runId: string };
       const testEvents = await (await fetch(`${ui.url}/api/runs/${testRun.runId}/events`)).text();
+      const useTestRun = await (await fetch(`${ui.url}/api/run`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ command: 'test', scenario: 'order/use-login' }),
+      })).json() as { runId: string };
+      const useTestEvents = await (await fetch(`${ui.url}/api/runs/${useTestRun.runId}/events`)).text();
 
       expect(html).toContain('openapi-k6 UI');
       expect(html).toContain('ansi-green');
@@ -1829,6 +1835,10 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('historyItem.text += data.chunk ||');
       expect(html).toContain('run-summary-label">Status');
       expect(html).toContain("line.startsWith('Next:')");
+      expect(html).toContain("events.addEventListener('test-result'");
+      expect(html).toContain('historyItem.stepResults = Array.isArray(data.steps) ? data.steps : [];');
+      expect(html).toContain('run-step-results');
+      expect(html).toContain('formatStepSource');
       expect(html).toContain('step-source');
       expect(html).toContain("step.source.kind !== 'direct'");
       expect(html).toContain('text-overflow: ellipsis');
@@ -1886,7 +1896,16 @@ describe('openapi-k6 CLI', () => {
       expect(testEvents).toContain('\\u001b[32m');
       expect(testEvents).toContain('<span class=\\"ansi-green\\">');
       expect(testEvents).toContain('"status":"passed"');
-      expect(reportedScenarios).toEqual(['smoke']);
+      expect(testEvents).toContain('event: test-result');
+      expect(testEvents).toContain('"id":"health"');
+      expect(testEvents).toContain('"source":{"kind":"direct"}');
+      expect(useTestEvents).toContain('$ openapi-k6 test');
+      expect(useTestEvents).toContain('event: test-result');
+      expect(useTestEvents).toContain('"status":"failed"');
+      expect(useTestEvents).toContain('"id":"health"');
+      expect(useTestEvents).toContain('"source":{"kind":"use","reference":"auth/login"}');
+      expect(useTestEvents).toContain('"responseStatus":200');
+      expect(reportedScenarios).toEqual(['smoke', 'use-login']);
     } finally {
       await ui.close();
     }

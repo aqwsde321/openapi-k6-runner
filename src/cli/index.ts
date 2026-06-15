@@ -2595,6 +2595,7 @@ interface UiRunRecord {
   status: UiRunStatus;
   exitCode?: number;
   chunks: UiRunChunk[];
+  testResult?: UiRunTestResult;
   clients: Set<ServerResponse>;
   ansiHtmlState: AnsiHtmlState;
 }
@@ -2603,6 +2604,24 @@ interface UiRunChunk {
   stream: 'stdout' | 'stderr';
   chunk: string;
   html: string;
+}
+
+interface UiRunTestResult {
+  scenario: string;
+  status: 'passed' | 'failed';
+  durationMs: number;
+  steps: UiRunStepResult[];
+}
+
+interface UiRunStepResult {
+  index: number;
+  id: string;
+  status: 'passed' | 'failed';
+  durationMs: number;
+  source: UiScenarioStepSource;
+  method: string;
+  path: string;
+  responseStatus?: number;
 }
 
 async function handleUiRequest(
@@ -2872,6 +2891,9 @@ async function runUiCliCommand(
   payload: { command: 'validate' | 'test'; scenario: string; varFile: string[]; vars: string[] },
 ): Promise<void> {
   const scenarioPath = resolveUiScenarioPath(state, payload.scenario);
+  const stepSources = payload.command === 'test'
+    ? await readUiScenarioStepSources(state, scenarioPath)
+    : [];
   const args = [
     payload.command,
     '--scenario',
@@ -2887,7 +2909,11 @@ async function runUiCliCommand(
   const stdout = createUiRunWritable(run, 'stdout');
   const stderr = createUiRunWritable(run, 'stderr');
   const testReporter = payload.command === 'test'
-    ? createUiScenarioReporter(stdout, state.context.testReporter)
+    ? createUiScenarioReporter(stdout, state.context.testReporter, {
+        onScenarioEnd(result) {
+          appendUiRunTestResult(run, createUiRunTestResult(result, stepSources));
+        },
+      })
     : state.context.testReporter;
 
   try {
@@ -2961,18 +2987,49 @@ function appendUiRunChunk(run: UiRunRecord, stream: 'stdout' | 'stderr', chunk: 
   writeUiRunEvent(run, 'chunk', event);
 }
 
+function appendUiRunTestResult(run: UiRunRecord, result: UiRunTestResult): void {
+  run.testResult = result;
+  writeUiRunEvent(run, 'test-result', result);
+}
+
+function createUiRunTestResult(
+  result: ScenarioExecutionResult,
+  stepSources: UiScenarioStepSource[],
+): UiRunTestResult {
+  return {
+    scenario: result.scenario,
+    status: result.passed ? 'passed' : 'failed',
+    durationMs: Math.round(result.durationMs),
+    steps: result.steps.map((step) => ({
+      index: step.index,
+      id: step.id,
+      status: step.passed ? 'passed' : 'failed',
+      durationMs: Math.round(step.durationMs),
+      source: stepSources[step.index] ?? { kind: 'direct' },
+      method: step.method,
+      path: step.path,
+      ...(step.response === undefined ? {} : { responseStatus: step.response.status }),
+    })),
+  };
+}
+
 function createUiScenarioReporter(
   stdout: WritableLike,
   injectedReporter: ScenarioExecutionReporter | undefined,
+  resultReporter?: ScenarioExecutionReporter,
 ): ScenarioExecutionReporter {
-  const uiReporter = createScenarioConsoleReporter(stdout, {
+  let reporter = createScenarioConsoleReporter(stdout, {
     color: true,
     live: false,
   });
 
-  return injectedReporter === undefined
-    ? uiReporter
-    : teeScenarioReporters(uiReporter, injectedReporter);
+  if (injectedReporter !== undefined) {
+    reporter = teeScenarioReporters(reporter, injectedReporter);
+  }
+
+  return resultReporter === undefined
+    ? reporter
+    : teeScenarioReporters(reporter, resultReporter);
 }
 
 function teeScenarioReporters(
@@ -3034,6 +3091,10 @@ function streamUiRunEvents(state: UiState, runId: string, response: ServerRespon
 
   for (const chunk of run.chunks) {
     writeSseEvent(response, 'chunk', chunk);
+  }
+
+  if (run.testResult !== undefined) {
+    writeSseEvent(response, 'test-result', run.testResult);
   }
 
   if (run.status !== 'running') {
@@ -4001,6 +4062,43 @@ const UI_HTML = String.raw`<!doctype html>
     }
     .run-summary-message .error { color: var(--bad); }
     .run-summary-message .next { color: var(--warn); }
+    .run-step-results {
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      padding-top: 8px;
+    }
+    .run-step-result {
+      align-items: start;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      min-width: 0;
+    }
+    .run-step-result-main {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .run-step-result-title {
+      font-size: 12px;
+      font-weight: 750;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .run-step-result-meta {
+      color: var(--muted);
+      font-size: 11px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .run-step-result-source {
+      font-size: 11px;
+      justify-self: end;
+    }
     .run-history {
       display: grid;
       gap: 6px;
@@ -4520,6 +4618,37 @@ const UI_HTML = String.raw`<!doctype html>
       return { error, next };
     }
 
+    function formatStepSource(source) {
+      if (!source || source.kind === 'direct') return 'direct';
+      return source.kind + ' ' + (source.reference || '');
+    }
+
+    function formatStepResultMeta(step) {
+      const parts = [];
+      const api = ((step.method || '') + ' ' + (step.path || '')).trim();
+      if (api) parts.push(api);
+      if (typeof step.responseStatus === 'number') parts.push('HTTP ' + step.responseStatus);
+      if (typeof step.durationMs === 'number') parts.push(Math.round(step.durationMs) + 'ms');
+      return parts.join(' · ');
+    }
+
+    function renderRunStepResults(item) {
+      if (!item.stepResults || item.stepResults.length === 0) return '';
+
+      return '<div class="run-step-results">' + item.stepResults.map((step) => {
+        const index = typeof step.index === 'number' ? step.index + 1 : '';
+        const title = (index ? index + '. ' : '') + step.id;
+        const status = step.status || 'unknown';
+        return '<div class="run-step-result">' +
+          '<span class="run-step-result-main">' +
+            '<span class="run-step-result-title">' + escapeHtml(title) + ' <span class="pill' + statusTone(status) + '">' + escapeHtml(status) + '</span></span>' +
+            '<span class="run-step-result-meta">' + escapeHtml(formatStepResultMeta(step)) + '</span>' +
+          '</span>' +
+          '<span class="pill run-step-result-source">' + escapeHtml(formatStepSource(step.source)) + '</span>' +
+        '</div>';
+      }).join('') + '</div>';
+    }
+
     function renderRunSummary() {
       const item = state.runHistory.find((candidate) => candidate.id === state.activeOutputRunId);
       if (!item) {
@@ -4545,7 +4674,8 @@ const UI_HTML = String.raw`<!doctype html>
           '<div class="run-summary-cell"><div class="run-summary-label">Exit</div><div class="run-summary-value">' + escapeHtml(exitCode) + '</div></div>' +
           '<div class="run-summary-cell"><div class="run-summary-label">Duration</div><div class="run-summary-value">' + escapeHtml(duration) + '</div></div>' +
         '</div>' +
-        message;
+        message +
+        renderRunStepResults(item);
     }
 
     function renderRunHistory() {
@@ -4621,7 +4751,8 @@ const UI_HTML = String.raw`<!doctype html>
         finishedAt: null,
         exitCode: null,
         html: '',
-        text: ''
+        text: '',
+        stepResults: []
       };
       state.runHistory.unshift(historyItem);
       state.runHistory = state.runHistory.slice(0, 20);
@@ -4642,6 +4773,13 @@ const UI_HTML = String.raw`<!doctype html>
         historyItem.text += data.chunk || '';
         if (state.activeOutputRunId === result.runId) {
           appendOutputChunk(data);
+          renderRunSummary();
+        }
+      });
+      events.addEventListener('test-result', (event) => {
+        const data = JSON.parse(event.data);
+        historyItem.stepResults = Array.isArray(data.steps) ? data.steps : [];
+        if (state.activeOutputRunId === result.runId) {
           renderRunSummary();
         }
       });
