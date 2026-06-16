@@ -3719,6 +3719,70 @@ const UI_HTML = String.raw`<!doctype html>
       max-width: 820px;
       min-width: 0;
     }
+    .server-status {
+      display: inline-flex;
+      position: relative;
+    }
+    .server-status-summary {
+      align-items: center;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      display: inline-flex;
+      gap: 10px;
+      min-height: 28px;
+      padding: 3px 9px;
+    }
+    .server-count {
+      align-items: center;
+      color: var(--muted);
+      display: inline-flex;
+      font-size: 12px;
+      font-weight: 800;
+      gap: 4px;
+      line-height: 1;
+    }
+    .server-dot {
+      border-radius: 999px;
+      display: inline-block;
+      height: 8px;
+      width: 8px;
+    }
+    .server-dot.ok { background: var(--ok); }
+    .server-dot.bad { background: var(--bad); }
+    .server-popover {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      box-shadow: 0 12px 28px rgba(16, 24, 40, 0.14);
+      display: none;
+      gap: 8px;
+      max-width: calc(100vw - 24px);
+      padding: 10px;
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      width: 420px;
+      z-index: 10;
+    }
+    .server-status:hover .server-popover,
+    .server-status:focus-within .server-popover {
+      display: grid;
+    }
+    .server-popover-head {
+      align-items: center;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+    }
+    .icon-button {
+      align-items: center;
+      display: inline-grid;
+      height: 30px;
+      justify-content: center;
+      padding: 0;
+      width: 30px;
+    }
     main {
       display: grid;
       grid-template-columns: minmax(250px, 300px) minmax(430px, 1fr) minmax(390px, 0.9fr);
@@ -3936,14 +4000,6 @@ const UI_HTML = String.raw`<!doctype html>
     .section-heading h3 {
       margin: 0;
     }
-    .section-actions {
-      align-items: center;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      justify-content: flex-end;
-      min-width: 0;
-    }
     .section-content {
       padding: 0;
     }
@@ -4157,6 +4213,8 @@ const UI_HTML = String.raw`<!doctype html>
       border-top: 1px solid var(--line);
       display: grid;
       gap: 0;
+      max-height: 320px;
+      overflow: auto;
     }
     .server {
       display: grid;
@@ -4200,7 +4258,6 @@ const UI_HTML = String.raw`<!doctype html>
         align-items: start;
         grid-template-columns: 1fr;
       }
-      .section-actions { justify-content: flex-start; }
       .terminal { min-height: 360px; }
     }
     @media (max-height: 560px) and (min-width: 1101px) {
@@ -4221,6 +4278,20 @@ const UI_HTML = String.raw`<!doctype html>
     </div>
     <div class="row header-meta">
       <span id="configPath" class="pill">불러오는 중</span>
+      <div id="serverStatus" class="server-status" tabindex="0" aria-label="서버 상태">
+        <div id="serverStatusSummary" class="server-status-summary">
+          <span class="server-count"><span class="server-dot ok" aria-hidden="true"></span><span id="serverConnectedCount">0</span></span>
+          <span class="server-count"><span class="server-dot bad" aria-hidden="true"></span><span id="serverIssueCount">0</span></span>
+        </div>
+        <div class="server-popover">
+          <div class="server-popover-head">
+            <strong>서버 상태</strong>
+            <button id="checkServersBtn" class="icon-button" type="button" title="서버 다시 확인" aria-label="서버 다시 확인">↻</button>
+          </div>
+          <span id="serverCheckedAt" class="muted"></span>
+          <div id="serverList" class="server-grid"><div class="empty">서버 확인 전</div></div>
+        </div>
+      </div>
       <button id="refreshBtn">새로고침</button>
     </div>
   </header>
@@ -4249,16 +4320,6 @@ const UI_HTML = String.raw`<!doctype html>
             <h3>최근 실행 결과</h3>
           </div>
           <div id="runSummary" class="run-summary"><div class="muted">실행 기록 없음</div></div>
-        </div>
-        <div class="section">
-          <div class="section-heading">
-            <h3>대상 서버</h3>
-            <div class="section-actions">
-              <button id="checkServersBtn">서버 확인</button>
-              <span id="serverCheckedAt" class="muted"></span>
-            </div>
-          </div>
-          <div id="serverList" class="server-grid"></div>
         </div>
         <div class="section">
           <div id="detailBody" class="section-content empty">왼쪽에서 시나리오를 선택하세요.</div>
@@ -4292,7 +4353,7 @@ const UI_HTML = String.raw`<!doctype html>
       lastRun: new Map(),
       runsByScenario: new Map(),
       activeOutputRunId: null,
-      serverSummary: { checked: false, failedServers: 0, missingSnapshots: 0 }
+      serverSummary: { checked: false, moduleCount: 0, connectedServers: 0, failedServers: 0, missingSnapshots: 0, issueModules: 0 }
     };
 
     const els = {
@@ -4305,6 +4366,9 @@ const UI_HTML = String.raw`<!doctype html>
       detailStatus: document.getElementById('detailStatus'),
       scenarioSummary: document.getElementById('scenarioSummary'),
       detailBody: document.getElementById('detailBody'),
+      serverStatusSummary: document.getElementById('serverStatusSummary'),
+      serverConnectedCount: document.getElementById('serverConnectedCount'),
+      serverIssueCount: document.getElementById('serverIssueCount'),
       checkServersBtn: document.getElementById('checkServersBtn'),
       serverCheckedAt: document.getElementById('serverCheckedAt'),
       serverList: document.getElementById('serverList'),
@@ -4571,10 +4635,12 @@ const UI_HTML = String.raw`<!doctype html>
     async function checkServers() {
       setStatus(els.runStatus, 'checking');
       els.serverList.innerHTML = '<div class="empty">서버 확인 중...</div>';
+      els.serverCheckedAt.textContent = '확인 중';
       try {
         const result = await fetchJson('/api/check-servers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
-        els.serverCheckedAt.textContent = new Date(result.checkedAt).toLocaleTimeString();
         state.serverSummary = summarizeServerResult(result);
+        updateServerStatusSummary();
+        els.serverCheckedAt.textContent = formatServerStatusSummaryText(state.serverSummary) + ' · ' + new Date(result.checkedAt).toLocaleTimeString();
         els.serverList.innerHTML = result.modules.map((module) => {
           const snapshot = module.snapshot || { status: 'missing', error: 'snapshot unknown' };
           const serverMeta = formatServerMeta(module);
@@ -4582,8 +4648,11 @@ const UI_HTML = String.raw`<!doctype html>
           return '<div class="server"><strong>' + escapeHtml(module.name) + '</strong><div class="server-lines"><div>' + escapeHtml(module.baseUrl || 'baseUrl 미설정') + '</div><div class="muted">' + escapeHtml(serverMeta) + '</div><div class="muted">' + escapeHtml(snapshotMeta) + '</div></div><span class="pill' + statusTone(module.status) + '">' + escapeHtml(formatStatusLabel(module.status)) + '</span></div>';
         }).join('');
       } catch (error) {
-        state.serverSummary = { checked: false, failedServers: 0, missingSnapshots: 0 };
+        state.serverSummary = { checked: false, moduleCount: 0, connectedServers: 0, failedServers: 1, missingSnapshots: 0, issueModules: 1 };
+        updateServerStatusSummary();
+        els.serverStatusSummary.title = '서버 확인 실패';
         els.serverList.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
+        els.serverCheckedAt.textContent = '확인 실패';
       } finally {
         setStatus(els.runStatus, 'idle');
         updateRunHint();
@@ -4591,11 +4660,30 @@ const UI_HTML = String.raw`<!doctype html>
     }
 
     function summarizeServerResult(result) {
+      const modules = result.modules || [];
       return {
         checked: true,
-        failedServers: result.modules.filter((module) => module.status === 'failed' || module.status === 'unknown').length,
-        missingSnapshots: result.modules.filter((module) => !module.snapshot || module.snapshot.status !== 'present').length
+        moduleCount: modules.length,
+        connectedServers: modules.filter((module) => module.status === 'reachable').length,
+        failedServers: modules.filter((module) => module.status === 'failed' || module.status === 'unknown').length,
+        missingSnapshots: modules.filter((module) => !module.snapshot || module.snapshot.status !== 'present').length,
+        issueModules: modules.filter((module) => module.status !== 'reachable' || !module.snapshot || module.snapshot.status !== 'present').length
       };
+    }
+
+    function updateServerStatusSummary() {
+      els.serverConnectedCount.textContent = String(state.serverSummary.connectedServers || 0);
+      els.serverIssueCount.textContent = String(state.serverSummary.issueModules || 0);
+      els.serverStatusSummary.title = state.serverSummary.checked
+        ? formatServerStatusSummaryText(state.serverSummary)
+        : '서버 확인 전';
+    }
+
+    function formatServerStatusSummaryText(summary) {
+      const modules = summary.moduleCount === 1 ? '1 module' : summary.moduleCount + ' modules';
+      const connected = summary.connectedServers === 1 ? '1 connected' : summary.connectedServers + ' connected';
+      const missing = summary.missingSnapshots === 1 ? '1 missing snapshot' : summary.missingSnapshots + ' missing snapshots';
+      return modules + ' · ' + connected + ' · ' + missing;
     }
 
     function formatServerMeta(module) {

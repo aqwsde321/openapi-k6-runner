@@ -1824,6 +1824,11 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('<button id="validateBtn" class="blue" disabled>validate</button>');
       expect(html).toContain('<button id="testBtn" class="primary" disabled>test</button>');
       expect(html).toContain('<button id="clearBtn">clear</button>');
+      expect(html).toContain('id="serverStatusSummary"');
+      expect(html).toContain('id="serverConnectedCount"');
+      expect(html).toContain('id="serverIssueCount"');
+      expect(html).toContain('class="server-popover"');
+      expect(html).toContain('title="서버 다시 확인"');
       expect(html).toContain('openapi-k6.ui.collapsedScenarioGroups');
       expect(html).toContain('toggleScenarioGroup');
       expect(html).toContain('const collapsed = !query && state.collapsedGroups.has(group.name);');
@@ -1842,7 +1847,12 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('id="runSummary"');
       expect(html).toContain('renderRunSummary');
       expect(html).toContain('<h3>최근 실행 결과</h3>');
-      expect(html.indexOf('id="runSummary"')).toBeLessThan(html.indexOf('id="checkServersBtn"'));
+      expect(html).not.toContain('<h3>대상 서버</h3>');
+      expect(html.indexOf('id="checkServersBtn"')).toBeLessThan(html.indexOf('<main>'));
+      expect(html).toContain('updateServerStatusSummary');
+      expect(html).toContain('formatServerStatusSummaryText');
+      expect(html).toContain("summary.moduleCount + ' modules'");
+      expect(html).toContain('issueModules');
       expect(html).toContain('summarizeRunText');
       expect(html).toContain('renderRunMessage');
       expect(html).toContain('실패 지점: ');
