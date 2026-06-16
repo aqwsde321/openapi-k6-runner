@@ -4032,10 +4032,35 @@ const UI_HTML = String.raw`<!doctype html>
       padding: 0;
       width: 100%;
     }
+    .run-result {
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+      padding: 0 0 8px;
+    }
+    .run-result + .run-result {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+    }
+    .run-result-title-row {
+      align-items: center;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      min-width: 0;
+    }
+    .run-result-title {
+      font-size: 13px;
+      font-weight: 780;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .run-summary-grid {
       display: grid;
       gap: 6px;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       min-width: 0;
     }
     .run-summary-cell {
@@ -4107,58 +4132,6 @@ const UI_HTML = String.raw`<!doctype html>
     .run-step-result-source {
       font-size: 11px;
       justify-self: end;
-    }
-    .run-history {
-      display: grid;
-      gap: 0;
-      max-height: 122px;
-      min-width: 0;
-      overflow: auto;
-      width: 100%;
-      border-top: 1px solid var(--line);
-    }
-    .run-history-empty {
-      color: var(--muted);
-      font-size: 12px;
-      padding: 6px 0;
-    }
-    .run-history-item {
-      align-items: center;
-      background: transparent;
-      border: 0;
-      border-radius: 0;
-      display: grid;
-      gap: 8px;
-      grid-template-columns: minmax(0, 1fr) max-content;
-      min-width: 0;
-      padding: 7px 0;
-      text-align: left;
-      width: 100%;
-    }
-    .run-history-item + .run-history-item { border-top: 1px solid var(--line); }
-    .run-history-item.active {
-      background: #f7faff;
-      box-shadow: inset 3px 0 0 var(--accent-2);
-      padding-left: 8px;
-    }
-    .run-history-main {
-      display: grid;
-      gap: 2px;
-      min-width: 0;
-    }
-    .run-history-title {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .run-history-meta {
-      color: var(--muted);
-      font-size: 11px;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
     }
     .terminal {
       margin: 0;
@@ -4304,7 +4277,6 @@ const UI_HTML = String.raw`<!doctype html>
           <button id="clearBtn">clear</button>
         </div>
         <span id="runHint" class="hint">시나리오를 선택하세요.</span>
-        <div id="runHistory" class="run-history"><div class="run-history-empty">실행 기록 없음</div></div>
       </div>
       <pre id="output" class="terminal">시나리오를 선택한 뒤 검증/실행하세요.</pre>
     </section>
@@ -4318,7 +4290,7 @@ const UI_HTML = String.raw`<!doctype html>
       detail: null,
       collapsedGroups: readCollapsedScenarioGroups(),
       lastRun: new Map(),
-      runHistory: [],
+      runsByScenario: new Map(),
       activeOutputRunId: null,
       serverSummary: { checked: false, failedServers: 0, missingSnapshots: 0 }
     };
@@ -4342,8 +4314,7 @@ const UI_HTML = String.raw`<!doctype html>
       output: document.getElementById('output'),
       runStatus: document.getElementById('runStatus'),
       runHint: document.getElementById('runHint'),
-      runSummary: document.getElementById('runSummary'),
-      runHistory: document.getElementById('runHistory')
+      runSummary: document.getElementById('runSummary')
     };
 
     function escapeHtml(value) {
@@ -4536,9 +4507,9 @@ const UI_HTML = String.raw`<!doctype html>
 
     async function selectScenario(id) {
       state.selected = id;
-      const activeItem = state.runHistory.find((candidate) => candidate.id === state.activeOutputRunId);
+      const activeItem = findRunById(state.activeOutputRunId);
       if (!activeItem || activeItem.scenario !== id) {
-        const latestItem = state.runHistory.find((candidate) => candidate.scenario === id);
+        const latestItem = getLatestScenarioRun(id);
         state.activeOutputRunId = latestItem ? latestItem.id : null;
         if (latestItem) {
           els.output.innerHTML = latestItem.html || '';
@@ -4659,6 +4630,37 @@ const UI_HTML = String.raw`<!doctype html>
       return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString();
     }
 
+    function getScenarioRuns(scenarioId) {
+      return state.runsByScenario.get(scenarioId) || {};
+    }
+
+    function saveScenarioRun(item) {
+      const runs = Object.assign({}, getScenarioRuns(item.scenario));
+      runs[item.command] = item;
+      state.runsByScenario.set(item.scenario, runs);
+    }
+
+    function findRunById(runId) {
+      if (!runId) return null;
+      for (const runs of state.runsByScenario.values()) {
+        for (const item of [runs.validate, runs.test]) {
+          if (item && item.id === runId) return item;
+        }
+      }
+      return null;
+    }
+
+    function getLatestScenarioRun(scenarioId) {
+      const runs = getScenarioRuns(scenarioId);
+      const items = [runs.validate, runs.test].filter(Boolean);
+      items.sort((left, right) => {
+        const leftTime = Date.parse(left.finishedAt || left.startedAt || '');
+        const rightTime = Date.parse(right.finishedAt || right.startedAt || '');
+        return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+      });
+      return items[0] || null;
+    }
+
     function formatRunDuration(item) {
       const startedAt = Date.parse(item.startedAt);
       const finishedAt = item.finishedAt ? Date.parse(item.finishedAt) : Date.now();
@@ -4742,67 +4744,50 @@ const UI_HTML = String.raw`<!doctype html>
       '</div>';
     }
 
-    function renderRunSummary() {
-      const item = state.runHistory.find((candidate) => candidate.id === state.activeOutputRunId);
-      if (!item) {
-        els.runSummary.innerHTML = '<div class="muted">이 시나리오 실행 기록 없음</div>';
-        return;
-      }
+    function formatRunResultTitle(item) {
+      const command = item.command === 'validate' ? '검증' : item.command === 'test' ? '테스트' : formatCommandLabel(item.command);
+      if (item.status === 'passed') return command + ' 통과';
+      if (item.status === 'failed') return command + ' 실패';
+      if (item.status === 'running') return command + ' 중';
+      return command + ' ' + formatStatusLabel(item.status);
+    }
 
+    function renderRunResult(item) {
       const summary = summarizeRunText(item.text);
       const duration = formatRunDuration(item);
       const exitCode = item.exitCode === null || item.exitCode === undefined ? '-' : String(item.exitCode);
       const message = renderRunMessage(item, summary);
 
-      els.runSummary.innerHTML =
+      return '<div class="run-result">' +
+        '<div class="run-result-title-row">' +
+          '<div class="run-result-title">' + escapeHtml(formatRunResultTitle(item)) + '</div>' +
+          '<span class="pill' + statusTone(item.status) + '">' + escapeHtml(formatStatusLabel(item.status)) + '</span>' +
+        '</div>' +
         '<div class="run-summary-grid">' +
-          '<div class="run-summary-cell"><div class="run-summary-label">시나리오</div><div class="run-summary-value">' + escapeHtml(item.scenario) + '</div></div>' +
           '<div class="run-summary-cell"><div class="run-summary-label">작업</div><div class="run-summary-value">' + escapeHtml(formatCommandLabel(item.command)) + '</div></div>' +
-          '<div class="run-summary-cell"><div class="run-summary-label">결과</div><div class="run-summary-value">' + escapeHtml(formatStatusLabel(item.status)) + '</div></div>' +
           '<div class="run-summary-cell"><div class="run-summary-label">종료코드</div><div class="run-summary-value">' + escapeHtml(exitCode) + '</div></div>' +
           '<div class="run-summary-cell"><div class="run-summary-label">소요시간</div><div class="run-summary-value">' + escapeHtml(duration) + '</div></div>' +
+          '<div class="run-summary-cell"><div class="run-summary-label">시각</div><div class="run-summary-value">' + escapeHtml(formatRunHistoryTime(item.finishedAt || item.startedAt)) + '</div></div>' +
         '</div>' +
         message +
-        renderRunStepResults(item);
+        renderRunStepResults(item) +
+      '</div>';
     }
 
-    function renderRunHistory() {
-      if (state.runHistory.length === 0) {
-        els.runHistory.innerHTML = '<div class="run-history-empty">실행 기록 없음</div>';
+    function renderRunSummary() {
+      if (!state.selected) {
+        els.runSummary.innerHTML = '<div class="muted">이 시나리오 실행 기록 없음</div>';
         return;
       }
 
-      els.runHistory.innerHTML = state.runHistory.map((item) => {
-        const active = state.activeOutputRunId === item.id;
-        const title = formatCommandLabel(item.command) + ' ' + item.scenarioName;
-        const meta = item.scenario + ' - ' + formatRunHistoryTime(item.startedAt);
-        return '<button class="run-history-item ' + (active ? 'active' : '') + '" type="button" data-run-id="' + escapeHtml(item.id) + '" aria-current="' + String(active) + '">' +
-          '<span class="run-history-main">' +
-            '<span class="run-history-title">' + escapeHtml(title) + '</span>' +
-            '<span class="run-history-meta">' + escapeHtml(meta) + '</span>' +
-          '</span>' +
-          '<span class="pill' + statusTone(item.status) + '">' + escapeHtml(formatStatusLabel(item.status)) + '</span>' +
-        '</button>';
-      }).join('');
-
-      for (const item of els.runHistory.querySelectorAll('.run-history-item')) {
-        item.addEventListener('click', () => { void showRunHistoryItem(item.getAttribute('data-run-id')); });
+      const runs = getScenarioRuns(state.selected);
+      const items = [runs.validate, runs.test].filter(Boolean);
+      if (items.length === 0) {
+        els.runSummary.innerHTML = '<div class="muted">이 시나리오 실행 기록 없음</div>';
+        return;
       }
-    }
 
-    async function showRunHistoryItem(runId) {
-      const item = state.runHistory.find((candidate) => candidate.id === runId);
-      if (!item) return;
-      state.activeOutputRunId = item.id;
-      els.output.innerHTML = item.html || '';
-      els.output.scrollTop = els.output.scrollHeight;
-      setStatus(els.runStatus, item.status);
-      if (item.scenario !== state.selected) {
-        await selectScenario(item.scenario);
-      } else {
-        renderRunSummary();
-        renderRunHistory();
-      }
+      els.runSummary.innerHTML = items.map(renderRunResult).join('');
     }
 
     function clearRunOutput() {
@@ -4810,7 +4795,6 @@ const UI_HTML = String.raw`<!doctype html>
       resetOutput();
       setStatus(els.runStatus, 'idle');
       renderRunSummary();
-      renderRunHistory();
     }
 
     async function runCommand(command) {
@@ -4833,7 +4817,7 @@ const UI_HTML = String.raw`<!doctype html>
         return;
       }
 
-      const historyItem = {
+      const runItem = {
         id: result.runId,
         command,
         scenario: runScenario,
@@ -4846,8 +4830,7 @@ const UI_HTML = String.raw`<!doctype html>
         text: '',
         stepResults: []
       };
-      state.runHistory.unshift(historyItem);
-      state.runHistory = state.runHistory.slice(0, 20);
+      saveScenarioRun(runItem);
       state.activeOutputRunId = result.runId;
       state.lastRun.set(runScenario, 'running');
       if (state.selected === runScenario) {
@@ -4855,62 +4838,61 @@ const UI_HTML = String.raw`<!doctype html>
       }
       renderScenarioList();
       renderRunSummary();
-      renderRunHistory();
 
       const events = new EventSource('/api/runs/' + encodeURIComponent(result.runId) + '/events');
       events.addEventListener('chunk', (event) => {
         const data = JSON.parse(event.data);
         const html = data.html !== undefined ? data.html : escapeHtml(data.chunk || '');
-        historyItem.html += html;
-        historyItem.text += data.chunk || '';
+        runItem.html += html;
+        runItem.text += data.chunk || '';
         if (state.activeOutputRunId === result.runId) {
           appendOutputChunk(data);
+        }
+        if (state.selected === runScenario) {
           renderRunSummary();
         }
       });
       events.addEventListener('test-result', (event) => {
         const data = JSON.parse(event.data);
-        historyItem.stepResults = Array.isArray(data.steps) ? data.steps : [];
-        if (state.activeOutputRunId === result.runId) {
+        runItem.stepResults = Array.isArray(data.steps) ? data.steps : [];
+        if (state.selected === runScenario) {
           renderRunSummary();
         }
       });
       events.addEventListener('done', (event) => {
         const data = JSON.parse(event.data);
-        historyItem.status = data.status;
-        historyItem.finishedAt = new Date().toISOString();
-        historyItem.exitCode = data.exitCode;
+        runItem.status = data.status;
+        runItem.finishedAt = new Date().toISOString();
+        runItem.exitCode = data.exitCode;
         state.lastRun.set(runScenario, data.status);
         if (state.activeOutputRunId === result.runId) {
           setStatus(els.runStatus, data.status);
-          renderRunSummary();
         }
         if (state.selected === runScenario) {
           setStatus(els.detailStatus, data.status);
+          renderRunSummary();
         }
         renderScenarioList();
-        renderRunHistory();
         updateRunHint();
         events.close();
       });
       events.onerror = () => {
-        if (historyItem.status === 'running') {
-          historyItem.status = 'failed';
-          historyItem.finishedAt = new Date().toISOString();
-          historyItem.exitCode = 1;
-          historyItem.html += escapeHtml('\nEvent stream disconnected.\n');
-          historyItem.text += '\nEvent stream disconnected.\n';
+        if (runItem.status === 'running') {
+          runItem.status = 'failed';
+          runItem.finishedAt = new Date().toISOString();
+          runItem.exitCode = 1;
+          runItem.html += escapeHtml('\nEvent stream disconnected.\n');
+          runItem.text += '\nEvent stream disconnected.\n';
           state.lastRun.set(runScenario, 'failed');
           if (state.activeOutputRunId === result.runId) {
             appendOutputHtml(escapeHtml('\nEvent stream disconnected.\n'));
             setStatus(els.runStatus, 'failed');
-            renderRunSummary();
           }
           if (state.selected === runScenario) {
             setStatus(els.detailStatus, 'failed');
+            renderRunSummary();
           }
           renderScenarioList();
-          renderRunHistory();
           updateRunHint();
         }
         events.close();
