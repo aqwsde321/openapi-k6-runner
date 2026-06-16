@@ -1819,6 +1819,8 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('.scenario-item-head');
       expect(html).toContain('.scenario-group-title');
       expect(html).toContain('.scenario-group-caret');
+      expect(html).toContain('.scenario-group:not(.collapsed) .scenario-group-title');
+      expect(html).toContain('border: 1px solid var(--line);');
       expect(html).toContain('openapi-k6.ui.collapsedScenarioGroups');
       expect(html).toContain('toggleScenarioGroup');
       expect(html).toContain('const collapsed = !query && state.collapsedGroups.has(group.name);');
@@ -1842,6 +1844,7 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('formatUiPath(scenario.path)');
       expect(html).toContain('formatUiPath(detail.path)');
       expect(html).toContain('formatUiPath(snapshot.path)');
+      expect(html).toContain("replace(/^scenarios\\//, '')");
       expect(html).toContain('historyItem.text += data.chunk ||');
       expect(html).toContain('run-summary-label">결과');
       expect(html).toContain("line.startsWith('Next:')");

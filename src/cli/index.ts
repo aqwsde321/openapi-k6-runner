@@ -3792,18 +3792,22 @@ const UI_HTML = String.raw`<!doctype html>
     .scenario-list {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 8px;
       margin-top: 10px;
     }
     .scenario-group {
+      background: #fbfcfe;
+      border: 1px solid var(--line);
+      border-radius: 6px;
       display: flex;
       flex-direction: column;
       gap: 0;
+      padding: 4px 6px 7px;
     }
     .scenario-group-title {
       border: 0;
       background: transparent;
-      padding: 7px 2px 5px;
+      padding: 6px 2px 6px;
       color: var(--muted);
       display: grid;
       grid-template-columns: 14px minmax(0, 1fr) max-content;
@@ -3816,6 +3820,10 @@ const UI_HTML = String.raw`<!doctype html>
       text-align: left;
       text-transform: uppercase;
       width: 100%;
+    }
+    .scenario-group:not(.collapsed) .scenario-group-title {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 4px;
     }
     .scenario-group-title:hover {
       color: var(--text);
@@ -3840,9 +3848,9 @@ const UI_HTML = String.raw`<!doctype html>
     }
     .scenario-group.collapsed .scenario-group-items { display: none; }
     .scenario-group-items {
-      border-left: 1px solid var(--line);
-      margin-left: 6px;
-      padding-left: 7px;
+      border-left: 2px solid #d7e4f7;
+      margin-left: 7px;
+      padding-left: 6px;
     }
     .scenario-item {
       border: 0;
@@ -4347,7 +4355,7 @@ const UI_HTML = String.raw`<!doctype html>
     }
 
     function formatUiPath(value) {
-      return String(value || '').replace(/^openapi-k6\//, '');
+      return String(value || '').replace(/^openapi-k6\//, '').replace(/^scenarios\//, '');
     }
 
     function formatStatusLabel(value) {
