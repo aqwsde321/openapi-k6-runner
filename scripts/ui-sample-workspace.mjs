@@ -49,16 +49,15 @@ async function writeSampleWorkspace(workspace, baseUrl) {
 
   await mkdir(path.join(workspaceDir, 'openapi'), { recursive: true });
   await mkdir(path.join(workspaceDir, 'scenarios/auth'), { recursive: true });
-  await mkdir(path.join(workspaceDir, 'scenarios/order/partials'), { recursive: true });
+  await mkdir(path.join(workspaceDir, 'scenarios/order'), { recursive: true });
 
   await writeFile(path.join(workspaceDir, 'config.yaml'), createConfig(baseUrl), 'utf8');
   await writeFile(path.join(workspaceDir, '.openapi-k6.json'), await createScaffoldMetadata(), 'utf8');
   await writeFile(path.join(workspaceDir, 'openapi/app.openapi.yaml'), createOpenApi(baseUrl), 'utf8');
-  await writeFile(path.join(workspaceDir, 'scenarios/smoke.yaml'), createSmokeScenario(), 'utf8');
+  await writeFile(path.join(workspaceDir, 'scenarios/health.yaml'), createHealthScenario(), 'utf8');
   await writeFile(path.join(workspaceDir, 'scenarios/auth/login.yaml'), createLoginScenario(), 'utf8');
   await writeFile(path.join(workspaceDir, 'scenarios/order/use-login.yaml'), createUseLoginScenario(), 'utf8');
-  await writeFile(path.join(workspaceDir, 'scenarios/order/include-health.yaml'), createIncludeHealthScenario(), 'utf8');
-  await writeFile(path.join(workspaceDir, 'scenarios/order/partials/health.yaml'), createHealthPartial(), 'utf8');
+  await writeFile(path.join(workspaceDir, 'scenarios/order/use-health.yaml'), createUseHealthScenario(), 'utf8');
 }
 
 async function createScaffoldMetadata() {
@@ -159,9 +158,9 @@ function createOpenApi(baseUrl) {
   ].join('\n');
 }
 
-function createSmokeScenario() {
+function createHealthScenario() {
   return [
-    'name: smoke',
+    'name: health',
     'steps:',
     '  - id: health',
     '    api:',
@@ -207,23 +206,12 @@ function createUseLoginScenario() {
   ].join('\n');
 }
 
-function createIncludeHealthScenario() {
+function createUseHealthScenario() {
   return [
-    'name: include-health',
+    'name: use-health',
     'steps:',
-    '  - include: ./partials/health.yaml',
+    '  - use: health',
     '  - id: direct-health',
-    '    api:',
-    '      operationId: getHealth',
-    '    condition: status == 200',
-    '',
-  ].join('\n');
-}
-
-function createHealthPartial() {
-  return [
-    'steps:',
-    '  - id: included-health',
     '    api:',
     '      operationId: getHealth',
     '    condition: status == 200',
@@ -356,8 +344,8 @@ function printSampleInstructions({ workspace, backendUrl, uiUrl }) {
   console.log(`  Workspace: ${path.join(workspace, 'openapi-k6')}`);
   console.log('');
   console.log('Try these scenarios in the UI:');
-  console.log('  smoke                 passes and shows 직접 정의');
-  console.log('  order/include-health  passes and shows 파일 포함: ./partials/health.yaml');
+  console.log('  health                passes and shows 직접 정의');
+  console.log('  order/use-health      passes and shows 시나리오 사용: health');
   console.log('  order/use-login       fails login on purpose and shows 시나리오 사용: auth/login in 최근 실행 결과');
   console.log('');
   console.log('Press Ctrl+C to stop the UI. The workspace is left on disk for inspection.');

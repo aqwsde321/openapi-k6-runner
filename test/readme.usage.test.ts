@@ -19,7 +19,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('npx --yes openapi-k6 install-skill --yes');
     expect(readme).toContain('$openapi-k6-scenario 회원 로그인 시나리오');
     expect(readme).toContain('`$openapi-k6-scenario` 스킬을 사용할 수 있는지 확인해.');
-    expect(readme).toContain('기존 partial include 또는 scenario use 재사용 여부');
+    expect(readme).toContain('기존 scenario 재사용 여부');
     expect(readme).toContain('npx --yes openapi-k6@latest install-skill --yes');
     expect(readme).toContain('기본 작업공간은 `openapi-k6/`야. 팀이나 프로젝트 규칙상 다른 이름이 필요하면 `init --dir <path>`를 사용해.');
     expect(readme).toContain('기존 `load-tests/config.yaml`이 있고 `openapi-k6/config.yaml`이 없으면 npx --yes openapi-k6@latest update로 `openapi-k6/`로 이전해.');
@@ -92,9 +92,10 @@ describe('README usage guide', () => {
 
     expect(readme).toContain('## 필요할 때만');
     expect(readme).toContain('`npx --yes openapi-k6 ui`');
+    expect(readme).toContain('| 다른 scenario 재사용 | `steps` 안에서 `- use: auth/login` |');
     expect(readme).toContain('`npx --yes openapi-k6 module add auth --base-url <url> --sync`');
     expect(readme).toContain('CLI가 `Scaffold update available`을 표시하면 `npx --yes openapi-k6 update`');
-    expect(readme).toContain('include와 fixture 경로는 실행하는 scenario 파일 기준 상대 경로이며');
+    expect(readme).toContain('fixture 경로는 실행하는 scenario 파일 기준 상대 경로이며');
     expect(readme).toContain('use 경로는 `openapi-k6/scenarios` 기준 scenario key이며');
     expect(readme).toContain('`use`에는 확장자를 쓰지 않습니다.');
     expect(readme).toContain('<summary>고급 기능 예시 보기</summary>');
