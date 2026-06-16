@@ -1821,9 +1821,14 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('.scenario-group-caret');
       expect(html).toContain('.scenario-group:not(.collapsed) .scenario-group-title');
       expect(html).toContain('border: 1px solid var(--line);');
+      expect(html).toContain('border-left: 3px solid #d7e4f7;');
+      expect(html).toContain('<button id="validateBtn" class="blue" disabled>validate</button>');
+      expect(html).toContain('<button id="testBtn" class="primary" disabled>test</button>');
+      expect(html).toContain('<button id="clearBtn">clear</button>');
       expect(html).toContain('openapi-k6.ui.collapsedScenarioGroups');
       expect(html).toContain('toggleScenarioGroup');
       expect(html).toContain('const collapsed = !query && state.collapsedGroups.has(group.name);');
+      expect(html).not.toContain('border-left: 2px solid #d7e4f7;');
       expect(html).toContain('aria-expanded');
       expect(html).not.toContain('groups.sort(');
       expect(html).not.toContain('group.scenarios.sort(');

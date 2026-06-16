@@ -3848,9 +3848,9 @@ const UI_HTML = String.raw`<!doctype html>
     }
     .scenario-group.collapsed .scenario-group-items { display: none; }
     .scenario-group-items {
-      border-left: 2px solid #d7e4f7;
-      margin-left: 7px;
-      padding-left: 6px;
+      display: grid;
+      gap: 2px;
+      padding-top: 2px;
     }
     .scenario-item {
       border: 0;
@@ -3911,10 +3911,10 @@ const UI_HTML = String.raw`<!doctype html>
     .stack { display: flex; flex-direction: column; gap: 10px; }
     .section {
       border: 0;
-      border-top: 1px solid var(--line);
+      border-left: 3px solid #d7e4f7;
       border-radius: 0;
-      padding: 10px 0 0;
-      background: transparent;
+      padding: 9px 0 9px 10px;
+      background: #fbfcfe;
     }
     #scenarioSummary.section {
       border: 0;
@@ -4299,9 +4299,9 @@ const UI_HTML = String.raw`<!doctype html>
       </div>
       <div class="actions">
         <div class="button-row">
-          <button id="validateBtn" class="blue" disabled>검증</button>
-          <button id="testBtn" class="primary" disabled>실행</button>
-          <button id="clearBtn">지우기</button>
+          <button id="validateBtn" class="blue" disabled>validate</button>
+          <button id="testBtn" class="primary" disabled>test</button>
+          <button id="clearBtn">clear</button>
         </div>
         <span id="runHint" class="hint">시나리오를 선택하세요.</span>
         <div id="runHistory" class="run-history"><div class="run-history-empty">실행 기록 없음</div></div>
@@ -4374,8 +4374,6 @@ const UI_HTML = String.raw`<!doctype html>
     }
 
     function formatCommandLabel(value) {
-      if (value === 'validate') return '검증';
-      if (value === 'test') return '실행';
       return String(value);
     }
 
