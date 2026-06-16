@@ -4089,14 +4089,30 @@ const UI_HTML = String.raw`<!doctype html>
       width: 100%;
     }
     .run-result {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-left: 4px solid #94a3b8;
+      border-radius: 6px;
       display: grid;
       gap: 7px;
       min-width: 0;
-      padding: 0 0 8px;
+      padding: 10px 12px;
     }
-    .run-result + .run-result {
-      border-top: 1px solid var(--line);
-      padding-top: 9px;
+    .run-result-validate {
+      border-left-color: var(--blue);
+    }
+    .run-result-test {
+      border-left-color: var(--primary);
+    }
+    .run-result-failed {
+      background: #fffafa;
+      border-color: #fecaca;
+    }
+    .run-result-failed.run-result-validate {
+      border-left-color: var(--blue);
+    }
+    .run-result-failed.run-result-test {
+      border-left-color: var(--primary);
     }
     .run-result-title-row {
       align-items: center;
@@ -4104,6 +4120,17 @@ const UI_HTML = String.raw`<!doctype html>
       gap: 8px;
       grid-template-columns: minmax(0, 1fr) max-content;
       min-width: 0;
+    }
+    .run-result-heading {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .run-result-kind {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
     }
     .run-result-title {
       font-size: 13px;
@@ -4116,7 +4143,7 @@ const UI_HTML = String.raw`<!doctype html>
     .run-summary-grid {
       display: grid;
       gap: 6px;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       min-width: 0;
     }
     .run-summary-cell {
@@ -4840,19 +4867,32 @@ const UI_HTML = String.raw`<!doctype html>
       return command + ' ' + formatStatusLabel(item.status);
     }
 
+    function formatRunResultKind(command) {
+      if (command === 'validate') return '정적 검증';
+      if (command === 'test') return '실행 테스트';
+      return formatCommandLabel(command);
+    }
+
+    function formatRunResultClassPart(value) {
+      return String(value || 'unknown').replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
+    }
+
     function renderRunResult(item) {
       const summary = summarizeRunText(item.text);
       const duration = formatRunDuration(item);
       const exitCode = item.exitCode === null || item.exitCode === undefined ? '-' : String(item.exitCode);
       const message = renderRunMessage(item, summary);
+      const className = 'run-result run-result-' + formatRunResultClassPart(item.command) + ' run-result-' + formatRunResultClassPart(item.status);
 
-      return '<div class="run-result">' +
+      return '<div class="' + className + '">' +
         '<div class="run-result-title-row">' +
-          '<div class="run-result-title">' + escapeHtml(formatRunResultTitle(item)) + '</div>' +
+          '<div class="run-result-heading">' +
+            '<div class="run-result-kind">' + escapeHtml(formatRunResultKind(item.command)) + '</div>' +
+            '<div class="run-result-title">' + escapeHtml(formatRunResultTitle(item)) + '</div>' +
+          '</div>' +
           '<span class="pill' + statusTone(item.status) + '">' + escapeHtml(formatStatusLabel(item.status)) + '</span>' +
         '</div>' +
         '<div class="run-summary-grid">' +
-          '<div class="run-summary-cell"><div class="run-summary-label">작업</div><div class="run-summary-value">' + escapeHtml(formatCommandLabel(item.command)) + '</div></div>' +
           '<div class="run-summary-cell"><div class="run-summary-label">종료코드</div><div class="run-summary-value">' + escapeHtml(exitCode) + '</div></div>' +
           '<div class="run-summary-cell"><div class="run-summary-label">소요시간</div><div class="run-summary-value">' + escapeHtml(duration) + '</div></div>' +
           '<div class="run-summary-cell"><div class="run-summary-label">시각</div><div class="run-summary-value">' + escapeHtml(formatRunHistoryTime(item.finishedAt || item.startedAt)) + '</div></div>' +
