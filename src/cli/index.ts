@@ -3721,6 +3721,8 @@ const UI_HTML = String.raw`<!doctype html>
     }
     .server-status {
       display: inline-flex;
+      margin-bottom: -8px;
+      padding-bottom: 8px;
       position: relative;
     }
     .server-status-summary {
@@ -3761,7 +3763,7 @@ const UI_HTML = String.raw`<!doctype html>
       padding: 10px;
       position: absolute;
       right: 0;
-      top: calc(100% + 8px);
+      top: 100%;
       width: 420px;
       z-index: 10;
     }

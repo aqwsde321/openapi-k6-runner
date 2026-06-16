@@ -1832,6 +1832,9 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('id="serverIssueCount"');
       expect(html).toContain('class="server-popover"');
       expect(html).toContain('title="서버 다시 확인"');
+      expect(html).toContain('margin-bottom: -8px;');
+      expect(html).toContain('padding-bottom: 8px;');
+      expect(html).not.toContain('top: calc(100% + 8px);');
       expect(html).toContain('openapi-k6.ui.collapsedScenarioGroups');
       expect(html).toContain('toggleScenarioGroup');
       expect(html).toContain('const collapsed = !query && state.collapsedGroups.has(group.name);');
