@@ -1824,6 +1824,9 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('<button id="validateBtn" class="blue" disabled>validate</button>');
       expect(html).toContain('<button id="testBtn" class="primary" disabled>test</button>');
       expect(html).toContain('<button id="clearBtn">clear</button>');
+      expect(html).not.toContain('id="configPath"');
+      expect(html).not.toContain('id="refreshBtn"');
+      expect(html).not.toContain('>새로고침</button>');
       expect(html).toContain('id="serverStatusSummary"');
       expect(html).toContain('id="serverConnectedCount"');
       expect(html).toContain('id="serverIssueCount"');

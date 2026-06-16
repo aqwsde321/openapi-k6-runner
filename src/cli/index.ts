@@ -4304,7 +4304,6 @@ const UI_HTML = String.raw`<!doctype html>
       <div class="subtitle">시나리오 검증/실행</div>
     </div>
     <div class="row header-meta">
-      <span id="configPath" class="pill">불러오는 중</span>
       <div id="serverStatus" class="server-status" tabindex="0" aria-label="서버 상태">
         <div id="serverStatusSummary" class="server-status-summary">
           <span class="server-count"><span class="server-dot ok" aria-hidden="true"></span><span id="serverConnectedCount">0</span></span>
@@ -4319,7 +4318,6 @@ const UI_HTML = String.raw`<!doctype html>
           <div id="serverList" class="server-grid"><div class="empty">서버 확인 전</div></div>
         </div>
       </div>
-      <button id="refreshBtn">새로고침</button>
     </div>
   </header>
   <main>
@@ -4384,11 +4382,9 @@ const UI_HTML = String.raw`<!doctype html>
     };
 
     const els = {
-      configPath: document.getElementById('configPath'),
       scenarioCount: document.getElementById('scenarioCount'),
       scenarioList: document.getElementById('scenarioList'),
       searchInput: document.getElementById('searchInput'),
-      refreshBtn: document.getElementById('refreshBtn'),
       detailTitle: document.getElementById('detailTitle'),
       detailStatus: document.getElementById('detailStatus'),
       scenarioSummary: document.getElementById('scenarioSummary'),
@@ -4530,7 +4526,6 @@ const UI_HTML = String.raw`<!doctype html>
     async function loadScenarios() {
       const data = await fetchJson('/api/scenarios');
       state.scenarios = data.scenarios;
-      els.configPath.textContent = formatUiPath(data.configPath);
       renderScenarioList();
       if (!state.selected && state.scenarios.length > 0) {
         await selectScenario(state.scenarios[0].id);
@@ -5027,7 +5022,6 @@ const UI_HTML = String.raw`<!doctype html>
       };
     }
 
-    els.refreshBtn.addEventListener('click', loadScenarios);
     els.searchInput.addEventListener('input', renderScenarioList);
     els.checkServersBtn.addEventListener('click', checkServers);
     els.validateBtn.addEventListener('click', () => runCommand('validate'));
