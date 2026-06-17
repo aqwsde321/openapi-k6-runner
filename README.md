@@ -487,7 +487,7 @@ k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s --sum
 기본 `openapi-k6/.gitignore`는 `scenarios/**`만 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.
 전체 작업 공간을 git에 포함하려면 ignore 규칙을 조정합니다.
 
-## 명령 모음
+## openapi-k6 명령 모음
 
 | 상황 | 명령 |
 | --- | --- |
@@ -500,12 +500,28 @@ k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s --sum
 | 정적 검증 | `npx --yes openapi-k6 validate -s <scenario-key>` |
 | 실행 검증 | `npx --yes openapi-k6 test -s <scenario-key>` |
 | 정적 검증 후 k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <scenario-key>` |
-| k6 직접 실행 | `k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1` |
 | 검증+생성+실행 편의 명령 | `npx --yes openapi-k6 run -s <scenario-key>` |
 | 로컬 UI | `npx --yes openapi-k6 ui` |
 | 점검 | `npx --yes openapi-k6 doctor` |
 | scaffold 갱신 | `npx --yes openapi-k6 update` |
 | Codex 스킬 설치 | `npx --yes openapi-k6 install-skill --yes` |
+
+## k6 명령 모음
+
+먼저 scenario를 k6 스크립트로 생성합니다.
+
+```bash
+npx --yes openapi-k6 generate -s <scenario-key>
+```
+
+| 상황 | 명령 |
+| --- | --- |
+| 1회 smoke | `k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1 --iterations 1` |
+| 30초 짧은 부하 | `k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s` |
+| 부하 증가/감소 | `k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --stage 30s:10 --stage 1m:50 --stage 30s:0` |
+| summary JSON 저장 | `k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s --summary-export openapi-k6/logs/<scenario-key>-summary.json` |
+| 실시간 Web Dashboard | `K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_OPEN=true k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s` |
+| HTML report 저장 | `K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_EXPORT=openapi-k6/logs/<scenario-key>-report.html k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s` |
 
 ## 지원 범위
 

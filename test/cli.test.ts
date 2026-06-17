@@ -465,9 +465,11 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('./openapi-k6/run.sh <scenario-key>');
     expect(readme).toContain('./openapi-k6/run.sh <scenario-key> --vus 1 --iterations 1');
     expect(readme).toContain('./openapi-k6/run.sh <scenario-key> --log');
+    expect(readme).toContain('k6 명령 모음:');
     expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1 --iterations 1");
     expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s");
     expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --stage 30s:10 --stage 1m:50 --stage 30s:0");
+    expect(readme).toContain("K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_OPEN=true k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s");
     expect(readme).toContain('예를 들어 `-s auth/login`은 `openapi-k6/generated/auth/login.k6.js`로 생성됩니다.');
     expect(readme).toContain('로그 파일: `openapi-k6/logs/<scenario-key>.log`');
 

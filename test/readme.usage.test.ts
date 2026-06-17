@@ -53,13 +53,18 @@ describe('README usage guide', () => {
     expect(readme).toContain('npx --yes openapi-k6 init --base-url <url> --openapi <path-or-url> --sync');
 
     const quickStartSection = readme.slice(readme.indexOf('## 빠른 시작'), readme.indexOf('## 1. 작업 공간 만들기'));
-    const commandSection = readme.slice(readme.indexOf('## 명령 모음'), readme.indexOf('## 지원 범위'));
+    const openapiCommandSection = readme.slice(readme.indexOf('## openapi-k6 명령 모음'), readme.indexOf('## k6 명령 모음'));
+    const k6CommandSection = readme.slice(readme.indexOf('## k6 명령 모음'), readme.indexOf('## 지원 범위'));
 
     expect(quickStartSection).not.toContain('catalog --query login');
     expect(quickStartSection).not.toContain('-s smoke');
-    expect(commandSection).not.toContain('catalog --query login');
-    expect(commandSection).not.toContain('-s smoke');
-    expect(commandSection).toContain('| Codex 스킬 설치 | `npx --yes openapi-k6 install-skill --yes` |');
+    expect(openapiCommandSection).not.toContain('catalog --query login');
+    expect(openapiCommandSection).not.toContain('-s smoke');
+    expect(openapiCommandSection).not.toContain("k6 run 'openapi-k6/generated");
+    expect(openapiCommandSection).not.toContain('K6_WEB_DASHBOARD');
+    expect(openapiCommandSection).toContain('| Codex 스킬 설치 | `npx --yes openapi-k6 install-skill --yes` |');
+    expect(k6CommandSection).toContain('| 실시간 Web Dashboard | `K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_OPEN=true k6 run');
+    expect(k6CommandSection).toContain('| HTML report 저장 | `K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_EXPORT=openapi-k6/logs/<scenario-key>-report.html k6 run');
 
     expect(readme).toContain('## 1. 작업 공간 만들기');
     expect(readme).toContain('API base URL [http://localhost:8080]: https://api.example.com');
@@ -92,8 +97,8 @@ describe('README usage guide', () => {
     expect(readme).toContain('| `test` | 있음 | 없음 | 실제 API 흐름을 1회 실행 |');
     expect(readme).toContain('| `generate` | 없음 | 없음 | YAML과 OpenAPI 정합성 확인 후 k6 스크립트 생성 |');
     expect(readme).toContain('| `run` | 있음 | 있음 | 검증/생성 후 k6 실행 편의 명령 |');
-    expect(readme).toContain('| k6 직접 실행 | `k6 run \'openapi-k6/generated/<scenario-key>.k6.js\' --vus 1` |');
     expect(readme).toContain('| 검증+생성+실행 편의 명령 | `npx --yes openapi-k6 run -s <scenario-key>` |');
+    expect(readme).toContain('| 1회 smoke | `k6 run \'openapi-k6/generated/<scenario-key>.k6.js\' --vus 1 --iterations 1` |');
     expect(readme).toContain('`validate`가 통과한 scenario만 `generate`하고, `test`가 통과한 scenario만 `run`하는 흐름을 권장합니다.');
 
     expect(readme).toContain('## 필요할 때만');
@@ -142,7 +147,8 @@ describe('README usage guide', () => {
     expect(readme.indexOf('## 빠른 시작')).toBeLessThan(readme.indexOf('## 1. 작업 공간 만들기'));
     expect(readme.indexOf('## 4. 검증과 실행')).toBeLessThan(readme.indexOf('## 필요할 때만'));
     expect(readme.indexOf('## 필요할 때만')).toBeLessThan(readme.indexOf('## 파일 규칙'));
-    expect(readme.indexOf('## 명령 모음')).toBeLessThan(readme.indexOf('## 지원 범위'));
+    expect(readme.indexOf('## openapi-k6 명령 모음')).toBeLessThan(readme.indexOf('## k6 명령 모음'));
+    expect(readme.indexOf('## k6 명령 모음')).toBeLessThan(readme.indexOf('## 지원 범위'));
     expect(readme.indexOf('<summary>고급 기능 예시 보기</summary>')).toBeGreaterThan(readme.indexOf('## 필요할 때만'));
     expect(readme.indexOf('<summary>고급 기능 예시 보기</summary>')).toBeLessThan(readme.indexOf('## 파일 규칙'));
 
