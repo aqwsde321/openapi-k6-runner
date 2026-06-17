@@ -1940,12 +1940,14 @@ describe('openapi-k6 CLI', () => {
         name: 'login-v2',
         steps: [expect.objectContaining({ id: 'health', operationId: 'getHealth' })],
       });
-      expect(events).toContain('$ openapi-k6 validate');
+      expect(events).toContain('$ npx --yes openapi-k6 validate -s smoke --config openapi-k6/config.yaml');
       expect(events).toContain('Validated openapi-k6/scenarios/smoke.yaml');
       expect(events).toContain('"status":"passed"');
+      expect(nestedEvents).toContain('$ npx --yes openapi-k6 validate -s auth/login --config openapi-k6/config.yaml');
       expect(nestedEvents).toContain('Validated openapi-k6/scenarios/auth/login.yaml');
       expect(nestedEvents).toContain('"status":"passed"');
-      expect(testEvents).toContain('$ openapi-k6 test');
+      expect(testEvents).toContain('$ npx --yes openapi-k6 test -s smoke --config openapi-k6/config.yaml');
+      expect(testEvents).not.toContain('--scenario openapi-k6/scenarios/smoke.yaml');
       expect(testEvents).not.toContain('--no-color');
       expect(testEvents).toContain('\\u001b[32m');
       expect(testEvents).toContain('<span class=\\"ansi-green\\">');
@@ -1953,7 +1955,8 @@ describe('openapi-k6 CLI', () => {
       expect(testEvents).toContain('event: test-result');
       expect(testEvents).toContain('"id":"health"');
       expect(testEvents).toContain('"source":{"kind":"direct"}');
-      expect(useTestEvents).toContain('$ openapi-k6 test');
+      expect(useTestEvents).toContain('$ npx --yes openapi-k6 test -s order/use-login --config openapi-k6/config.yaml');
+      expect(useTestEvents).not.toContain('--scenario openapi-k6/scenarios/order/use-login.yaml');
       expect(useTestEvents).toContain('event: test-result');
       expect(useTestEvents).toContain('"status":"failed"');
       expect(useTestEvents).toContain('"id":"health"');

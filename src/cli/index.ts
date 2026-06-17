@@ -2900,8 +2900,9 @@ async function runUiCliCommand(
     ...payload.varFile.flatMap((value) => ['--var-file', value]),
     ...payload.vars.flatMap((value) => ['--var', value]),
   ];
+  const displayCommand = formatUiRunDisplayCommand(state, payload, scenarioPath);
 
-  appendUiRunChunk(run, 'stdout', `\u001b[90m$ openapi-k6 ${args.map(shellQuote).join(' ')}\u001b[0m\n`);
+  appendUiRunChunk(run, 'stdout', `\u001b[90m$ ${displayCommand}\u001b[0m\n`);
   const stdout = createUiRunWritable(run, 'stdout');
   const stderr = createUiRunWritable(run, 'stderr');
   const testReporter = payload.command === 'test'
@@ -2934,6 +2935,27 @@ async function runUiCliCommand(
 
     finishUiRun(run, 'failed', error instanceof CommanderError ? error.exitCode : 1);
   }
+}
+
+function formatUiRunDisplayCommand(
+  state: UiState,
+  payload: { command: 'validate' | 'test'; varFile: string[]; vars: string[] },
+  scenarioPath: string,
+): string {
+  const scenarioDir = path.join(resolveLoadTestDir(state.cwd, state.config), 'scenarios');
+  const scenarioOption = formatUiScenarioOption(state.cwd, scenarioDir, scenarioPath);
+  const args = [
+    payload.command,
+    '-s',
+    scenarioOption,
+    '--config',
+    formatDisplayPath(state.cwd, state.config.path),
+    ...(state.options.module === undefined ? [] : ['--module', state.options.module]),
+    ...payload.varFile.flatMap((value) => ['--var-file', value]),
+    ...payload.vars.flatMap((value) => ['--var', value]),
+  ];
+
+  return `npx --yes openapi-k6 ${args.map(shellQuote).join(' ')}`;
 }
 
 function createUiFailureHint(message: string): string | undefined {
