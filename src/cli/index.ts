@@ -4187,16 +4187,16 @@ const UI_HTML = String.raw`<!doctype html>
     }
     .step:hover { background: var(--hover); }
     .step.active {
-      border-left-color: var(--accent);
-      background: #f4fbf8;
+      border-left-color: #98a2b3;
+      background: #f9fafb;
     }
     .step.reused {
       border-left-color: var(--accent-2);
       background: #f7faff;
     }
     .step.reused.active {
-      border-left-color: var(--accent);
-      background: #eef6ff;
+      border-left-color: var(--accent-2);
+      background: #f7faff;
     }
     .step-toggle {
       align-items: start;
@@ -4207,11 +4207,18 @@ const UI_HTML = String.raw`<!doctype html>
       display: grid;
       font: inherit;
       gap: 6px;
-      grid-template-columns: minmax(0, 1fr) max-content;
+      grid-template-columns: 12px minmax(0, 1fr) max-content;
       min-width: 0;
-      padding: 8px 0 8px 9px;
+      padding: 8px 0 8px 8px;
       text-align: left;
       width: 100%;
+    }
+    .step-caret {
+      align-self: start;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      line-height: 1.6;
     }
     .step-title-row {
       align-items: start;
@@ -4230,18 +4237,22 @@ const UI_HTML = String.raw`<!doctype html>
       align-self: start;
       font-size: 11px;
     }
+    .step.reused > .step-toggle .step-source {
+      background: #eef4ff;
+      color: #175cd3;
+    }
     .step-code {
       border-top: 1px solid var(--line);
       display: grid;
       gap: 6px;
       min-width: 0;
-      padding: 8px 0 8px 9px;
+      padding: 8px 0 8px 26px;
     }
     .step-code-head {
       align-items: center;
       display: grid;
       gap: 8px;
-      grid-template-columns: minmax(0, 1fr) max-content;
+      grid-template-columns: minmax(0, 1fr);
       min-width: 0;
     }
     .step-code-path {
@@ -4897,13 +4908,13 @@ const UI_HTML = String.raw`<!doctype html>
           ? '<div class="step-code">' +
               '<div class="step-code-head">' +
                 '<div class="step-code-path">' + escapeHtml(codePath || step.id) + '</div>' +
-                '<span class="pill step-source">' + escapeHtml(sourceText) + '</span>' +
               '</div>' +
               '<pre class="definition-code">' + renderYamlCode(code) + '</pre>' +
             '</div>'
           : '';
         return '<div class="step ' + (reused ? 'reused ' : '') + (active ? 'active' : '') + '" data-step-index="' + index + '">' +
           '<button type="button" class="step-toggle" data-step-index="' + index + '" aria-expanded="' + String(active) + '">' +
+            '<span class="step-caret" aria-hidden="true">' + (active ? 'v' : '&gt;') + '</span>' +
             '<div class="step-title">' + escapeHtml(step.id) + '</div><span class="pill step-source">' + escapeHtml(sourceText) + '</span>' +
           '</button>' +
           codeBlock +

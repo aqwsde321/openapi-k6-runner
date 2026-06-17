@@ -1895,6 +1895,10 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('run-step-results');
       expect(html).toContain('formatStepSource');
       expect(html).toContain('step-source');
+      expect(html).toContain('step-caret');
+      expect(html).toContain('step.reused > .step-toggle .step-source');
+      expect(html).toContain('border-left-color: #98a2b3');
+      expect(html).not.toContain('background: #eef6ff;');
       expect(html).toContain("step.source.kind !== 'direct'");
       expect(html).toContain('openStepIndexes: new Set()');
       expect(html).toContain('시나리오 정의');
