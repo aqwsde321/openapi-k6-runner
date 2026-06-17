@@ -1901,7 +1901,8 @@ describe('openapi-k6 CLI', () => {
       expect(html).not.toContain('background: #eef6ff;');
       expect(html).toContain("step.source.kind !== 'direct'");
       expect(html).toContain('openStepIndexes: new Set()');
-      expect(html).toContain('시나리오 정의');
+      expect(html).toContain('실행 단계');
+      expect(html).not.toContain('시나리오 정의');
       expect(html).toContain('step-toggle');
       expect(html).toContain('definition-code');
       expect(html).toContain('renderYamlCode');

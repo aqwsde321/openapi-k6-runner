@@ -4919,7 +4919,7 @@ const UI_HTML = String.raw`<!doctype html>
         '</div>';
       }).join('');
       els.detailBody.className = 'section-content stack';
-      els.detailBody.innerHTML = '<div><h3>시나리오 정의</h3><div class="steps">' + steps + '</div></div>';
+      els.detailBody.innerHTML = '<div><h3>실행 단계</h3><div class="steps">' + steps + '</div></div>';
       for (const item of els.detailBody.querySelectorAll('.step-toggle')) {
         item.addEventListener('click', () => {
           const nextIndex = Number(item.getAttribute('data-step-index'));
