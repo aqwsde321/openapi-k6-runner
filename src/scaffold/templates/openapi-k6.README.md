@@ -51,7 +51,8 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 | 정적 검증 | `__VALIDATE_NAME_COMMAND__` |
 | 실행 검증 | `__TEST_NAME_COMMAND__` |
 | 정적 검증 후 k6 스크립트 생성 | `__GENERATE_NAME_COMMAND__` |
-| 짧은 k6 실행 | `__RUN_NAME_COMMAND__ --log -- --vus 1 --iterations 1` |
+| k6 직접 실행 | `k6 run __GENERATED_OUTPUT_ARG__ --vus 1 --iterations 1` |
+| 검증+생성+실행 편의 명령 | `__RUN_NAME_COMMAND__` |
 | 로컬 UI | `__UI_COMMAND__` |
 | 작업 공간 점검 | `__DOCTOR_COMMAND__` |
 | scaffold 안전 갱신 | `__UPDATE_COMMAND__` |
@@ -79,6 +80,13 @@ k6 run __GENERATED_OUTPUT_ARG__ --vus 1 --iterations 1
 기본 생성 경로는 `__DIRECTORY__/generated/<scenario-key>.k6.js`입니다.
 예를 들어 `-s auth/login`은 `__DIRECTORY__/generated/auth/login.k6.js`로 생성됩니다.
 `--write`를 쓰면 직접 실행할 k6 파일 경로도 그 값에 맞춰 달라집니다.
+
+자주 쓰는 k6 옵션:
+
+```bash
+k6 run __GENERATED_OUTPUT_ARG__ --vus 10 --duration 30s
+k6 run __GENERATED_OUTPUT_ARG__ --stage 30s:10 --stage 1m:50 --stage 30s:0
+```
 
 ## Scenario 작성 규칙
 

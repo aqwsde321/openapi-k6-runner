@@ -66,7 +66,8 @@ npx --yes openapi-k6 catalog --query <검색어>
 # openapi-k6/scenarios/<scenario-key>.yaml 작성
 npx --yes openapi-k6 validate -s <scenario-key>
 npx --yes openapi-k6 test -s <scenario-key>
-npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1 --iterations 1
+npx --yes openapi-k6 generate -s <scenario-key>
+k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1 --iterations 1
 ```
 
 `<검색어>`는 endpoint를 찾을 단어이고, `<scenario-key>`는 `openapi-k6/scenarios/<scenario-key>.yaml`에서 확장자를 뺀 경로입니다.
@@ -195,19 +196,19 @@ steps:
 | `validate` | 없음 | 없음 | YAML과 OpenAPI 정합성 확인 |
 | `test` | 있음 | 없음 | 실제 API 흐름을 1회 실행 |
 | `generate` | 없음 | 없음 | YAML과 OpenAPI 정합성 확인 후 k6 스크립트 생성 |
-| `run` | 있음 | 있음 | k6 실행 |
+| `run` | 있음 | 있음 | 검증/생성 후 k6 실행 편의 명령 |
 
 ```bash
 npx --yes openapi-k6 validate -s <scenario-key>
 npx --yes openapi-k6 test -s <scenario-key>
-npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1 --iterations 1
+npx --yes openapi-k6 generate -s <scenario-key>
+k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1 --iterations 1
 ```
 
-생성된 k6 스크립트를 직접 실행할 때는 먼저 `generate`를 실행합니다.
+검증/생성/실행을 한 번에 처리하려면 `openapi-k6 run`도 사용할 수 있습니다.
 
 ```bash
-npx --yes openapi-k6 generate -s <scenario-key>
-k6 run openapi-k6/generated/<scenario-key>.k6.js --vus 1 --iterations 1
+npx --yes openapi-k6 run -s <scenario-key>
 ```
 
 기본 생성 경로는 `openapi-k6/generated/<scenario-key>.k6.js`입니다.
@@ -444,7 +445,15 @@ k6 옵션은 scenario key 뒤에 붙입니다.
 k6를 직접 실행할 때는 생성된 JS 파일을 지정합니다. 이 방식은 YAML/OpenAPI를 다시 검증하거나 최신 스크립트를 다시 만들지 않습니다.
 
 ```bash
-k6 run openapi-k6/generated/<scenario-key>.k6.js --vus 1 --iterations 1
+k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1 --iterations 1
+```
+
+자주 쓰는 k6 옵션 예시입니다.
+
+```bash
+k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s
+k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --stage 30s:10 --stage 1m:50 --stage 30s:0
+k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s --summary-export openapi-k6/logs/<scenario-key>-summary.json
 ```
 
 ### 제약
@@ -491,7 +500,8 @@ k6 run openapi-k6/generated/<scenario-key>.k6.js --vus 1 --iterations 1
 | 정적 검증 | `npx --yes openapi-k6 validate -s <scenario-key>` |
 | 실행 검증 | `npx --yes openapi-k6 test -s <scenario-key>` |
 | 정적 검증 후 k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <scenario-key>` |
-| k6 실행 | `npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1` |
+| k6 직접 실행 | `k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1` |
+| 검증+생성+실행 편의 명령 | `npx --yes openapi-k6 run -s <scenario-key>` |
 | 로컬 UI | `npx --yes openapi-k6 ui` |
 | 점검 | `npx --yes openapi-k6 doctor` |
 | scaffold 갱신 | `npx --yes openapi-k6 update` |

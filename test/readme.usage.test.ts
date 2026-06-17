@@ -38,8 +38,10 @@ describe('README usage guide', () => {
     expect(readme).toContain('# openapi-k6/scenarios/<scenario-key>.yaml 작성');
     expect(readme).toContain('npx --yes openapi-k6 validate -s <scenario-key>');
     expect(readme).toContain('npx --yes openapi-k6 test -s <scenario-key>');
-    expect(readme).toContain('npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1 --iterations 1');
-    expect(readme).toContain('k6 run openapi-k6/generated/<scenario-key>.k6.js --vus 1 --iterations 1');
+    expect(readme).toContain('npx --yes openapi-k6 generate -s <scenario-key>');
+    expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1 --iterations 1");
+    expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s");
+    expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --stage 30s:10 --stage 1m:50 --stage 30s:0");
     expect(readme).toContain('예를 들어 `-s auth/login`은 `openapi-k6/generated/auth/login.k6.js`로 생성됩니다.');
     expect(readme).toContain('시나리오가 많아지면 `openapi-k6/scenarios/auth/login.yaml`처럼 폴더로 묶고, CLI에서는 `-s auth/login`으로 실행합니다.');
     expect(readme).toContain('아래 예시는 이해를 돕기 위한 값입니다. 실제 명령에는 위 placeholder를 프로젝트에 맞게 바꿔 넣습니다.');
@@ -89,7 +91,9 @@ describe('README usage guide', () => {
     expect(readme).toContain('| `validate` | 없음 | 없음 | YAML과 OpenAPI 정합성 확인 |');
     expect(readme).toContain('| `test` | 있음 | 없음 | 실제 API 흐름을 1회 실행 |');
     expect(readme).toContain('| `generate` | 없음 | 없음 | YAML과 OpenAPI 정합성 확인 후 k6 스크립트 생성 |');
-    expect(readme).toContain('| `run` | 있음 | 있음 | k6 실행 |');
+    expect(readme).toContain('| `run` | 있음 | 있음 | 검증/생성 후 k6 실행 편의 명령 |');
+    expect(readme).toContain('| k6 직접 실행 | `k6 run \'openapi-k6/generated/<scenario-key>.k6.js\' --vus 1` |');
+    expect(readme).toContain('| 검증+생성+실행 편의 명령 | `npx --yes openapi-k6 run -s <scenario-key>` |');
     expect(readme).toContain('`validate`가 통과한 scenario만 `generate`하고, `test`가 통과한 scenario만 `run`하는 흐름을 권장합니다.');
 
     expect(readme).toContain('## 필요할 때만');
@@ -147,6 +151,7 @@ describe('README usage guide', () => {
     expect(readme).not.toContain('### 4-4. 선택: 데이터와 공통 step');
     expect(readme).not.toContain('docs/advanced-usage.md');
     expect(readme).not.toContain('npx --yes openapi-k6 run -s smoke --log -- --vus 1 --iterations 1');
+    expect(readme).not.toContain('-- --vus');
   });
 
   it('keeps the docs index focused on secondary documents', async () => {

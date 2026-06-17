@@ -444,8 +444,9 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 catalog --sync --query <검색어> --ai');
     expect(readme).toContain('npx --yes openapi-k6 validate -s <scenario-key>');
     expect(readme).toContain('npx --yes openapi-k6 test -s <scenario-key>');
-    expect(readme).toContain('npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1 --iterations 1');
     expect(readme).toContain('npx --yes openapi-k6 generate -s <scenario-key>');
+    expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1 --iterations 1");
+    expect(readme).toContain('npx --yes openapi-k6 run -s <scenario-key>');
     expect(readme).toContain('npx --yes openapi-k6 ui');
     expect(readme).toContain('npx --yes openapi-k6 doctor');
 
@@ -453,6 +454,7 @@ describe('openapi-k6 CLI', () => {
 
     expect(commandSection).not.toContain('catalog --query login');
     expect(commandSection).not.toContain('-s smoke');
+    expect(commandSection).not.toContain('-- --vus');
 
     expect(readme).toContain('openapi-k6/config.yaml');
     expect(readme).toContain('openapi-k6/scenarios/<scenario-key>.yaml');
@@ -464,6 +466,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('./openapi-k6/run.sh <scenario-key> --vus 1 --iterations 1');
     expect(readme).toContain('./openapi-k6/run.sh <scenario-key> --log');
     expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1 --iterations 1");
+    expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s");
+    expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --stage 30s:10 --stage 1m:50 --stage 30s:0");
     expect(readme).toContain('예를 들어 `-s auth/login`은 `openapi-k6/generated/auth/login.k6.js`로 생성됩니다.');
     expect(readme).toContain('로그 파일: `openapi-k6/logs/<scenario-key>.log`');
 
@@ -1411,6 +1415,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('./perf-tests/run.sh <scenario-key> --vus 1 --iterations 1');
     expect(readme).toContain('./perf-tests/run.sh <scenario-key> --log');
     expect(readme).toContain("k6 run 'perf-tests/generated/<scenario-key>.k6.js' --vus 1 --iterations 1");
+    expect(readme).toContain("k6 run 'perf-tests/generated/<scenario-key>.k6.js' --vus 10 --duration 30s");
     expect(readme).toContain('로그 파일: `perf-tests/logs/<scenario-key>.log`');
     expect(readme).toContain('cp perf-tests/.env.example perf-tests/.env');
     expect(readme).not.toContain('openapi-k6/');
@@ -1451,6 +1456,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain("'./perf tests/run.sh' <scenario-key>");
     expect(readme).toContain("'./perf tests/run.sh' <scenario-key> --log");
     expect(readme).toContain("k6 run 'perf tests/generated/<scenario-key>.k6.js' --vus 1 --iterations 1");
+    expect(readme).toContain("k6 run 'perf tests/generated/<scenario-key>.k6.js' --vus 10 --duration 30s");
     expect(readme).toContain("cp 'perf tests/.env.example' 'perf tests/.env'");
 
     await writeFile(path.join(workspace, 'perf tests/README.md'), 'stale readme\n', 'utf8');
