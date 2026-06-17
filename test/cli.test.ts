@@ -1898,7 +1898,13 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain("step.source.kind !== 'direct'");
       expect(html).toContain('selectedStepIndex');
       expect(html).toContain('시나리오 정의');
+      expect(html).toContain('step-toggle');
       expect(html).toContain('definition-code');
+      expect(html).toContain('renderYamlCode');
+      expect(html).toContain('yaml-key');
+      expect(html).toContain('yaml-value');
+      expect(html).toContain('yaml-comment');
+      expect(html).toContain("state.selectedStepIndex === nextIndex ? null : nextIndex");
       expect(html).not.toContain('요청 단계');
       expect(html).toContain('text-overflow: ellipsis');
       expect(html).not.toContain('<h3>참조</h3>');

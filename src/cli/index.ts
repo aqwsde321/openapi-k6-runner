@@ -4178,16 +4178,12 @@ const UI_HTML = String.raw`<!doctype html>
       border-top: 1px solid var(--line);
       border-left: 3px solid transparent;
       border-radius: 0;
-      padding: 8px 0 8px 9px;
       display: grid;
       gap: 4px;
       min-width: 0;
       width: 100%;
       background: transparent;
       color: inherit;
-      cursor: pointer;
-      font: inherit;
-      text-align: left;
     }
     .step:hover { background: var(--hover); }
     .step.active {
@@ -4201,6 +4197,21 @@ const UI_HTML = String.raw`<!doctype html>
     .step.reused.active {
       border-left-color: var(--accent);
       background: #eef6ff;
+    }
+    .step-toggle {
+      align-items: start;
+      background: transparent;
+      border: 0;
+      color: inherit;
+      cursor: pointer;
+      display: grid;
+      font: inherit;
+      gap: 6px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      min-width: 0;
+      padding: 8px 0 8px 9px;
+      text-align: left;
+      width: 100%;
     }
     .step-title-row {
       align-items: start;
@@ -4224,7 +4235,7 @@ const UI_HTML = String.raw`<!doctype html>
       display: grid;
       gap: 6px;
       min-width: 0;
-      padding-top: 8px;
+      padding: 8px 0 8px 9px;
     }
     .step-code-head {
       align-items: center;
@@ -4255,6 +4266,9 @@ const UI_HTML = String.raw`<!doctype html>
       tab-size: 2;
       white-space: pre;
     }
+    .yaml-key { color: #7dd3fc; }
+    .yaml-value { color: #fde68a; }
+    .yaml-comment { color: #94a3b8; }
     .actions {
       display: flex;
       align-items: flex-start;
@@ -4604,6 +4618,48 @@ const UI_HTML = String.raw`<!doctype html>
         .replace(/"/g, '&quot;');
     }
 
+    function renderYamlCode(value) {
+      return String(value).split('\n').map(renderYamlLine).join('\n');
+    }
+
+    function renderYamlLine(line) {
+      const commentIndex = findYamlCommentIndex(line);
+      const body = commentIndex === -1 ? line : line.slice(0, commentIndex);
+      const comment = commentIndex === -1
+        ? ''
+        : '<span class="yaml-comment">' + escapeHtml(line.slice(commentIndex)) + '</span>';
+      const match = body.match(/^(\s*(?:-\s*)?)([A-Za-z0-9_.-]+)(:)(.*)$/);
+
+      if (!match) {
+        return escapeHtml(body) + comment;
+      }
+
+      return escapeHtml(match[1]) +
+        '<span class="yaml-key">' + escapeHtml(match[2]) + '</span>' +
+        escapeHtml(match[3]) +
+        (match[4] ? '<span class="yaml-value">' + escapeHtml(match[4]) + '</span>' : '') +
+        comment;
+    }
+
+    function findYamlCommentIndex(line) {
+      let quote = null;
+
+      for (let index = 0; index < line.length; index += 1) {
+        const char = line[index];
+        const previous = line[index - 1];
+
+        if ((char === '"' || char === "'") && previous !== '\\') {
+          quote = quote === char ? null : quote || char;
+        }
+
+        if (char === '#' && quote === null && (index === 0 || /\s/.test(previous))) {
+          return index;
+        }
+      }
+
+      return -1;
+    }
+
     function formatUiPath(value) {
       return String(value || '').replace(/^openapi-k6\//, '').replace(/^scenarios\//, '');
     }
@@ -4828,35 +4884,37 @@ const UI_HTML = String.raw`<!doctype html>
           '<div class="muted">' + escapeHtml(formatUiPath(detail.path)) + '</div>' +
           '<div class="row"><span class="pill">' + escapeHtml(formatStepCount(detail.stepCount)) + '</span></div>' +
         '</div>';
-      if (state.selectedStepIndex === null || state.selectedStepIndex >= detail.steps.length) {
-        state.selectedStepIndex = detail.steps.length > 0 ? 0 : null;
+      if (state.selectedStepIndex !== null && state.selectedStepIndex >= detail.steps.length) {
+        state.selectedStepIndex = null;
       }
-      const activeStep = state.selectedStepIndex === null ? null : detail.steps[state.selectedStepIndex];
       const steps = detail.steps.map((step, index) => {
         const sourceText = formatStepSource(step.source);
         const reused = step.source && step.source.kind !== 'direct';
         const active = index === state.selectedStepIndex;
-        return '<button type="button" class="step ' + (reused ? 'reused ' : '') + (active ? 'active' : '') + '" data-step-index="' + index + '">' +
-          '<div class="step-title-row"><div class="step-title">' + escapeHtml(step.id) + '</div><span class="pill step-source">' + escapeHtml(sourceText) + '</span></div>' +
-        '</button>';
+        const code = step.definition ? step.definition.code : '코드 조각을 찾을 수 없습니다.';
+        const codePath = step.definition ? formatUiPath(step.definition.path) : '';
+        const codeBlock = active
+          ? '<div class="step-code">' +
+              '<div class="step-code-head">' +
+                '<div class="step-code-path">' + escapeHtml(codePath || step.id) + '</div>' +
+                '<span class="pill step-source">' + escapeHtml(sourceText) + '</span>' +
+              '</div>' +
+              '<pre class="definition-code">' + renderYamlCode(code) + '</pre>' +
+            '</div>'
+          : '';
+        return '<div class="step ' + (reused ? 'reused ' : '') + (active ? 'active' : '') + '" data-step-index="' + index + '">' +
+          '<button type="button" class="step-toggle" data-step-index="' + index + '" aria-expanded="' + String(active) + '">' +
+            '<div class="step-title">' + escapeHtml(step.id) + '</div><span class="pill step-source">' + escapeHtml(sourceText) + '</span>' +
+          '</button>' +
+          codeBlock +
+        '</div>';
       }).join('');
-      const activeSourceText = activeStep ? formatStepSource(activeStep.source) : '';
-      const activeCode = activeStep && activeStep.definition ? activeStep.definition.code : '코드 조각을 찾을 수 없습니다.';
-      const activePath = activeStep && activeStep.definition ? formatUiPath(activeStep.definition.path) : '';
-      const codePanel = activeStep
-        ? '<div class="step-code">' +
-            '<div class="step-code-head">' +
-              '<div class="step-code-path">' + escapeHtml(activePath || activeStep.id) + '</div>' +
-              '<span class="pill step-source">' + escapeHtml(activeSourceText) + '</span>' +
-            '</div>' +
-            '<pre class="definition-code">' + escapeHtml(activeCode) + '</pre>' +
-          '</div>'
-        : '';
       els.detailBody.className = 'section-content stack';
-      els.detailBody.innerHTML = '<div><h3>시나리오 정의</h3><div class="steps">' + steps + '</div>' + codePanel + '</div>';
-      for (const item of els.detailBody.querySelectorAll('.step')) {
+      els.detailBody.innerHTML = '<div><h3>시나리오 정의</h3><div class="steps">' + steps + '</div></div>';
+      for (const item of els.detailBody.querySelectorAll('.step-toggle')) {
         item.addEventListener('click', () => {
-          state.selectedStepIndex = Number(item.getAttribute('data-step-index'));
+          const nextIndex = Number(item.getAttribute('data-step-index'));
+          state.selectedStepIndex = state.selectedStepIndex === nextIndex ? null : nextIndex;
           renderDetail();
         });
       }
