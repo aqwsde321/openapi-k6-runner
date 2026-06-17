@@ -4648,11 +4648,6 @@ const UI_HTML = String.raw`<!doctype html>
       const detail = state.detail;
       els.detailTitle.textContent = detail.name;
       setStatus(els.detailStatus, state.lastRun.get(detail.id) || 'not run');
-      const referencePills = []
-        .concat(detail.modules.map((item) => '<span class="pill">모듈 ' + escapeHtml(item) + '</span>'))
-        .concat(detail.env.map((item) => '<span class="pill">env.' + escapeHtml(item) + '</span>'))
-        .concat(detail.vars.map((item) => '<span class="pill">vars.' + escapeHtml(item) + '</span>'))
-        .concat(detail.includes.map((item) => '<span class="pill">재사용 ' + escapeHtml(item) + '</span>'));
       els.scenarioSummary.innerHTML =
         '<div class="stack" style="gap: 6px;">' +
           '<div class="muted">' + escapeHtml(formatUiPath(detail.path)) + '</div>' +
@@ -4667,11 +4662,8 @@ const UI_HTML = String.raw`<!doctype html>
           '<div class="step-title-row"><div class="step-title">' + escapeHtml(step.id) + '</div><span class="pill step-source">' + escapeHtml(sourceText) + '</span></div>' +
           '<div class="muted">' + escapeHtml(api || 'api') + '</div>' + extract + '</div>';
       }).join('');
-      const references = referencePills.length
-        ? '<div><h3>참조</h3><div class="row">' + referencePills.join('') + '</div></div>'
-        : '';
       els.detailBody.className = 'section-content stack';
-      els.detailBody.innerHTML = references + '<div><h3>요청 단계</h3><div class="steps">' + steps + '</div></div>';
+      els.detailBody.innerHTML = '<div><h3>요청 단계</h3><div class="steps">' + steps + '</div></div>';
     }
 
     async function checkServers() {

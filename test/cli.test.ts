@@ -1896,8 +1896,8 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('step-source');
       expect(html).toContain("step.source.kind !== 'direct'");
       expect(html).toContain('text-overflow: ellipsis');
-      expect(html).toContain('detail.includes.map');
-      expect(html).toContain('재사용 ');
+      expect(html).not.toContain('<h3>참조</h3>');
+      expect(html).not.toContain('detail.includes.map');
       expect(scenarios.defaultModule).toBe('app');
       expect(scenarios.moduleCount).toBe(1);
       expect(scenarios.scenarios).toHaveLength(4);
