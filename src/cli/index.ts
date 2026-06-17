@@ -4578,7 +4578,7 @@ const UI_HTML = String.raw`<!doctype html>
     const state = {
       scenarios: [],
       selected: null,
-      selectedStepIndex: null,
+      openStepIndexes: new Set(),
       detail: null,
       collapsedGroups: readCollapsedScenarioGroups(),
       lastRun: new Map(),
@@ -4842,7 +4842,7 @@ const UI_HTML = String.raw`<!doctype html>
     async function selectScenario(id) {
       const previousSelected = state.selected;
       state.selected = id;
-      if (previousSelected !== id) state.selectedStepIndex = null;
+      if (previousSelected !== id) state.openStepIndexes.clear();
       const activeItem = findRunById(state.activeOutputRunId);
       if (!activeItem || activeItem.scenario !== id) {
         const latestItem = getLatestScenarioRun(id);
@@ -4864,7 +4864,7 @@ const UI_HTML = String.raw`<!doctype html>
         els.testBtn.disabled = false;
       } catch (error) {
         state.detail = null;
-        state.selectedStepIndex = null;
+        state.openStepIndexes.clear();
         els.detailTitle.textContent = '시나리오 오류';
         els.scenarioSummary.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
         els.detailBody.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
@@ -4884,13 +4884,13 @@ const UI_HTML = String.raw`<!doctype html>
           '<div class="muted">' + escapeHtml(formatUiPath(detail.path)) + '</div>' +
           '<div class="row"><span class="pill">' + escapeHtml(formatStepCount(detail.stepCount)) + '</span></div>' +
         '</div>';
-      if (state.selectedStepIndex !== null && state.selectedStepIndex >= detail.steps.length) {
-        state.selectedStepIndex = null;
+      for (const index of Array.from(state.openStepIndexes)) {
+        if (index >= detail.steps.length) state.openStepIndexes.delete(index);
       }
       const steps = detail.steps.map((step, index) => {
         const sourceText = formatStepSource(step.source);
         const reused = step.source && step.source.kind !== 'direct';
-        const active = index === state.selectedStepIndex;
+        const active = state.openStepIndexes.has(index);
         const code = step.definition ? step.definition.code : '코드 조각을 찾을 수 없습니다.';
         const codePath = step.definition ? formatUiPath(step.definition.path) : '';
         const codeBlock = active
@@ -4914,7 +4914,11 @@ const UI_HTML = String.raw`<!doctype html>
       for (const item of els.detailBody.querySelectorAll('.step-toggle')) {
         item.addEventListener('click', () => {
           const nextIndex = Number(item.getAttribute('data-step-index'));
-          state.selectedStepIndex = state.selectedStepIndex === nextIndex ? null : nextIndex;
+          if (state.openStepIndexes.has(nextIndex)) {
+            state.openStepIndexes.delete(nextIndex);
+          } else {
+            state.openStepIndexes.add(nextIndex);
+          }
           renderDetail();
         });
       }
