@@ -1792,6 +1792,7 @@ describe('openapi-k6 CLI', () => {
           id: string;
           operationId?: string;
           source: { kind: 'direct' | 'use' | 'include'; reference?: string };
+          definition?: { path: string; code: string };
         }>;
       };
       const dottedScenarioId = 'openapi-k6/scenarios/auth/login.v2.yaml';
@@ -1895,6 +1896,10 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('formatStepSource');
       expect(html).toContain('step-source');
       expect(html).toContain("step.source.kind !== 'direct'");
+      expect(html).toContain('selectedStepIndex');
+      expect(html).toContain('시나리오 정의');
+      expect(html).toContain('definition-code');
+      expect(html).not.toContain('요청 단계');
       expect(html).toContain('text-overflow: ellipsis');
       expect(html).not.toContain('<h3>참조</h3>');
       expect(html).not.toContain('detail.includes.map');
@@ -1927,11 +1932,19 @@ describe('openapi-k6 CLI', () => {
             id: 'health',
             operationId: 'getHealth',
             source: { kind: 'use', reference: 'auth/login' },
+            definition: expect.objectContaining({
+              path: 'openapi-k6/scenarios/auth/login.yaml',
+              code: expect.stringContaining('- id: health'),
+            }),
           }),
           expect.objectContaining({
             id: 'second-health',
             operationId: 'getHealth',
             source: { kind: 'direct' },
+            definition: expect.objectContaining({
+              path: 'openapi-k6/scenarios/order/use-login.yaml',
+              code: expect.stringContaining('- id: second-health'),
+            }),
           }),
         ],
       });

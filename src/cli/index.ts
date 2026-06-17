@@ -10,7 +10,7 @@ import { homedir } from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
-import { isMap, Pair, parse as parseYaml, parseDocument, Scalar, YAMLMap } from 'yaml';
+import { isMap, isSeq, Pair, parse as parseYaml, parseDocument, Scalar, YAMLMap } from 'yaml';
 
 import { buildAst } from '../compiler/ast.builder.js';
 import { generateK6Script } from '../compiler/k6.generator.js';
@@ -2743,12 +2743,17 @@ async function readUiScenarioDetail(
     path?: string;
     condition?: string;
     extract?: string[];
+    definition?: {
+      path: string;
+      code: string;
+    };
   }>;
 }> {
   const scenarioPath = resolveUiScenarioPath(state, scenarioOption);
   const scenario = await parseWorkspaceScenarioFile(state.cwd, state.config, scenarioPath);
   const analysis = analyzeUiScenario(scenario);
   const stepSources = await readUiScenarioStepSources(state, scenarioPath);
+  const stepDefinitions = await readUiScenarioStepDefinitions(state, scenarioPath);
 
   return {
     id: formatUiScenarioOption(state.cwd, path.join(resolveLoadTestDir(state.cwd, state.config), 'scenarios'), scenarioPath),
@@ -2769,6 +2774,7 @@ async function readUiScenarioDetail(
       ...(step.api.path === undefined ? {} : { path: step.api.path }),
       ...(step.condition === undefined ? {} : { condition: step.condition }),
       ...(step.extract === undefined ? {} : { extract: Object.keys(step.extract) }),
+      ...(stepDefinitions[index] === undefined ? {} : { definition: stepDefinitions[index] }),
     })),
   };
 }
@@ -3477,6 +3483,11 @@ interface UiScenarioStepSource {
   reference?: string;
 }
 
+interface UiScenarioStepDefinition {
+  path: string;
+  code: string;
+}
+
 async function readUiScenarioStepSources(state: UiState, filePath: string): Promise<UiScenarioStepSource[]> {
   try {
     return await readUiScenarioStepSourcesInternal(state, path.resolve(filePath), new Set());
@@ -3539,6 +3550,115 @@ async function readUiScenarioStepSourcesInternal(
   }
 
   return sources;
+}
+
+async function readUiScenarioStepDefinitions(state: UiState, filePath: string): Promise<UiScenarioStepDefinition[]> {
+  try {
+    return await readUiScenarioStepDefinitionsInternal(state, path.resolve(filePath), new Set());
+  } catch {
+    return [];
+  }
+}
+
+async function readUiScenarioStepDefinitionsInternal(
+  state: UiState,
+  filePath: string,
+  stack: Set<string>,
+): Promise<UiScenarioStepDefinition[]> {
+  if (stack.has(filePath)) {
+    return [];
+  }
+
+  const raw = await fs.readFile(filePath, 'utf8');
+  const document = parseDocument(raw, { keepSourceTokens: true });
+
+  if (document.errors.length > 0 || !isMap(document.contents)) {
+    return [];
+  }
+
+  const steps = document.contents.get('steps', true);
+
+  if (!isSeq(steps)) {
+    return [];
+  }
+
+  const nextStack = new Set(stack);
+  nextStack.add(filePath);
+  const definitions: UiScenarioStepDefinition[] = [];
+
+  for (const step of steps.items) {
+    if (!isMap(step)) {
+      continue;
+    }
+
+    const useReference = readYamlMapString(step, 'use');
+    const includeReference = readYamlMapString(step, 'include');
+
+    if (useReference !== undefined) {
+      const nestedPath = resolveUiScenarioPath(state, useReference);
+      definitions.push(...await readUiScenarioStepDefinitionsInternal(state, nestedPath, nextStack));
+      continue;
+    }
+
+    if (includeReference !== undefined) {
+      const nestedPath = path.resolve(path.dirname(filePath), includeReference);
+      definitions.push(...await readUiScenarioStepDefinitionsInternal(state, nestedPath, nextStack));
+      continue;
+    }
+
+    const code = formatYamlNodeSnippet(raw, step);
+
+    if (code !== undefined) {
+      definitions.push({
+        path: formatDisplayPath(state.cwd, filePath),
+        code,
+      });
+    }
+  }
+
+  return definitions;
+}
+
+function readYamlMapString(node: YAMLMap, key: string): string | undefined {
+  const value = node.get(key);
+  return typeof value === 'string' ? value : undefined;
+}
+
+function formatYamlNodeSnippet(raw: string, node: unknown): string | undefined {
+  const range = readYamlNodeRange(node);
+
+  if (range === undefined) {
+    return undefined;
+  }
+
+  const lineStart = raw.lastIndexOf('\n', Math.max(0, range[0] - 1)) + 1;
+  return dedentYamlSnippet(raw.slice(lineStart, range[1]));
+}
+
+function readYamlNodeRange(node: unknown): [number, number, number?] | undefined {
+  const range = node && typeof node === 'object'
+    ? (node as { range?: unknown }).range
+    : undefined;
+
+  if (
+    Array.isArray(range) &&
+    typeof range[0] === 'number' &&
+    typeof range[1] === 'number'
+  ) {
+    return [range[0], range[1], typeof range[2] === 'number' ? range[2] : undefined];
+  }
+
+  return undefined;
+}
+
+function dedentYamlSnippet(value: string): string {
+  const lines = value.replace(/\r\n/g, '\n').replace(/\n+$/, '').split('\n');
+  const indents = lines
+    .filter((line) => line.trim() !== '')
+    .map((line) => line.match(/^ */)?.[0].length ?? 0);
+  const indent = indents.length === 0 ? 0 : Math.min(...indents);
+
+  return lines.map((line) => line.trim() === '' ? '' : line.slice(indent)).join('\n');
 }
 
 async function readUiJsonBody(request: IncomingMessage): Promise<unknown> {
@@ -4062,10 +4182,25 @@ const UI_HTML = String.raw`<!doctype html>
       display: grid;
       gap: 4px;
       min-width: 0;
+      width: 100%;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+    }
+    .step:hover { background: var(--hover); }
+    .step.active {
+      border-left-color: var(--accent);
+      background: #f4fbf8;
     }
     .step.reused {
       border-left-color: var(--accent-2);
       background: #f7faff;
+    }
+    .step.reused.active {
+      border-left-color: var(--accent);
+      background: #eef6ff;
     }
     .step-title-row {
       align-items: start;
@@ -4083,6 +4218,42 @@ const UI_HTML = String.raw`<!doctype html>
     .step-source {
       align-self: start;
       font-size: 11px;
+    }
+    .step-code {
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+      padding-top: 8px;
+    }
+    .step-code-head {
+      align-items: center;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      min-width: 0;
+    }
+    .step-code-path {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .definition-code {
+      background: var(--terminal);
+      border-radius: 6px;
+      color: #f3f7ff;
+      font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      margin: 0;
+      max-height: 260px;
+      min-width: 0;
+      overflow: auto;
+      padding: 10px;
+      tab-size: 2;
+      white-space: pre;
     }
     .actions {
       display: flex;
@@ -4393,6 +4564,7 @@ const UI_HTML = String.raw`<!doctype html>
     const state = {
       scenarios: [],
       selected: null,
+      selectedStepIndex: null,
       detail: null,
       collapsedGroups: readCollapsedScenarioGroups(),
       lastRun: new Map(),
@@ -4612,7 +4784,9 @@ const UI_HTML = String.raw`<!doctype html>
     }
 
     async function selectScenario(id) {
+      const previousSelected = state.selected;
       state.selected = id;
+      if (previousSelected !== id) state.selectedStepIndex = null;
       const activeItem = findRunById(state.activeOutputRunId);
       if (!activeItem || activeItem.scenario !== id) {
         const latestItem = getLatestScenarioRun(id);
@@ -4634,6 +4808,7 @@ const UI_HTML = String.raw`<!doctype html>
         els.testBtn.disabled = false;
       } catch (error) {
         state.detail = null;
+        state.selectedStepIndex = null;
         els.detailTitle.textContent = '시나리오 오류';
         els.scenarioSummary.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
         els.detailBody.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
@@ -4653,17 +4828,38 @@ const UI_HTML = String.raw`<!doctype html>
           '<div class="muted">' + escapeHtml(formatUiPath(detail.path)) + '</div>' +
           '<div class="row"><span class="pill">' + escapeHtml(formatStepCount(detail.stepCount)) + '</span></div>' +
         '</div>';
-      const steps = detail.steps.map((step) => {
-        const api = step.operationId || ((step.method || '') + ' ' + (step.path || '')).trim();
-        const extract = step.extract && step.extract.length ? '<div class="muted">응답 저장: ' + escapeHtml(step.extract.join(', ')) + '</div>' : '';
+      if (state.selectedStepIndex === null || state.selectedStepIndex >= detail.steps.length) {
+        state.selectedStepIndex = detail.steps.length > 0 ? 0 : null;
+      }
+      const activeStep = state.selectedStepIndex === null ? null : detail.steps[state.selectedStepIndex];
+      const steps = detail.steps.map((step, index) => {
         const sourceText = formatStepSource(step.source);
         const reused = step.source && step.source.kind !== 'direct';
-        return '<div class="step ' + (reused ? 'reused' : '') + '">' +
+        const active = index === state.selectedStepIndex;
+        return '<button type="button" class="step ' + (reused ? 'reused ' : '') + (active ? 'active' : '') + '" data-step-index="' + index + '">' +
           '<div class="step-title-row"><div class="step-title">' + escapeHtml(step.id) + '</div><span class="pill step-source">' + escapeHtml(sourceText) + '</span></div>' +
-          '<div class="muted">' + escapeHtml(api || 'api') + '</div>' + extract + '</div>';
+        '</button>';
       }).join('');
+      const activeSourceText = activeStep ? formatStepSource(activeStep.source) : '';
+      const activeCode = activeStep && activeStep.definition ? activeStep.definition.code : '코드 조각을 찾을 수 없습니다.';
+      const activePath = activeStep && activeStep.definition ? formatUiPath(activeStep.definition.path) : '';
+      const codePanel = activeStep
+        ? '<div class="step-code">' +
+            '<div class="step-code-head">' +
+              '<div class="step-code-path">' + escapeHtml(activePath || activeStep.id) + '</div>' +
+              '<span class="pill step-source">' + escapeHtml(activeSourceText) + '</span>' +
+            '</div>' +
+            '<pre class="definition-code">' + escapeHtml(activeCode) + '</pre>' +
+          '</div>'
+        : '';
       els.detailBody.className = 'section-content stack';
-      els.detailBody.innerHTML = '<div><h3>요청 단계</h3><div class="steps">' + steps + '</div></div>';
+      els.detailBody.innerHTML = '<div><h3>시나리오 정의</h3><div class="steps">' + steps + '</div>' + codePanel + '</div>';
+      for (const item of els.detailBody.querySelectorAll('.step')) {
+        item.addEventListener('click', () => {
+          state.selectedStepIndex = Number(item.getAttribute('data-step-index'));
+          renderDetail();
+        });
+      }
     }
 
     async function checkServers() {
