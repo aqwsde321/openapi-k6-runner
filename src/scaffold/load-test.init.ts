@@ -645,6 +645,7 @@ function renderReadme(
     ENV_COPY_COMMAND: 'cp ' + shellQuote(directory + '/.env.example') + ' ' + envArg,
     ENV_PATH: envPath,
     FIXTURES_PATH: fixturesPath,
+    GENERATED_OUTPUT_ARG: shellQuote(outputTemplatePath),
     GENERATE_NAME_COMMAND: generateNameCommand,
     GENERATE_WORKFLOW_COMMAND: generateWorkflowCommand,
     MODULE_NAME: moduleName,

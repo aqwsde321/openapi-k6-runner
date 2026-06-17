@@ -39,6 +39,8 @@ describe('README usage guide', () => {
     expect(readme).toContain('npx --yes openapi-k6 validate -s <scenario-key>');
     expect(readme).toContain('npx --yes openapi-k6 test -s <scenario-key>');
     expect(readme).toContain('npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1 --iterations 1');
+    expect(readme).toContain('k6 run openapi-k6/generated/<scenario-key>.k6.js --vus 1 --iterations 1');
+    expect(readme).toContain('예를 들어 `-s auth/login`은 `openapi-k6/generated/auth/login.k6.js`로 생성됩니다.');
     expect(readme).toContain('시나리오가 많아지면 `openapi-k6/scenarios/auth/login.yaml`처럼 폴더로 묶고, CLI에서는 `-s auth/login`으로 실행합니다.');
     expect(readme).toContain('아래 예시는 이해를 돕기 위한 값입니다. 실제 명령에는 위 placeholder를 프로젝트에 맞게 바꿔 넣습니다.');
     expect(readme).toContain('처음 적용하는 프로젝트는 `init`부터 실행합니다.');
@@ -116,6 +118,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('`test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다.');
     expect(readme).toContain('module별 baseUrl 출처');
     expect(readme).toContain('### generate와 runner');
+    expect(readme).toContain('이 방식은 YAML/OpenAPI를 다시 검증하거나 최신 스크립트를 다시 만들지 않습니다.');
     expect(readme).toContain('### 제약');
 
     expect(readme).toContain('## 파일 규칙');

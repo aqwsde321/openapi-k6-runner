@@ -203,6 +203,17 @@ npx --yes openapi-k6 test -s <scenario-key>
 npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1 --iterations 1
 ```
 
+생성된 k6 스크립트를 직접 실행할 때는 먼저 `generate`를 실행합니다.
+
+```bash
+npx --yes openapi-k6 generate -s <scenario-key>
+k6 run openapi-k6/generated/<scenario-key>.k6.js --vus 1 --iterations 1
+```
+
+기본 생성 경로는 `openapi-k6/generated/<scenario-key>.k6.js`입니다.
+예를 들어 `-s auth/login`은 `openapi-k6/generated/auth/login.k6.js`로 생성됩니다.
+`--write`나 다른 작업공간 경로를 쓰면 직접 실행할 k6 파일 경로도 그 값에 맞춰 달라집니다.
+
 `validate`가 통과한 scenario만 `generate`하고, `test`가 통과한 scenario만 `run`하는 흐름을 권장합니다.
 `run`으로 실행하는 k6 스크립트는 각 step의 `condition`을 k6 check로 검증하고, check 실패가 있으면 명령도 실패합니다.
 
@@ -428,6 +439,12 @@ k6 옵션은 scenario key 뒤에 붙입니다.
 
 ```bash
 ./openapi-k6/run.sh <scenario-key> --log --vus 1 --iterations 1
+```
+
+k6를 직접 실행할 때는 생성된 JS 파일을 지정합니다. 이 방식은 YAML/OpenAPI를 다시 검증하거나 최신 스크립트를 다시 만들지 않습니다.
+
+```bash
+k6 run openapi-k6/generated/<scenario-key>.k6.js --vus 1 --iterations 1
 ```
 
 ### 제약

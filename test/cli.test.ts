@@ -463,6 +463,8 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('./openapi-k6/run.sh <scenario-key>');
     expect(readme).toContain('./openapi-k6/run.sh <scenario-key> --vus 1 --iterations 1');
     expect(readme).toContain('./openapi-k6/run.sh <scenario-key> --log');
+    expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1 --iterations 1");
+    expect(readme).toContain('예를 들어 `-s auth/login`은 `openapi-k6/generated/auth/login.k6.js`로 생성됩니다.');
     expect(readme).toContain('로그 파일: `openapi-k6/logs/<scenario-key>.log`');
 
     expect(readme).toContain('매번 전체를 다시 읽지 말고, 같은 대화에서 최신 `init`, `update`, README 변경 이후 이미 읽었다면 필요한 섹션만 확인합니다.');
@@ -1408,6 +1410,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('./perf-tests/run.sh <scenario-key>');
     expect(readme).toContain('./perf-tests/run.sh <scenario-key> --vus 1 --iterations 1');
     expect(readme).toContain('./perf-tests/run.sh <scenario-key> --log');
+    expect(readme).toContain("k6 run 'perf-tests/generated/<scenario-key>.k6.js' --vus 1 --iterations 1");
     expect(readme).toContain('로그 파일: `perf-tests/logs/<scenario-key>.log`');
     expect(readme).toContain('cp perf-tests/.env.example perf-tests/.env');
     expect(readme).not.toContain('openapi-k6/');
@@ -1447,6 +1450,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain("--write 'perf tests/generated/<scenario-key>.k6.js'");
     expect(readme).toContain("'./perf tests/run.sh' <scenario-key>");
     expect(readme).toContain("'./perf tests/run.sh' <scenario-key> --log");
+    expect(readme).toContain("k6 run 'perf tests/generated/<scenario-key>.k6.js' --vus 1 --iterations 1");
     expect(readme).toContain("cp 'perf tests/.env.example' 'perf tests/.env'");
 
     await writeFile(path.join(workspace, 'perf tests/README.md'), 'stale readme\n', 'utf8');

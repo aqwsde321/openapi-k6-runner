@@ -70,6 +70,16 @@ __RUN_SCRIPT_ARG__ <scenario-key> --vus 1 --iterations 1
 
 로그 파일: `__DIRECTORY__/logs/<scenario-key>.log`
 
+k6를 직접 실행할 때는 먼저 `__GENERATE_NAME_COMMAND__`로 스크립트를 생성합니다.
+
+```bash
+k6 run __GENERATED_OUTPUT_ARG__ --vus 1 --iterations 1
+```
+
+기본 생성 경로는 `__DIRECTORY__/generated/<scenario-key>.k6.js`입니다.
+예를 들어 `-s auth/login`은 `__DIRECTORY__/generated/auth/login.k6.js`로 생성됩니다.
+`--write`를 쓰면 직접 실행할 k6 파일 경로도 그 값에 맞춰 달라집니다.
+
 ## Scenario 작성 규칙
 
 - `operationId`가 유일하면 `api.operationId`를 우선 사용합니다.
