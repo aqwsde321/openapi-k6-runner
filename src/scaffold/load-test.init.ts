@@ -607,6 +607,7 @@ function renderReadme(
   const catalogSearchCommand = cliCommand + ' catalog' + configOption + moduleOption + ' --query <검색어>';
   const catalogAiCommand = catalogSearchCommand + ' --ai';
   const catalogSyncAiCommand = cliCommand + ' catalog' + configOption + moduleOption + ' --sync --query <검색어> --ai';
+  const doctorCommand = cliCommand + ' doctor' + configOption;
   const uiCommand = cliCommand + ' ui' + configOption + moduleOption;
   const updateCommand = cliCommand + ' update' + configOption + moduleOption;
   const validateNameCommand = usesDefaultDirectory
@@ -640,6 +641,7 @@ function renderReadme(
     CONFIG_PATH: configPath,
     DIRECTORY: directory,
     DIRECTORY_SHELL_ARG: shellQuote(directory),
+    DOCTOR_COMMAND: doctorCommand,
     ENV_COPY_COMMAND: 'cp ' + shellQuote(directory + '/.env.example') + ' ' + envArg,
     ENV_PATH: envPath,
     FIXTURES_PATH: fixturesPath,

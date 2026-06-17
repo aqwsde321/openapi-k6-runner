@@ -447,6 +447,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 run -s <scenario-key> --log -- --vus 1 --iterations 1');
     expect(readme).toContain('npx --yes openapi-k6 generate -s <scenario-key>');
     expect(readme).toContain('npx --yes openapi-k6 ui');
+    expect(readme).toContain('npx --yes openapi-k6 doctor');
 
     const commandSection = readme.slice(readme.indexOf('## 명령'), readme.indexOf('## Scenario 작성 규칙'));
 
@@ -474,6 +475,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('폴더는 UI 카테고리로 사용합니다. 예: `openapi-k6/scenarios/auth/login.yaml`은 `-s auth/login`으로 실행합니다.');
     expect(readme).toContain('UI는 `scenarios/` 아래 폴더를 그룹으로 보여주고, 요청 단계에서 각 step의 출처를 `직접 정의`, `시나리오 사용: auth/login`처럼 표시합니다.');
     expect(readme).toContain('`test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다.');
+    expect(readme).toContain('상단 서버 상태는 module별 baseUrl 연결 여부와 snapshot 상태를 요약합니다.');
     expect(readme).toContain('UI에서 폴더는 접고 펼칠 수 있으며, 재사용된 step은 요청 단계와 최근 실행 결과에서 `시나리오 사용: auth/login`처럼 출처가 표시됩니다.');
     expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 남아 있으면 `validate`가 실패합니다.');
     expect(readme).toContain('값 우선순위는 `fixtures:` < `vars:` < CLI `--var-file` < CLI `--var`입니다.');
@@ -482,6 +484,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('`use` 값은 `auth/login`처럼 확장자 없는 scenario key여야 하며, `auth/login.yaml`이나 `auth/login.v2`는 사용할 수 없습니다.');
     expect(readme).toContain('`use`로 펼친 step의 `extract` 값은 뒤 step에서 `{{variableName}}`으로 참조할 수 있습니다.');
     expect(readme).toContain('여러 OpenAPI 서버를 한 scenario에서 섞을 때만 `api.module`을 사용합니다.');
+    expect(readme).toContain('module baseUrl은 `BASE_URL_<MODULE>`, `BASE_URL`, `modules.<name>.baseUrl`, root `baseUrl`, snapshot `servers[0].url` 순서로 해석됩니다.');
     expect(readme).toContain('openapi-k6/README.md');
     expect(readme).toContain('openapi-k6/run.sh');
     expect(readme).toContain('openapi-k6/.env.example');
@@ -1660,6 +1663,7 @@ describe('openapi-k6 CLI', () => {
       { cwd: workspace, stdout: createSink(), stderr: createSink() },
     );
     await mkdir(path.join(workspace, 'openapi-k6/openapi'), { recursive: true });
+    await writeFile(path.join(workspace, 'openapi-k6/.env'), 'BASE_URL_APP=https://env-api.test.local\n', 'utf8');
     await writeFile(path.join(workspace, 'openapi-k6/openapi/app.openapi.json'), '{}\n', 'utf8');
     await writeFile(path.join(workspace, 'openapi-k6/openapi/app.catalog.json'), '{}\n', 'utf8');
 
@@ -1679,6 +1683,8 @@ describe('openapi-k6 CLI', () => {
 
     expect(stdout.output()).toContain('Doctor openapi-k6/config.yaml');
     expect(stdout.output()).toContain('config: openapi-k6/config.yaml loaded');
+    expect(stdout.output()).toContain('modules.summary: 0 module baseUrls · 1 snapshots configured · root baseUrl configured');
+    expect(stdout.output()).toContain('modules.app.baseUrl: https://env-api.test.local (BASE_URL_APP)');
     expect(stdout.output()).toContain('modules.app.snapshot: openapi-k6/openapi/app.openapi.json');
     expect(stdout.output()).toContain('modules.app.catalog: openapi-k6/openapi/app.catalog.json');
     expect(stdout.output()).toContain('scaffold: openapi-k6/.openapi-k6.json is current');
@@ -2105,6 +2111,16 @@ describe('openapi-k6 CLI', () => {
       name: 'module-env',
       status: 'fail',
       message: 'modules "bos-api", "bos_api" all map to BASE_URL_BOS_API',
+    }));
+    expect(output.checks).toContainEqual(expect.objectContaining({
+      name: 'modules.bos-api.baseUrl',
+      status: 'fail',
+      message: expect.stringContaining('snapshot fallback could not be checked'),
+    }));
+    expect(output.checks).toContainEqual(expect.objectContaining({
+      name: 'modules.bos_api.baseUrl',
+      status: 'fail',
+      message: expect.stringContaining('set BASE_URL_BOS_API, BASE_URL, modules.bos_api.baseUrl, baseUrl, or snapshot servers[0].url'),
     }));
     expect(output.checks).toContainEqual(expect.objectContaining({
       name: 'modules.bos-api.snapshot',

@@ -5217,7 +5217,12 @@ export async function runDoctorCommand(
   }
 
   if (config !== undefined) {
-    checks.push(...await collectDoctorConfigChecks(cwd, config));
+    const loadTestEnv = await loadLoadTestEnv(path.dirname(config.path));
+    const runtimeEnv = {
+      ...loadTestEnv,
+      ...(context.env ?? process.env),
+    };
+    checks.push(...await collectDoctorConfigChecks(cwd, config, runtimeEnv));
     checks.push(collectDoctorScaffoldCheck(cwd, config, await readScaffoldWarnings(cwd, config)));
   }
 
@@ -5230,16 +5235,23 @@ export async function runDoctorCommand(
   };
 }
 
-async function collectDoctorConfigChecks(cwd: string, config: LoadTestConfig): Promise<DoctorCheck[]> {
+async function collectDoctorConfigChecks(
+  cwd: string,
+  config: LoadTestConfig,
+  runtimeEnv: NodeJS.ProcessEnv,
+): Promise<DoctorCheck[]> {
   const checks: DoctorCheck[] = [];
   const moduleNames = [...config.modules.keys()];
   const collisions = findModuleBaseUrlEnvNameCollisions(moduleNames);
+  const modules = [...config.modules.values()];
 
   checks.push({
     name: 'modules',
     status: 'pass',
     message: `${moduleNames.length} configured (${moduleNames.join(', ')})`,
   });
+
+  checks.push(collectDoctorModuleSummary(config, modules));
 
   if (collisions.length === 0) {
     checks.push({
@@ -5255,13 +5267,26 @@ async function collectDoctorConfigChecks(cwd: string, config: LoadTestConfig): P
     })));
   }
 
-  for (const moduleConfig of config.modules.values()) {
+  for (const moduleConfig of modules) {
     checks.push(checkOptionalOpenApi(moduleConfig));
+    checks.push(await checkDoctorModuleBaseUrl(cwd, config, moduleConfig, runtimeEnv));
     checks.push(await checkConfiguredFile(cwd, config, moduleConfig, 'snapshot'));
     checks.push(await checkConfiguredFile(cwd, config, moduleConfig, 'catalog'));
   }
 
   return checks;
+}
+
+function collectDoctorModuleSummary(config: LoadTestConfig, modules: LoadTestModuleConfig[]): DoctorCheck {
+  const moduleBaseUrls = modules.filter((moduleConfig) => normalizeConfiguredValue(moduleConfig.baseUrl) !== undefined).length;
+  const snapshots = modules.filter((moduleConfig) => isConfiguredValue(moduleConfig.snapshot)).length;
+  const rootBaseUrl = normalizeConfiguredValue(config.baseUrl) === undefined ? 'root baseUrl not configured' : 'root baseUrl configured';
+
+  return {
+    name: 'modules.summary',
+    status: 'pass',
+    message: `${moduleBaseUrls} module baseUrls · ${snapshots} snapshots configured · ${rootBaseUrl}`,
+  };
 }
 
 function checkOptionalOpenApi(moduleConfig: LoadTestModuleConfig): DoctorCheck {
@@ -5277,6 +5302,73 @@ function checkOptionalOpenApi(moduleConfig: LoadTestModuleConfig): DoctorCheck {
     name: `modules.${moduleConfig.name}.openapi`,
     status: 'pass',
     message: moduleConfig.openapi,
+  };
+}
+
+async function checkDoctorModuleBaseUrl(
+  cwd: string,
+  config: LoadTestConfig,
+  moduleConfig: LoadTestModuleConfig,
+  runtimeEnv: NodeJS.ProcessEnv,
+): Promise<DoctorCheck> {
+  const name = `modules.${moduleConfig.name}.baseUrl`;
+  const moduleEnvName = createModuleBaseUrlEnvName(moduleConfig.name);
+  const moduleEnv = normalizeConfiguredValue(runtimeEnv[moduleEnvName]);
+
+  if (moduleEnv !== undefined) {
+    return { name, status: 'pass', message: `${moduleEnv} (${moduleEnvName})` };
+  }
+
+  const rootEnv = normalizeConfiguredValue(runtimeEnv.BASE_URL);
+
+  if (rootEnv !== undefined) {
+    return { name, status: 'pass', message: `${rootEnv} (BASE_URL)` };
+  }
+
+  const moduleBaseUrl = normalizeConfiguredValue(moduleConfig.baseUrl);
+
+  if (moduleBaseUrl !== undefined) {
+    return { name, status: 'pass', message: `${moduleBaseUrl} (modules.${moduleConfig.name}.baseUrl)` };
+  }
+
+  const rootBaseUrl = normalizeConfiguredValue(config.baseUrl);
+
+  if (rootBaseUrl !== undefined) {
+    return { name, status: 'pass', message: `${rootBaseUrl} (baseUrl)` };
+  }
+
+  if (isConfiguredValue(moduleConfig.snapshot)) {
+    const snapshotPath = resolveConfigFilePath(config, moduleConfig.snapshot);
+
+    try {
+      const registry = await parseOpenApiFile(snapshotPath);
+
+      if (registry.defaultServerUrl !== undefined) {
+        return {
+          name,
+          status: 'pass',
+          message: `${registry.defaultServerUrl} (modules.${moduleConfig.name}.snapshot servers[0].url)`,
+        };
+      }
+
+      return {
+        name,
+        status: 'fail',
+        message: 'baseUrl is not configured and snapshot servers[0].url is missing',
+      };
+    } catch (error) {
+      return {
+        name,
+        status: 'fail',
+        message: `baseUrl is not configured; snapshot fallback could not be checked: ${formatDisplayPath(cwd, snapshotPath)} (${error instanceof Error ? error.message : String(error)})`,
+      };
+    }
+  }
+
+  return {
+    name,
+    status: 'fail',
+    message: `baseUrl is not configured; set ${moduleEnvName}, BASE_URL, modules.${moduleConfig.name}.baseUrl, baseUrl, or snapshot servers[0].url`,
   };
 }
 

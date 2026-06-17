@@ -109,9 +109,12 @@ describe('README usage guide', () => {
     expect(readme).toContain('`use` 대상 파일도 재사용될 때는 `vars:`나 `fixtures:`를 두지 않습니다.');
     expect(readme).toContain('### 여러 서버 연결');
     expect(readme).toContain('npx --yes openapi-k6 module add auth --base-url https://auth-api.example.com --sync');
+    expect(readme).toContain('baseUrl은 `BASE_URL_AUTH` 같은 module별 환경변수, `BASE_URL`, `modules.auth.baseUrl`, root `baseUrl`, OpenAPI snapshot의 `servers[0].url` 순서로 해석됩니다.');
+    expect(readme).toContain('`doctor`는 각 module의 baseUrl이 어느 출처에서 해석되는지와 snapshot/catalog 파일 존재 여부를 같이 보여줍니다.');
     expect(readme).toContain('### UI, doctor, update');
     expect(readme).toContain('폴더별 scenario는 접어서 볼 수 있고, 요청 단계는 각 step이 `직접 정의`, `시나리오 사용: auth/login`, `파일 포함: ...` 중 어디서 온 것인지 표시합니다.');
     expect(readme).toContain('`test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다.');
+    expect(readme).toContain('module별 baseUrl 출처');
     expect(readme).toContain('### generate와 runner');
     expect(readme).toContain('### 제약');
 

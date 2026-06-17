@@ -53,10 +53,12 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 | 정적 검증 후 k6 스크립트 생성 | `__GENERATE_NAME_COMMAND__` |
 | 짧은 k6 실행 | `__RUN_NAME_COMMAND__ --log -- --vus 1 --iterations 1` |
 | 로컬 UI | `__UI_COMMAND__` |
+| 작업 공간 점검 | `__DOCTOR_COMMAND__` |
 | scaffold 안전 갱신 | `__UPDATE_COMMAND__` |
 
 UI는 `scenarios/` 아래 폴더를 그룹으로 보여주고, 요청 단계에서 각 step의 출처를 `직접 정의`, `시나리오 사용: auth/login`처럼 표시합니다.
 `test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다.
+상단 서버 상태는 module별 baseUrl 연결 여부와 snapshot 상태를 요약합니다.
 
 자주 쓰는 runner:
 
@@ -89,6 +91,7 @@ __RUN_SCRIPT_ARG__ <scenario-key> --vus 1 --iterations 1
 - `use`로 펼친 step의 `extract` 값은 뒤 step에서 `{{variableName}}`으로 참조할 수 있습니다.
 - fixture 경로는 entry scenario 파일 기준 상대 경로이며 scenario 디렉터리 밖으로 나갈 수 없습니다. use 경로는 `__DIRECTORY__/scenarios` 기준입니다.
 - 여러 OpenAPI 서버를 한 scenario에서 섞을 때만 `api.module`을 사용합니다.
+- module baseUrl은 `BASE_URL_<MODULE>`, `BASE_URL`, `modules.<name>.baseUrl`, root `baseUrl`, snapshot `servers[0].url` 순서로 해석됩니다.
 
 ## 파일 규칙
 
@@ -116,6 +119,7 @@ __RUN_SCRIPT_ARG__ <scenario-key> --vus 1 --iterations 1
 ```bash
 __ENV_COPY_COMMAND__
 __CLI_COMMAND__ module add auth --base-url <url> --sync
+__DOCTOR_COMMAND__
 __GENERATE_NAME_COMMAND__
 __UPDATE_COMMAND__
 ```

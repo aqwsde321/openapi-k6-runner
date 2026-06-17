@@ -349,6 +349,22 @@ npx --yes openapi-k6 module add auth --base-url https://auth-api.example.com --s
 npx --yes openapi-k6 module list
 ```
 
+설정은 module 이름별 API 서버와 OpenAPI snapshot/catalog를 분리해서 저장합니다.
+
+```yaml
+baseUrl: https://api.example.com
+defaultModule: app
+modules:
+  app:
+    baseUrl: https://api.example.com
+    snapshot: openapi/app.openapi.json
+    catalog: openapi/app.catalog.json
+  auth:
+    baseUrl: https://auth-api.example.com
+    snapshot: openapi/auth.openapi.json
+    catalog: openapi/auth.catalog.json
+```
+
 OpenAPI 주소를 자동으로 찾지 못하면 직접 넘깁니다.
 
 ```bash
@@ -373,7 +389,9 @@ steps:
 ```
 
 `api.module`이 없는 step은 `--module`, `defaultModule`, 단일 module 추론 순서로 module을 선택합니다.
-생성된 k6 스크립트는 `BASE_URL_AUTH` 같은 module별 환경변수를 먼저 읽고, 없으면 `BASE_URL`과 config 값을 사용합니다.
+baseUrl은 `BASE_URL_AUTH` 같은 module별 환경변수, `BASE_URL`, `modules.auth.baseUrl`, root `baseUrl`, OpenAPI snapshot의 `servers[0].url` 순서로 해석됩니다.
+`doctor`는 각 module의 baseUrl이 어느 출처에서 해석되는지와 snapshot/catalog 파일 존재 여부를 같이 보여줍니다.
+생성된 k6 스크립트도 같은 우선순위로 module별 환경변수를 먼저 읽고, 없으면 공통 `BASE_URL`과 config 값을 사용합니다.
 
 ### UI, doctor, update
 
@@ -386,7 +404,7 @@ npx --yes openapi-k6 update
 - `ui`: 브라우저에서 scenario를 고르고 `validate`/`test`를 실행합니다.
   폴더별 scenario는 접어서 볼 수 있고, 요청 단계는 각 step이 `직접 정의`, `시나리오 사용: auth/login`, `파일 포함: ...` 중 어디서 온 것인지 표시합니다.
   `test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다.
-- `doctor`: config, snapshot, catalog, scaffold metadata, module env 충돌, k6 설치 여부를 점검합니다.
+- `doctor`: config, module별 baseUrl 출처, snapshot/catalog, scaffold metadata, module env 충돌, k6 설치 여부를 점검합니다.
 - `update`: 기존 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog, `generated/`, `logs/`를 보존하고 scaffold 파일만 갱신합니다.
 
 CLI가 `Scaffold update available`을 표시하면 안내된 `update` 명령을 실행합니다.
