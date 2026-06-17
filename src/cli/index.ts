@@ -358,8 +358,6 @@ export interface InitResult {
   configPath: string;
   runScriptPath: string;
   scenarioPath: string;
-  partialExamplePath: string;
-  dataFixtureExamplePath: string;
   readmePath: string;
   metadataPath: string;
   synced?: SyncResult;
@@ -371,8 +369,6 @@ export interface UpdateResult {
   envExamplePath: string;
   gitignorePath: string;
   runScriptPath: string;
-  partialExamplePath: string;
-  dataFixtureExamplePath: string;
   readmePath: string;
   metadataPath: string;
   migratedFrom?: string;
@@ -5762,8 +5758,6 @@ function writeInitSummary(
   writeLine(stdout, `${initStatusSymbol(stdout, 'success')} Created ${formatDisplayPath(cwd, result.directoryPath)}`);
   writeLine(stdout, `  config    ${formatDisplayPath(cwd, result.configPath)}`);
   writeLine(stdout, `  scenario  ${formatDisplayPath(cwd, result.scenarioPath)}`);
-  writeLine(stdout, `  partial   ${formatDisplayPath(cwd, result.partialExamplePath)}`);
-  writeLine(stdout, `  fixture   ${formatDisplayPath(cwd, result.dataFixtureExamplePath)}`);
   writeLine(stdout, `  runner    ${formatDisplayPath(cwd, result.runScriptPath)}`);
   writeLine(stdout, `  guide     ${formatDisplayPath(cwd, result.readmePath)}`);
   writeLine(stdout, `  metadata  ${formatDisplayPath(cwd, result.metadataPath)}`);
@@ -5827,8 +5821,6 @@ function writeUpdateSummary(
   writeLine(stdout, `  runner       ${formatDisplayPath(cwd, result.runScriptPath)}`);
   writeLine(stdout, `  env example  ${formatDisplayPath(cwd, result.envExamplePath)}`);
   writeLine(stdout, `  gitignore    ${formatDisplayPath(cwd, result.gitignorePath)}`);
-  writeLine(stdout, `  partial      ${formatDisplayPath(cwd, result.partialExamplePath)}`);
-  writeLine(stdout, `  fixture      ${formatDisplayPath(cwd, result.dataFixtureExamplePath)}`);
   writeLine(stdout, `  metadata     ${formatDisplayPath(cwd, result.metadataPath)}`);
   writeLine(stdout, '  kept existing scenarios, snapshots, generated scripts, logs, and .env unchanged');
 }

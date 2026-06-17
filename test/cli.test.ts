@@ -345,8 +345,6 @@ describe('openapi-k6 CLI', () => {
     const runScriptStat = await stat(runScriptPath);
     const runScriptSyntax = spawnSync('bash', ['-n', runScriptPath], { encoding: 'utf8' });
     const scenario = await readFile(path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'), 'utf8');
-    const partialExample = await readFile(path.join(workspace, 'openapi-k6/scenarios/partials/login.yaml.example'), 'utf8');
-    const dataFixtureExample = await readFile(path.join(workspace, 'openapi-k6/scenarios/fixtures/dev.yaml.example'), 'utf8');
     const readme = await readFile(path.join(workspace, 'openapi-k6/README.md'), 'utf8');
     const metadata = JSON.parse(
       await readFile(path.join(workspace, 'openapi-k6/.openapi-k6.json'), 'utf8'),
@@ -422,12 +420,8 @@ describe('openapi-k6 CLI', () => {
     expect(runScriptSyntax.stderr).toBe('');
     expect(runScriptSyntax.status).toBe(0);
     expect(scenario).toContain('path: /__dev/error-codes');
-    expect(partialExample).toContain('Rename this file to login.yaml and include it from a scenario');
-    expect(partialExample).toContain('username: "{{vars.loginId}}"');
-    expect(partialExample).toContain('password: "{{env.LOGIN_PASSWORD}}"');
-    expect(partialExample).toContain('token:');
-    expect(dataFixtureExample).toContain('loginId: tester@example.com');
-    expect(dataFixtureExample).toContain('sku: ABC-001');
+    await expect(stat(path.join(workspace, 'openapi-k6/scenarios/partials'))).rejects.toThrow();
+    await expect(stat(path.join(workspace, 'openapi-k6/scenarios/fixtures'))).rejects.toThrow();
     expect(readme).toContain('# openapi-k6');
     expect(readme).toContain('AI coding agent용 openapi-k6 작업 계약입니다.');
     expect(readme).toContain('OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작성 -> validate/test');
@@ -486,11 +480,13 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('상단 서버 상태는 module별 baseUrl 연결 여부와 snapshot 상태를 요약합니다.');
     expect(readme).toContain('UI에서 폴더는 접고 펼칠 수 있으며, 재사용된 step은 요청 단계와 최근 실행 결과에서 `시나리오 사용: auth/login`처럼 출처가 표시됩니다.');
     expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 남아 있으면 `validate`가 실패합니다.');
-    expect(readme).toContain('값 우선순위는 `fixtures:` < `vars:` < CLI `--var-file` < CLI `--var`입니다.');
-    expect(readme).toContain('`use` 대상 파일에는 `vars:`나 `fixtures:`를 두지 않고 entry scenario에서 관리합니다.');
+    expect(readme).toContain('값 우선순위는 `vars:` < CLI `--var-file` < CLI `--var`입니다.');
+    expect(readme).toContain('`use` 대상 파일에는 `vars:`를 두지 않고 entry scenario에서 관리합니다.');
     expect(readme).toContain('다른 폴더의 scenario steps는 `steps` 안의 `- use: auth/login`처럼 scenario root 기준 key로 재사용합니다.');
     expect(readme).toContain('`use` 값은 `auth/login`처럼 확장자 없는 scenario key여야 하며, `auth/login.yaml`이나 `auth/login.v2`는 사용할 수 없습니다.');
     expect(readme).toContain('`use`로 펼친 step의 `extract` 값은 뒤 step에서 `{{variableName}}`으로 참조할 수 있습니다.');
+    expect(readme).not.toContain('fixtures:');
+    expect(readme).not.toContain('fixture 경로');
     expect(readme).toContain('여러 OpenAPI 서버를 한 scenario에서 섞을 때만 `api.module`을 사용합니다.');
     expect(readme).toContain('module baseUrl은 `BASE_URL_<MODULE>`, `BASE_URL`, `modules.<name>.baseUrl`, root `baseUrl`, snapshot `servers[0].url` 순서로 해석됩니다.');
     expect(readme).toContain('openapi-k6/README.md');
@@ -1592,16 +1588,14 @@ describe('openapi-k6 CLI', () => {
     ) as { scaffoldVersion: string };
     const env = await readFile(path.join(workspace, 'openapi-k6/.env'), 'utf8');
     const scenario = await readFile(path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'), 'utf8');
-    const partialExample = await readFile(path.join(workspace, 'openapi-k6/scenarios/partials/login.yaml.example'), 'utf8');
-    const dataFixtureExample = await readFile(path.join(workspace, 'openapi-k6/scenarios/fixtures/dev.yaml.example'), 'utf8');
     const generated = await readFile(path.join(workspace, 'openapi-k6/generated/custom.k6.js'), 'utf8');
     const snapshot = await readFile(path.join(workspace, 'openapi-k6/openapi/custom.openapi.json'), 'utf8');
     const log = await readFile(path.join(workspace, 'openapi-k6/logs/smoke.log'), 'utf8');
 
     expect(output.output()).toContain('Updated openapi-k6 workspace metadata in openapi-k6');
     expect(output.output()).toContain('kept config  openapi-k6/config.yaml');
-    expect(output.output()).toContain('partial      openapi-k6/scenarios/partials/login.yaml.example');
-    expect(output.output()).toContain('fixture      openapi-k6/scenarios/fixtures/dev.yaml.example');
+    expect(output.output()).not.toContain('partial');
+    expect(output.output()).not.toContain('fixture');
     expect(output.output()).toContain('kept existing scenarios, snapshots, generated scripts, logs, and .env unchanged');
     expect(config).toBe('baseUrl: https://kept.test.local\nmodules:\n  pharma:\n    openapi: https://kept.test.local/v3/api-docs\n');
     expect(readme).toContain('# openapi-k6');
@@ -1612,8 +1606,8 @@ describe('openapi-k6 CLI', () => {
     expect(metadata.scaffoldVersion).toBe(CURRENT_SCAFFOLD_VERSION);
     expect(env).toBe('LOGIN_PASSWORD=local-secret\n');
     expect(scenario).toBe('name: kept\nsteps: []\n');
-    expect(partialExample).toContain('username: "{{vars.loginId}}"');
-    expect(dataFixtureExample).toContain('sku: ABC-001');
+    await expect(stat(path.join(workspace, 'openapi-k6/scenarios/partials'))).rejects.toThrow();
+    await expect(stat(path.join(workspace, 'openapi-k6/scenarios/fixtures'))).rejects.toThrow();
     expect(generated).toBe('export default function () {}\n');
     expect(snapshot).toBe('{}\n');
     expect(log).toBe('old log\n');
