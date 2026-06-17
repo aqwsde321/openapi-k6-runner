@@ -1883,7 +1883,7 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('run-result-kind');
       expect(html).toContain('run-result-validate');
       expect(html).toContain('run-result-test');
-      expect(html).toContain('formatUiPath(scenario.path)');
+      expect(html).not.toContain('formatUiPath(scenario.path)');
       expect(html).toContain('formatUiPath(detail.path)');
       expect(html).toContain('formatUiPath(snapshot.path)');
       expect(html).toContain("replace(/^scenarios\\//, '')");

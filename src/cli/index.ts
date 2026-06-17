@@ -4090,7 +4090,7 @@ const UI_HTML = String.raw`<!doctype html>
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .scenario-path, .muted {
+    .muted {
       min-width: 0;
       color: var(--muted);
       font-size: 11px;
@@ -4098,7 +4098,6 @@ const UI_HTML = String.raw`<!doctype html>
       overflow-wrap: anywhere;
       word-break: break-word;
     }
-    .scenario-item .scenario-path,
     .scenario-item .muted {
       display: block;
       max-width: 100%;
@@ -4845,7 +4844,6 @@ const UI_HTML = String.raw`<!doctype html>
         const status = state.lastRun.get(scenario.id) || (scenario.error ? 'failed' : 'not run');
         return '<button class="scenario-item ' + (state.selected === scenario.id ? 'active' : '') + '" data-id="' + escapeHtml(scenario.id) + '" title="' + escapeHtml(scenario.path) + '">' +
           '<div class="scenario-item-head"><span class="scenario-name">' + escapeHtml(scenario.name) + '</span><span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span></div>' +
-          '<div class="scenario-path">' + escapeHtml(formatUiPath(scenario.path)) + '</div>' +
           '<div class="muted">' + (scenario.stepCount === undefined ? '파싱 오류' : formatStepCount(scenario.stepCount)) + '</div>' +
           '</button>';
     }
