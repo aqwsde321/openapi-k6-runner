@@ -106,24 +106,24 @@ describe('README usage guide', () => {
     expect(readme).toContain('| 다른 scenario 재사용 | `steps` 안에서 `- use: auth/login` |');
     expect(readme).toContain('`npx --yes openapi-k6 module add auth --base-url <url> --sync`');
     expect(readme).toContain('CLI가 `Scaffold update available`을 표시하면 `npx --yes openapi-k6 update`');
-    expect(readme).toContain('fixture 경로는 실행하는 scenario 파일 기준 상대 경로이며');
     expect(readme).toContain('use 경로는 `openapi-k6/scenarios` 기준 scenario key이며');
     expect(readme).toContain('`use`에는 확장자를 쓰지 않습니다.');
-    expect(readme).toContain('<summary>고급 기능 예시 보기</summary>');
-    expect(readme).toContain('### 테스트 데이터 재사용');
-    expect(readme).toContain('우선순위는 `fixtures:` < `vars:` < `--var-file` < `--var`입니다.');
-    expect(readme).toContain('### 공통 step include');
-    expect(readme).toContain('include 파일에는 `vars:`나 `fixtures:`를 두지 않습니다.');
+    expect(readme).toContain('<summary>재사용과 고급 설정 보기</summary>');
     expect(readme).toContain('### 다른 scenario use');
     expect(readme).toContain('- use: auth/login');
     expect(readme).toContain('`use` 값은 `auth/login`처럼 확장자 없는 scenario key여야 합니다.');
-    expect(readme).toContain('`use` 대상 파일도 재사용될 때는 `vars:`나 `fixtures:`를 두지 않습니다.');
+    expect(readme).toContain('`use` 대상 파일에는 반복 값을 두지 않고 entry scenario의 `vars:` 또는 CLI `--var-file`, `--var`에서 관리합니다.');
+    expect(readme).toContain('### 테스트 데이터 재사용');
+    expect(readme).toContain('npx --yes openapi-k6 test -s <scenario-key> --var-file openapi-k6/vars/stage.yaml');
+    expect(readme).toContain('우선순위는 `vars:` < CLI `--var-file` < CLI `--var`입니다.');
+    expect(readme).toContain('### 기존 호환 기능');
+    expect(readme).toContain('기존 프로젝트의 `fixtures:`와 `include:`는 계속 동작합니다. 새 scenario는 `vars:`/`--var-file`과 `use`를 우선 사용합니다.');
     expect(readme).toContain('### 여러 서버 연결');
     expect(readme).toContain('npx --yes openapi-k6 module add auth --base-url https://auth-api.example.com --sync');
     expect(readme).toContain('baseUrl은 `BASE_URL_AUTH` 같은 module별 환경변수, `BASE_URL`, `modules.auth.baseUrl`, root `baseUrl`, OpenAPI snapshot의 `servers[0].url` 순서로 해석됩니다.');
     expect(readme).toContain('`doctor`는 각 module의 baseUrl이 어느 출처에서 해석되는지와 snapshot/catalog 파일 존재 여부를 같이 보여줍니다.');
     expect(readme).toContain('### UI, doctor, update');
-    expect(readme).toContain('폴더별 scenario는 접어서 볼 수 있고, 요청 단계는 각 step이 `직접 정의`, `시나리오 사용: auth/login`, `파일 포함: ...` 중 어디서 온 것인지 표시합니다.');
+    expect(readme).toContain('폴더별 scenario는 접어서 볼 수 있고, 요청 단계는 각 step이 `직접 정의`, `시나리오 사용: auth/login`처럼 어디서 온 것인지 표시합니다.');
     expect(readme).toContain('`test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다.');
     expect(readme).toContain('module별 baseUrl 출처');
     expect(readme).toContain('### generate와 runner');
@@ -149,8 +149,9 @@ describe('README usage guide', () => {
     expect(readme.indexOf('## 필요할 때만')).toBeLessThan(readme.indexOf('## 파일 규칙'));
     expect(readme.indexOf('## openapi-k6 명령 모음')).toBeLessThan(readme.indexOf('## k6 명령 모음'));
     expect(readme.indexOf('## k6 명령 모음')).toBeLessThan(readme.indexOf('## 지원 범위'));
-    expect(readme.indexOf('<summary>고급 기능 예시 보기</summary>')).toBeGreaterThan(readme.indexOf('## 필요할 때만'));
-    expect(readme.indexOf('<summary>고급 기능 예시 보기</summary>')).toBeLessThan(readme.indexOf('## 파일 규칙'));
+    expect(readme.indexOf('<summary>재사용과 고급 설정 보기</summary>')).toBeGreaterThan(readme.indexOf('## 필요할 때만'));
+    expect(readme.indexOf('<summary>재사용과 고급 설정 보기</summary>')).toBeLessThan(readme.indexOf('## 파일 규칙'));
+    expect(readme.indexOf('### 다른 scenario use')).toBeLessThan(readme.indexOf('### 테스트 데이터 재사용'));
 
     expect(readme).not.toContain('## 진행 방식 선택');
     expect(readme).not.toContain('## AI에게 맡기기');
@@ -158,6 +159,10 @@ describe('README usage guide', () => {
     expect(readme).not.toContain('docs/advanced-usage.md');
     expect(readme).not.toContain('npx --yes openapi-k6 run -s smoke --log -- --vus 1 --iterations 1');
     expect(readme).not.toContain('-- --vus');
+    expect(readme).not.toContain('### 공통 step include');
+    expect(readme).not.toContain('- include: ./partials/login.yaml');
+    expect(readme).not.toContain('openapi-k6/scenarios/partials/login.yaml');
+    expect(readme).not.toContain('파일 포함: ...');
   });
 
   it('keeps the docs index focused on secondary documents', async () => {

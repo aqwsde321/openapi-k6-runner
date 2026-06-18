@@ -229,92 +229,14 @@ npx --yes openapi-k6 run -s <scenario-key>
 | 작업 공간 점검 | `npx --yes openapi-k6 doctor` |
 | 기존 scaffold 안전 갱신 | CLI가 `Scaffold update available`을 표시하면 `npx --yes openapi-k6 update` |
 
-fixture 경로는 실행하는 scenario 파일 기준 상대 경로이며, scenario 디렉터리 밖으로 나갈 수 없습니다.
 use 경로는 `openapi-k6/scenarios` 기준 scenario key이며, 다른 폴더의 steps를 같은 실행 context에 펼칩니다.
 `use`에는 확장자를 쓰지 않습니다. 점이 들어간 파일명은 scenario key가 아니므로 재사용 대상은 `auth/login.yaml`처럼 key-safe한 이름으로 둡니다.
 여러 OpenAPI module을 한 scenario에서 섞을 때는 step의 `api.module`을 지정합니다.
 
 <details>
-<summary>고급 기능 예시 보기</summary>
+<summary>재사용과 고급 설정 보기</summary>
 
 빠른 시작이 통과한 뒤, 반복을 줄이거나 여러 서버를 연결해야 할 때만 사용합니다.
-
-### 테스트 데이터 재사용
-
-같은 값을 여러 step에서 쓰면 scenario 상단에 `vars:`를 둡니다.
-
-```yaml
-name: order-flow
-
-vars:
-  sku: ABC-001
-
-steps:
-  - id: create-order
-    api:
-      operationId: createOrder
-    request:
-      body:
-        sku: "{{vars.sku}}"
-```
-
-환경별 값은 fixture 파일로 분리할 수 있습니다.
-
-```yaml
-fixtures:
-  - ./fixtures/dev.yaml
-```
-
-```yaml
-# openapi-k6/scenarios/fixtures/dev.yaml
-sku: ABC-001
-tenantId: dev-tenant
-```
-
-실행 시점 override도 가능합니다.
-
-```bash
-npx --yes openapi-k6 test -s <scenario-key> --var-file openapi-k6/scenarios/fixtures/stage.yaml
-npx --yes openapi-k6 test -s <scenario-key> --var sku=ABC-002
-```
-
-우선순위는 `fixtures:` < `vars:` < `--var-file` < `--var`입니다.
-
-### 공통 step include
-
-로그인이나 seed 같은 공통 step은 partial YAML로 뺄 수 있습니다.
-
-```yaml
-steps:
-  - include: ./partials/login.yaml
-  - id: get-me
-    api:
-      operationId: getMe
-    request:
-      headers:
-        Authorization: "Bearer {{token}}"
-```
-
-partial 파일에는 `steps`만 둡니다.
-
-```yaml
-# openapi-k6/scenarios/partials/login.yaml
-steps:
-  - id: login
-    api:
-      operationId: loginUser
-    request:
-      body:
-        username: "{{vars.loginId}}"
-        password: "{{env.LOGIN_PASSWORD}}"
-    extract:
-      token:
-        from: $.token
-    condition: status == 200
-```
-
-include 파일에는 `vars:`나 `fixtures:`를 두지 않습니다.
-변수는 실행하는 entry scenario에서 관리합니다.
 
 ### 다른 scenario use
 
@@ -349,8 +271,40 @@ steps:
         from: $.token
 ```
 
-`use` 대상 파일도 재사용될 때는 `vars:`나 `fixtures:`를 두지 않습니다.
-변수는 실행하는 entry scenario에서 관리합니다.
+`use` 대상 파일에는 반복 값을 두지 않고 entry scenario의 `vars:` 또는 CLI `--var-file`, `--var`에서 관리합니다.
+
+### 테스트 데이터 재사용
+
+같은 값을 여러 step에서 쓰면 scenario 상단에 `vars:`를 둡니다.
+
+```yaml
+name: order-flow
+
+vars:
+  sku: ABC-001
+
+steps:
+  - id: create-order
+    api:
+      operationId: createOrder
+    request:
+      body:
+        sku: "{{vars.sku}}"
+```
+
+실행 시점 override도 가능합니다.
+
+```bash
+npx --yes openapi-k6 test -s <scenario-key> --var-file openapi-k6/vars/stage.yaml
+npx --yes openapi-k6 test -s <scenario-key> --var sku=ABC-002
+```
+
+우선순위는 `vars:` < CLI `--var-file` < CLI `--var`입니다.
+
+### 기존 호환 기능
+
+기존 프로젝트의 `fixtures:`와 `include:`는 계속 동작합니다. 새 scenario는 `vars:`/`--var-file`과 `use`를 우선 사용합니다.
+`fixtures`와 `include` 경로는 entry scenario 디렉터리 밖으로 나갈 수 없습니다.
 
 ### 여러 서버 연결
 
@@ -414,7 +368,7 @@ npx --yes openapi-k6 update
 ```
 
 - `ui`: 브라우저에서 scenario를 고르고 `validate`/`test`를 실행합니다.
-  폴더별 scenario는 접어서 볼 수 있고, 요청 단계는 각 step이 `직접 정의`, `시나리오 사용: auth/login`, `파일 포함: ...` 중 어디서 온 것인지 표시합니다.
+  폴더별 scenario는 접어서 볼 수 있고, 요청 단계는 각 step이 `직접 정의`, `시나리오 사용: auth/login`처럼 어디서 온 것인지 표시합니다.
   `test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다.
 - `doctor`: config, module별 baseUrl 출처, snapshot/catalog, scaffold metadata, module env 충돌, k6 설치 여부를 점검합니다.
 - `update`: 기존 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog, `generated/`, `logs/`를 보존하고 scaffold 파일만 갱신합니다.
@@ -461,7 +415,6 @@ k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s --sum
 - OpenAPI 3.x만 지원합니다.
 - `condition`은 분기가 아니라 검증식입니다.
 - `body`와 `multipart`는 같은 step에서 함께 쓰지 않습니다.
-- include와 fixture 경로는 entry scenario 디렉터리 밖으로 나갈 수 없습니다.
 - use 경로는 `openapi-k6/scenarios` 기준 확장자 없는 scenario key이며 scenario root 밖으로 나갈 수 없습니다.
 - 비밀값은 scenario YAML에 직접 쓰지 않고 `{{env.NAME}}`으로 참조합니다.
 
