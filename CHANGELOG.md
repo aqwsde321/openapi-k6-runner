@@ -6,11 +6,35 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-19
+
 ### Added
 
 - `auth/login` 같은 폴더형 scenario key를 지원해 `scenarios/auth/login.yaml`, `generated/auth/login.k6.js`, `logs/auth/login.log`처럼 시나리오, 생성물, 로그/리포트 경로를 같은 구조로 관리할 수 있게 했습니다.
 - Scenario YAML `steps`에서 `- use: auth/login`으로 scenario root 기준의 다른 시나리오 steps를 재사용할 수 있게 했습니다.
 - UI의 scenario 목록/상세에서 폴더형 시나리오와 `use` 재사용 참조를 확인할 수 있게 했습니다.
+- UI 실행 결과에서 step별 성공/실패, HTTP status, 소요시간, step 출처를 요약해 표시하도록 했습니다.
+- UI에서 scenario step 원문 YAML을 step별 토글로 확인할 수 있게 했습니다.
+- `openapi-k6 doctor`가 module별 baseUrl 연결 여부와 snapshot 상태를 함께 점검하도록 보강했습니다.
+- 로컬 fixture 백엔드와 샘플 workspace를 띄우는 `pnpm run sample:ui`를 추가했습니다.
+
+### Changed
+
+- `init` 기본 scaffold를 단순화해 `partials/`와 `fixtures/` 예시 파일을 기본 생성하지 않도록 했습니다.
+- 루트 README와 scaffold README를 `use`, `vars`, `--var-file`, 직접 `k6 run` 흐름 중심으로 정리했습니다.
+- README의 k6 명령 모음을 별도 섹션으로 분리하고, k6 Web Dashboard와 HTML report 예시를 추가했습니다.
+- UI에서 서버 상태를 scenario 상세가 아니라 헤더 요약으로 표시하고, module별 연결 상태를 hover 팝업에서 확인하도록 정리했습니다.
+- UI에서 실행 히스토리 목록을 제거하고, 선택한 scenario의 최근 validate/test 결과와 실행 로그를 중심으로 표시하도록 정리했습니다.
+- `validate`, `generate`, `run`에서 정적 검증 후 AST를 준비하는 흐름을 공통화했습니다.
+
+### Fixed
+
+- `run`에서 k6 check 실패가 프로세스 실패로 반영되도록 수정했습니다.
+- `generate`가 정적 검증 실패 시 기존 생성물을 덮어쓰지 않도록 보강했습니다.
+- `run` 실패 시 기존 생성물을 보존하도록 보강했습니다.
+- UI 서버 연결이 끊기면 화면 전체에 연결 끊김 상태를 표시하고, 재연결되면 다시 사용할 수 있도록 했습니다.
+- UI step 코드 토글이 여러 step에서 독립적으로 열리고 닫히도록 수정했습니다.
+- UI 서버 상태 팝업이 마우스를 옮기는 동안 너무 빨리 닫히지 않도록 수정했습니다.
 
 ## [0.8.0] - 2026-06-11
 
@@ -197,7 +221,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.0...v0.7.1
