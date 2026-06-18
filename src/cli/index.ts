@@ -3930,6 +3930,49 @@ const UI_HTML = String.raw`<!doctype html>
       padding: 12px;
       height: calc(100vh - 60px);
     }
+    body.ui-disconnected header,
+    body.ui-disconnected main {
+      filter: blur(2px);
+      pointer-events: none;
+      user-select: none;
+    }
+    .connection-overlay {
+      align-items: center;
+      background: rgba(247, 248, 251, 0.62);
+      display: none;
+      inset: 0;
+      justify-content: center;
+      padding: 18px;
+      position: fixed;
+      z-index: 50;
+    }
+    body.ui-disconnected .connection-overlay {
+      display: grid;
+    }
+    .connection-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      box-shadow: 0 18px 44px rgba(16, 24, 40, 0.18);
+      display: grid;
+      gap: 10px;
+      max-width: 440px;
+      padding: 16px;
+      width: min(100%, 440px);
+    }
+    .connection-title {
+      font-size: 16px;
+      font-weight: 800;
+    }
+    .connection-message {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .connection-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
     .panel {
       min-height: 0;
       background: var(--panel);
@@ -4582,8 +4625,18 @@ const UI_HTML = String.raw`<!doctype html>
       <pre id="output" class="terminal">시나리오를 선택한 뒤 검증/실행하세요.</pre>
     </section>
   </main>
+  <div id="connectionOverlay" class="connection-overlay" role="alert" aria-live="assertive">
+    <div class="connection-card">
+      <div class="connection-title">UI 서버 연결 끊김</div>
+      <div id="connectionMessage" class="connection-message">샘플 UI 서버가 실행 중인지 확인하세요.</div>
+      <div class="connection-actions">
+        <button id="reconnectBtn" class="blue" type="button">재연결</button>
+      </div>
+    </div>
+  </div>
   <script>
     const COLLAPSED_GROUPS_STORAGE_KEY = 'openapi-k6.ui.collapsedScenarioGroups';
+    const UI_CONNECTION_CHECK_INTERVAL_MS = 5000;
 
     const state = {
       scenarios: [],
@@ -4594,6 +4647,7 @@ const UI_HTML = String.raw`<!doctype html>
       lastRun: new Map(),
       runsByScenario: new Map(),
       activeOutputRunId: null,
+      uiDisconnected: false,
       serverSummary: { checked: false, moduleCount: 0, connectedServers: 0, failedServers: 0, missingSnapshots: 0, issueModules: 0 }
     };
 
@@ -4617,7 +4671,9 @@ const UI_HTML = String.raw`<!doctype html>
       output: document.getElementById('output'),
       runStatus: document.getElementById('runStatus'),
       runHint: document.getElementById('runHint'),
-      runSummary: document.getElementById('runSummary')
+      runSummary: document.getElementById('runSummary'),
+      connectionMessage: document.getElementById('connectionMessage'),
+      reconnectBtn: document.getElementById('reconnectBtn')
     };
 
     function escapeHtml(value) {
@@ -4751,7 +4807,42 @@ const UI_HTML = String.raw`<!doctype html>
       els.runHint.className = 'hint' + (tone ? ' ' + tone : '');
     }
 
+    function createUiConnectionError(error) {
+      const next = new Error('UI 서버 연결 끊김');
+      next.name = 'UiConnectionError';
+      next.cause = error;
+      return next;
+    }
+
+    function isUiConnectionError(error) {
+      return error instanceof Error && error.name === 'UiConnectionError';
+    }
+
+    function setUiDisconnected(error) {
+      state.uiDisconnected = true;
+      document.body.classList.add('ui-disconnected');
+      const reason = error instanceof Error && error.message ? ' 마지막 오류: ' + error.message : '';
+      els.connectionMessage.textContent = location.host + '에 연결할 수 없습니다. 샘플 UI 서버가 실행 중인지 확인하세요.' + reason;
+      els.validateBtn.disabled = true;
+      els.testBtn.disabled = true;
+      setHint('UI 서버 연결 끊김. 재연결 후 실행할 수 있습니다.', 'bad');
+    }
+
+    function clearUiDisconnected() {
+      if (!state.uiDisconnected) return;
+      state.uiDisconnected = false;
+      document.body.classList.remove('ui-disconnected');
+      updateRunHint();
+    }
+
     function updateRunHint() {
+      if (state.uiDisconnected) {
+        setHint('UI 서버 연결 끊김. 재연결 후 실행할 수 있습니다.', 'bad');
+        els.validateBtn.disabled = true;
+        els.testBtn.disabled = true;
+        return;
+      }
+
       if (!state.selected) {
         setHint('시나리오를 선택하세요.', '');
       } else if (state.serverSummary.missingSnapshots > 0) {
@@ -4773,7 +4864,14 @@ const UI_HTML = String.raw`<!doctype html>
     }
 
     async function fetchJson(url, options) {
-      const response = await fetch(url, options);
+      let response;
+      try {
+        response = await fetch(url, options);
+      } catch (error) {
+        setUiDisconnected(error);
+        throw createUiConnectionError(error);
+      }
+      clearUiDisconnected();
       const json = await response.json();
       if (!response.ok) {
         throw new Error(json.error || response.statusText);
@@ -4781,11 +4879,25 @@ const UI_HTML = String.raw`<!doctype html>
       return json;
     }
 
+    async function checkUiConnection() {
+      try {
+        const response = await fetch('/api/scenarios', { cache: 'no-store' });
+        if (!response.ok) return;
+        if (state.uiDisconnected) await reconnectUi();
+      } catch (error) {
+        setUiDisconnected(error);
+      }
+    }
+
     async function loadScenarios() {
       const data = await fetchJson('/api/scenarios');
       state.scenarios = data.scenarios;
       renderScenarioList();
-      if (!state.selected && state.scenarios.length > 0) {
+      const selectedExists = state.selected && state.scenarios.some((scenario) => scenario.id === state.selected);
+      if (selectedExists) {
+        await selectScenario(state.selected);
+      } else if (state.scenarios.length > 0) {
+        state.selected = null;
         await selectScenario(state.scenarios[0].id);
       }
       updateRunHint();
@@ -4874,9 +4986,12 @@ const UI_HTML = String.raw`<!doctype html>
       } catch (error) {
         state.detail = null;
         state.openStepIndexes.clear();
-        els.detailTitle.textContent = '시나리오 오류';
-        els.scenarioSummary.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
-        els.detailBody.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
+        const message = isUiConnectionError(error)
+          ? '상세 정보를 불러오지 못했습니다.'
+          : error.message;
+        els.detailTitle.textContent = isUiConnectionError(error) ? '상세 정보' : '시나리오 오류';
+        els.scenarioSummary.innerHTML = '<div class="empty">' + escapeHtml(message) + '</div>';
+        els.detailBody.innerHTML = '<div class="empty">' + escapeHtml(message) + '</div>';
         els.validateBtn.disabled = true;
         els.testBtn.disabled = true;
       }
@@ -4957,6 +5072,17 @@ const UI_HTML = String.raw`<!doctype html>
       } finally {
         setStatus(els.runStatus, 'idle');
         updateRunHint();
+      }
+    }
+
+    async function reconnectUi() {
+      try {
+        await loadScenarios();
+        await checkServers();
+      } catch (error) {
+        if (!isUiConnectionError(error)) {
+          els.scenarioList.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
+        }
       }
     }
 
@@ -5280,6 +5406,7 @@ const UI_HTML = String.raw`<!doctype html>
       });
       events.onerror = () => {
         if (runItem.status === 'running') {
+          setUiDisconnected(new Error('실행 로그 연결이 끊겼습니다.'));
           runItem.status = 'failed';
           runItem.finishedAt = new Date().toISOString();
           runItem.exitCode = 1;
@@ -5303,12 +5430,17 @@ const UI_HTML = String.raw`<!doctype html>
 
     els.searchInput.addEventListener('input', renderScenarioList);
     els.checkServersBtn.addEventListener('click', checkServers);
+    els.reconnectBtn.addEventListener('click', reconnectUi);
     els.validateBtn.addEventListener('click', () => runCommand('validate'));
     els.testBtn.addEventListener('click', () => runCommand('test'));
     els.clearBtn.addEventListener('click', clearRunOutput);
+    setInterval(checkUiConnection, UI_CONNECTION_CHECK_INTERVAL_MS);
 
     loadScenarios().then(checkServers).catch((error) => {
-      els.scenarioList.innerHTML = '<div class="empty">' + escapeHtml(error.message) + '</div>';
+      const message = isUiConnectionError(error)
+        ? '시나리오 목록을 불러오지 못했습니다.'
+        : error.message;
+      els.scenarioList.innerHTML = '<div class="empty">' + escapeHtml(message) + '</div>';
     });
   </script>
 </body>
