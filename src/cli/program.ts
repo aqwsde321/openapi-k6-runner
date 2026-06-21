@@ -1,8 +1,48 @@
 import { Command, CommanderError } from 'commander';
+import path from 'node:path';
 
+import {
+  CURRENT_SCAFFOLD_VERSION,
+} from '../scaffold/load-test.init.js';
+import {
+  writeCatalogOutput,
+} from './catalog.js';
+import {
+  runCatalogCommand,
+  runSyncCommand,
+} from './catalog-command.js';
+import { runDoctorCommand } from './doctor-command.js';
+import { writeDoctorOutput } from './doctor-output.js';
+import {
+  writeLine,
+} from './display.js';
+import {
+  runModuleAddCommand,
+  runModuleListCommand,
+  runModuleRemoveCommand,
+  runModuleSetDefaultCommand,
+} from './module-command.js';
+import {
+  writeModuleAddSummary,
+  writeModuleListOutput,
+  writeModuleRemoveSummary,
+  writeModuleSetDefaultSummary,
+} from './module-output.js';
+import {
+  runGenerateCommand,
+  runRunCommand,
+  runTestCommand,
+  runValidateCommand,
+} from './scenario-command.js';
+import {
+  writeScaffoldUpdateNotice,
+  writeValidateSummary,
+  writeValidationWarnings,
+} from './scenario-output.js';
 import { createScenarioConsoleReporter } from './test.reporter.js';
-import type { CatalogOptions, CatalogResult } from './catalog.js';
 import type {
+  CatalogOptions,
+  CatalogResult,
   CliContext,
   DoctorOptions,
   DoctorResult,
@@ -27,11 +67,27 @@ import type {
   TestOptions,
   TestResult,
   UiOptions,
+  UiResult,
   UpdateOptions,
   UpdateResult,
   ValidateOptions,
   ValidateResult,
 } from './types.js';
+import { runUiServerCommand } from './ui/server.js';
+import {
+  DEFAULT_LOAD_TEST_DIR,
+} from './workspace-paths.js';
+import {
+  runInitCommand,
+  runInstallSkillCommand,
+  runUpdateCommand,
+} from './workspace-command.js';
+import {
+  writeInitSummary,
+  writeInstallSkillSummary,
+  writeSyncSummary,
+  writeUpdateSummary,
+} from './workspace-output.js';
 
 type WritableLike = {
   write(chunk: string): unknown;
@@ -52,7 +108,7 @@ export interface CliProgramDeps {
   writeInstallSkillSummary(stdout: WritableLike, result: InstallSkillResult, cwd: string): void;
   runDoctorCommand(options: DoctorOptions, context: CliContext): Promise<DoctorResult>;
   writeDoctorOutput(stdout: WritableLike, result: DoctorResult, cwd: string, json: boolean | undefined): void;
-  runUiCommand(options: UiOptions, context: CliContext): Promise<unknown>;
+  runUiCommand(options: UiOptions, context: CliContext): Promise<UiResult>;
   runGenerateCommand(options: GenerateOptions, context: CliContext): Promise<GenerateResult>;
   writeValidationWarnings(stdout: WritableLike, warnings: string[]): void;
   writeScaffoldUpdateNotice(stdout: WritableLike, warnings: string[], command: string | undefined): void;
@@ -77,6 +133,103 @@ export interface CliProgramDeps {
   collectRepeatedOption(value: string, previous: string[] | undefined): string[];
   runTestCommand(options: TestOptions, context: CliContext): Promise<TestResult>;
 }
+
+const DEFAULT_CONFIG_PATH = `${DEFAULT_LOAD_TEST_DIR}/config.yaml`;
+const CLI_VERSION = CURRENT_SCAFFOLD_VERSION;
+const CODEX_SKILL_NAME = 'openapi-k6-scenario';
+
+function resolveCwd(context: CliContext): string {
+  return context.cwd ? path.resolve(context.cwd) : process.cwd();
+}
+
+export async function runUiCommand(
+  options: UiOptions,
+  context: CliContext = {},
+): Promise<UiResult> {
+  return runUiServerCommand(options, context, { runCli });
+}
+
+function shouldUseColor(
+  stream: WritableLike,
+  env: Record<string, string | undefined>,
+  colorOption: boolean | undefined,
+): boolean {
+  if (colorOption === false) {
+    return false;
+  }
+
+  if (env.NO_COLOR !== undefined || env.TERM === 'dumb') {
+    return false;
+  }
+
+  return stream.isTTY === true;
+}
+
+function shouldUseLiveOutput(
+  stream: WritableLike,
+  env: Record<string, string | undefined>,
+): boolean {
+  if (env.TERM === 'dumb') {
+    return false;
+  }
+
+  return stream.isTTY === true;
+}
+
+function collectRepeatedOption(value: string, previous: string[] | undefined): string[] {
+  return [...(previous ?? []), value];
+}
+
+export function createProgram(context: CliContext = {}): Command {
+  return createCliProgram(context, {
+    cliVersion: CLI_VERSION,
+    defaultLoadTestDir: DEFAULT_LOAD_TEST_DIR,
+    defaultConfigPath: DEFAULT_CONFIG_PATH,
+    codexSkillName: CODEX_SKILL_NAME,
+    resolveCwd,
+    runInitCommand,
+    writeInitSummary,
+    runUpdateCommand,
+    writeUpdateSummary,
+    runInstallSkillCommand,
+    writeInstallSkillSummary,
+    runDoctorCommand,
+    writeDoctorOutput,
+    runUiCommand,
+    runGenerateCommand,
+    writeValidationWarnings,
+    writeScaffoldUpdateNotice,
+    writeLine,
+    runRunCommand,
+    runSyncCommand,
+    writeSyncSummary,
+    runCatalogCommand,
+    writeCatalogOutput,
+    runModuleListCommand,
+    writeModuleListOutput,
+    runModuleAddCommand,
+    writeModuleAddSummary,
+    runModuleSetDefaultCommand,
+    writeModuleSetDefaultSummary,
+    runModuleRemoveCommand,
+    writeModuleRemoveSummary,
+    runValidateCommand,
+    writeValidateSummary,
+    shouldUseColor,
+    shouldUseLiveOutput,
+    collectRepeatedOption,
+    runTestCommand,
+  });
+}
+
+export async function runCli(
+  argv: string[] = process.argv.slice(2),
+  context: CliContext = {},
+): Promise<void> {
+  const program = createProgram(context);
+  await program.parseAsync(argv, { from: 'user' });
+}
+
 export function createCliProgram(context: CliContext = {}, deps: CliProgramDeps): Command {
   const {
     cliVersion: CLI_VERSION,
