@@ -83,6 +83,10 @@ import { loadLoadTestEnv } from './load-test-env.js';
 import { loadOptionalConfig } from './optional-config.js';
 import { runDoctorCommand as runDoctorCommandImpl } from './doctor-command.js';
 import { runK6Script } from './k6-runner.js';
+import {
+  writeScaffoldUpdateNotice,
+  writeValidationWarnings,
+} from './scenario-output.js';
 
 export type { CatalogResult } from './catalog.js';
 
@@ -953,43 +957,6 @@ export async function runDoctorCommand(
   context: CliContext = {},
 ): Promise<DoctorResult> {
   return runDoctorCommandImpl(options, context);
-}
-
-function writeValidationWarnings(stdout: WritableLike, warnings: string[]): void {
-  if (warnings.length === 0) {
-    return;
-  }
-
-  writeLine(stdout, 'Warnings:');
-
-  for (const warning of warnings) {
-    writeLine(stdout, `  - ${warning}`);
-  }
-
-  writeLine(stdout, '');
-}
-
-function writeScaffoldUpdateNotice(
-  stdout: WritableLike,
-  warnings: string[],
-  updateCommand: string | undefined,
-): void {
-  if (warnings.length === 0) {
-    return;
-  }
-
-  writeLine(stdout, 'Scaffold update available:');
-
-  for (const warning of warnings) {
-    writeLine(stdout, `  reason   ${warning}`);
-  }
-
-  if (updateCommand !== undefined) {
-    writeLine(stdout, `  command  ${updateCommand}`);
-  }
-
-  writeLine(stdout, '  keeps    config, scenarios, .env, snapshots, generated scripts, and logs unchanged');
-  writeLine(stdout, '');
 }
 
 function formatRunScriptCommand(cwd: string, runScriptPath: string): string {
