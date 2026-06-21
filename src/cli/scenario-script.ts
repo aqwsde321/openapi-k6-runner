@@ -1,21 +1,13 @@
 import { buildAst } from '../compiler/ast.builder.js';
 import { generateK6Script } from '../compiler/k6.generator.js';
-import type { ApiRegistry, ASTScenario, Scenario } from '../core/types.js';
+import type { ASTScenario, Scenario } from '../core/types.js';
 import {
   validateScenarioAgainstOpenApi,
   type ScenarioValidationResult,
 } from '../validator/scenario.validator.js';
+import type { ScenarioOpenApiContext } from './scenario-openapi.js';
 
-export interface ScenarioOpenApiContext {
-  registrySource: ApiRegistry | Map<string, ApiRegistry>;
-  defaultModuleName?: string;
-  openapiPath: string;
-  openapiPaths?: Record<string, string>;
-  baseUrl?: string;
-  moduleBaseUrls?: Record<string, string>;
-  moduleName?: string;
-  moduleNames?: string[];
-}
+export type { ScenarioOpenApiContext } from './scenario-openapi.js';
 
 export interface GeneratedK6ScriptPlan {
   outputPath: string;
