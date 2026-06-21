@@ -20,10 +20,10 @@ import {
   DEFAULT_LOAD_TEST_DIR,
 } from './workspace-paths.js';
 import {
-  runModuleAddCommand as runModuleAddCommandImpl,
-  runModuleListCommand as runModuleListCommandImpl,
-  runModuleRemoveCommand as runModuleRemoveCommandImpl,
-  runModuleSetDefaultCommand as runModuleSetDefaultCommandImpl,
+  runModuleAddCommand,
+  runModuleListCommand,
+  runModuleRemoveCommand,
+  runModuleSetDefaultCommand,
 } from './module-command.js';
 import {
   writeModuleAddSummary,
@@ -32,21 +32,21 @@ import {
   writeModuleSetDefaultSummary,
 } from './module-output.js';
 import { writeDoctorOutput } from './doctor-output.js';
-import { runDoctorCommand as runDoctorCommandImpl } from './doctor-command.js';
+import { runDoctorCommand } from './doctor-command.js';
 import {
-  runCatalogCommand as runCatalogCommandImpl,
-  runSyncCommand as runSyncCommandImpl,
+  runCatalogCommand,
+  runSyncCommand,
 } from './catalog-command.js';
 import {
-  runGenerateCommand as runGenerateCommandImpl,
-  runRunCommand as runRunCommandImpl,
-  runTestCommand as runTestCommandImpl,
-  runValidateCommand as runValidateCommandImpl,
+  runGenerateCommand,
+  runRunCommand,
+  runTestCommand,
+  runValidateCommand,
 } from './scenario-command.js';
 import {
-  runInitCommand as runInitCommandImpl,
-  runInstallSkillCommand as runInstallSkillCommandImpl,
-  runUpdateCommand as runUpdateCommandImpl,
+  runInitCommand,
+  runInstallSkillCommand,
+  runUpdateCommand,
 } from './workspace-command.js';
 import {
   writeScaffoldUpdateNotice,
@@ -60,37 +60,9 @@ import {
   writeUpdateSummary,
 } from './workspace-output.js';
 import type {
-  CatalogOptions,
-  CatalogResult,
   CliContext,
-  DoctorOptions,
-  DoctorResult,
-  GenerateOptions,
-  GenerateResult,
-  InitOptions,
-  InitResult,
-  InstallSkillOptions,
-  InstallSkillResult,
-  ModuleAddOptions,
-  ModuleAddResult,
-  ModuleListOptions,
-  ModuleListResult,
-  ModuleRemoveOptions,
-  ModuleRemoveResult,
-  ModuleSetDefaultOptions,
-  ModuleSetDefaultResult,
-  RunOptions,
-  RunResult,
-  SyncOptions,
-  SyncResult,
-  TestOptions,
-  TestResult,
   UiOptions,
   UiResult,
-  UpdateOptions,
-  UpdateResult,
-  ValidateOptions,
-  ValidateResult,
 } from './types.js';
 
 export type {
@@ -130,6 +102,29 @@ export type {
   ValidateResult,
 } from './types.js';
 
+export {
+  runCatalogCommand,
+  runSyncCommand,
+} from './catalog-command.js';
+export { runDoctorCommand } from './doctor-command.js';
+export {
+  runModuleAddCommand,
+  runModuleListCommand,
+  runModuleRemoveCommand,
+  runModuleSetDefaultCommand,
+} from './module-command.js';
+export {
+  runGenerateCommand,
+  runRunCommand,
+  runTestCommand,
+  runValidateCommand,
+} from './scenario-command.js';
+export {
+  runInitCommand,
+  runInstallSkillCommand,
+  runUpdateCommand,
+} from './workspace-command.js';
+
 const DEFAULT_CONFIG_PATH = `${DEFAULT_LOAD_TEST_DIR}/config.yaml`;
 const CLI_VERSION = CURRENT_SCAFFOLD_VERSION;
 const CODEX_SKILL_NAME = 'openapi-k6-scenario';
@@ -138,109 +133,11 @@ function resolveCwd(context: CliContext): string {
   return context.cwd ? path.resolve(context.cwd) : process.cwd();
 }
 
-export async function runGenerateCommand(
-  options: GenerateOptions,
-  context: CliContext = {},
-): Promise<GenerateResult> {
-  return runGenerateCommandImpl(options, context);
-}
-
-export async function runRunCommand(
-  options: RunOptions,
-  context: CliContext = {},
-): Promise<RunResult> {
-  return runRunCommandImpl(options, context);
-}
-
-export async function runValidateCommand(
-  options: ValidateOptions,
-  context: CliContext = {},
-): Promise<ValidateResult> {
-  return runValidateCommandImpl(options, context);
-}
-
-export async function runSyncCommand(
-  options: SyncOptions,
-  context: CliContext = {},
-): Promise<SyncResult> {
-  return runSyncCommandImpl(options, context);
-}
-
-export async function runCatalogCommand(
-  options: CatalogOptions,
-  context: CliContext = {},
-): Promise<CatalogResult> {
-  return runCatalogCommandImpl(options, context);
-}
-
-export async function runModuleListCommand(
-  options: ModuleListOptions,
-  context: CliContext = {},
-): Promise<ModuleListResult> {
-  return runModuleListCommandImpl(options, context);
-}
-
-export async function runModuleAddCommand(
-  options: ModuleAddOptions,
-  context: CliContext = {},
-): Promise<ModuleAddResult> {
-  return runModuleAddCommandImpl(options, context);
-}
-
-export async function runModuleSetDefaultCommand(
-  options: ModuleSetDefaultOptions,
-  context: CliContext = {},
-): Promise<ModuleSetDefaultResult> {
-  return runModuleSetDefaultCommandImpl(options, context);
-}
-
-export async function runModuleRemoveCommand(
-  options: ModuleRemoveOptions,
-  context: CliContext = {},
-): Promise<ModuleRemoveResult> {
-  return runModuleRemoveCommandImpl(options, context);
-}
-
-export async function runTestCommand(
-  options: TestOptions,
-  context: CliContext = {},
-): Promise<TestResult> {
-  return runTestCommandImpl(options, context);
-}
-
 export async function runUiCommand(
   options: UiOptions,
   context: CliContext = {},
 ): Promise<UiResult> {
   return runUiServerCommand(options, context, { runCli });
-}
-
-export async function runInitCommand(
-  options: InitOptions,
-  context: CliContext = {},
-): Promise<InitResult> {
-  return runInitCommandImpl(options, context);
-}
-
-export async function runUpdateCommand(
-  options: UpdateOptions,
-  context: CliContext = {},
-): Promise<UpdateResult> {
-  return runUpdateCommandImpl(options, context);
-}
-
-export async function runInstallSkillCommand(
-  options: InstallSkillOptions,
-  context: CliContext = {},
-): Promise<InstallSkillResult> {
-  return runInstallSkillCommandImpl(options, context);
-}
-
-export async function runDoctorCommand(
-  options: DoctorOptions,
-  context: CliContext = {},
-): Promise<DoctorResult> {
-  return runDoctorCommandImpl(options, context);
 }
 
 function shouldUseColor(
