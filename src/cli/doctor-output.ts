@@ -1,4 +1,4 @@
-import type { DoctorResult } from './index.js';
+import type { DoctorResult } from './types.js';
 import {
   formatDisplayPath,
   initStatusSymbol,

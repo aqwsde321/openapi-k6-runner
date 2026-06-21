@@ -25,7 +25,7 @@ import type {
   ModuleRemoveResult,
   ModuleSetDefaultOptions,
   ModuleSetDefaultResult,
-} from './index.js';
+} from './types.js';
 import { formatDisplayPath, normalizeCommandPath, type WritableLike } from './display.js';
 import {
   buildDefaultOpenApiUrl,

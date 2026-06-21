@@ -18,7 +18,7 @@ import type {
   DoctorCheck,
   DoctorOptions,
   DoctorResult,
-} from './index.js';
+} from './types.js';
 import {
   isConfiguredValue,
   normalizeConfiguredValue,

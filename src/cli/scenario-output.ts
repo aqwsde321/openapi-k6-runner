@@ -1,4 +1,4 @@
-import type { ValidateResult } from './index.js';
+import type { ValidateResult } from './types.js';
 import {
   formatDisplayPath,
   writeLine,

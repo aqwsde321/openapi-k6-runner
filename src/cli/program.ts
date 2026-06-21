@@ -31,7 +31,7 @@ import type {
   UpdateResult,
   ValidateOptions,
   ValidateResult,
-} from './index.js';
+} from './types.js';
 
 type WritableLike = {
   write(chunk: string): unknown;

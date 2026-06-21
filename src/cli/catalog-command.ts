@@ -25,7 +25,7 @@ import type {
   CliContext,
   SyncOptions,
   SyncResult,
-} from './index.js';
+} from './types.js';
 import { loadOptionalConfig } from './optional-config.js';
 
 export async function runSyncCommand(

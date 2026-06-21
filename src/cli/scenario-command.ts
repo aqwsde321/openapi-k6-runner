@@ -13,7 +13,7 @@ import type {
   TestResult,
   ValidateOptions,
   ValidateResult,
-} from './index.js';
+} from './types.js';
 import { writeLine } from './display.js';
 import { runK6Script } from './k6-runner.js';
 import { loadLoadTestEnv } from './load-test-env.js';

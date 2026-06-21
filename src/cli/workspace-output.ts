@@ -7,7 +7,7 @@ import type {
   SyncOptions,
   SyncResult,
   UpdateResult,
-} from './index.js';
+} from './types.js';
 import {
   formatDisplayPath,
   initStatusSymbol,

@@ -5,7 +5,7 @@ import type {
   ModuleListResult,
   ModuleRemoveResult,
   ModuleSetDefaultResult,
-} from './index.js';
+} from './types.js';
 import {
   formatDisplayPath,
   shellQuote,

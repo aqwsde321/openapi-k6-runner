@@ -21,7 +21,7 @@ import type {
   InstallSkillResult,
   UpdateOptions,
   UpdateResult,
-} from './index.js';
+} from './types.js';
 import { resolveInitOptionsInteractively } from './init-openapi.js';
 import { loadOptionalConfig } from './optional-config.js';
 import { DEFAULT_LOAD_TEST_DIR } from './workspace-paths.js';
