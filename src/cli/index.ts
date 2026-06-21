@@ -69,6 +69,11 @@ import {
   resolveOpenApiInput,
 } from './config-input.js';
 import {
+  formatDisplayPath,
+  normalizeCommandPath,
+  shellQuote,
+} from './display.js';
+import {
   DEFAULT_LOAD_TEST_DIR,
   isScenarioFile,
   parseWorkspaceScenarioFile,
@@ -2284,28 +2289,6 @@ function writeInitStatus(
   message: string,
 ): void {
   writeLine(stream, `  ${initStatusSymbol(stream, status)} ${target}  ${message}`);
-}
-
-function formatDisplayPath(cwd: string, filePath: string): string {
-  const relativePath = path.relative(cwd, filePath);
-
-  if (relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)) {
-    return normalizeCommandPath(relativePath);
-  }
-
-  return filePath;
-}
-
-function normalizeCommandPath(value: string): string {
-  return value.split(path.sep).join('/');
-}
-
-function shellQuote(value: string): string {
-  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(value)) {
-    return value;
-  }
-
-  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 function formatRunScriptCommand(cwd: string, runScriptPath: string): string {
