@@ -10,8 +10,6 @@ import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 
-import { buildAst } from '../compiler/ast.builder.js';
-import { generateK6Script } from '../compiler/k6.generator.js';
 import {
   loadTestConfig,
   resolveConfigFilePath,
@@ -32,7 +30,6 @@ import {
 import { formatScenarioVarNameIssue } from '../core/scenario-vars.js';
 import type {
   ApiRegistry,
-  ASTScenario,
   Scenario,
 } from '../core/types.js';
 import {
@@ -51,9 +48,12 @@ import {
   updateLoadTests,
 } from '../scaffold/load-test.init.js';
 import {
-  validateScenarioAgainstOpenApi,
-  type ScenarioValidationResult,
-} from '../validator/scenario.validator.js';
+  prepareGeneratedK6Script,
+  validateAndBuildAst,
+  validateScenarioOpenApi,
+  type ScenarioOpenApiContext,
+  type ValidatedAstPlan,
+} from './scenario-script.js';
 import {
   countCatalogTags,
   filterCatalogOperations,
@@ -386,28 +386,6 @@ export interface DoctorResult {
   configPath?: string;
   checks: DoctorCheck[];
   passed: boolean;
-}
-
-interface ScenarioOpenApiContext {
-  registrySource: ApiRegistry | Map<string, ApiRegistry>;
-  defaultModuleName?: string;
-  openapiPath: string;
-  openapiPaths?: Record<string, string>;
-  baseUrl?: string;
-  moduleBaseUrls?: Record<string, string>;
-  moduleName?: string;
-  moduleNames?: string[];
-}
-
-interface GeneratedK6ScriptPlan {
-  outputPath: string;
-  script: string;
-  warnings: string[];
-}
-
-interface ValidatedAstPlan {
-  ast: ASTScenario;
-  validation: ScenarioValidationResult;
 }
 
 interface ScenarioModuleUse {
@@ -1786,12 +1764,10 @@ export async function runGenerateCommand(
   });
   const scaffoldWarnings = await readScaffoldWarnings(cwd, config);
   const scaffoldUpdateCommand = resolveScaffoldUpdateCommand(cwd, config, scaffoldWarnings);
+  const outputPath = resolveOutputPath(cwd, config, options.scenario, options.write);
   const generated = prepareGeneratedK6Script({
-    cwd,
-    config,
     scenario,
-    scenarioInput: options.scenario,
-    write: options.write,
+    outputPath,
     openApiContext,
     fileRootDir: resolveLoadTestDir(cwd, config),
   });
@@ -1812,49 +1788,6 @@ export async function runGenerateCommand(
   await fs.writeFile(result.outputPath, generated.script, 'utf8');
 
   return result;
-}
-
-function prepareGeneratedK6Script(options: {
-  cwd: string;
-  config: LoadTestConfig | undefined;
-  scenario: Scenario;
-  scenarioInput: string;
-  write: string | undefined;
-  openApiContext: ScenarioOpenApiContext;
-  fileRootDir: string;
-  validatedAst?: ValidatedAstPlan;
-}): GeneratedK6ScriptPlan {
-  const validatedAst = options.validatedAst
-    ?? validateAndBuildAst(options.scenario, options.openApiContext);
-  const outputPath = resolveOutputPath(options.cwd, options.config, options.scenarioInput, options.write);
-  const script = generateK6Script(validatedAst.ast, {
-    baseUrl: options.openApiContext.baseUrl,
-    moduleBaseUrls: options.openApiContext.moduleBaseUrls,
-    fileRootDir: options.fileRootDir,
-    outputPath,
-  });
-
-  return {
-    outputPath,
-    script,
-    warnings: validatedAst.validation.warnings,
-  };
-}
-
-function validateAndBuildAst(
-  scenario: Scenario,
-  openApiContext: ScenarioOpenApiContext,
-): ValidatedAstPlan {
-  const validation = validateScenarioAgainstOpenApi(
-    scenario,
-    openApiContext.registrySource,
-    { defaultModuleName: openApiContext.defaultModuleName },
-  );
-  const ast = buildAst(scenario, openApiContext.registrySource, {
-    defaultModuleName: openApiContext.defaultModuleName,
-  });
-
-  return { ast, validation };
 }
 
 export async function runRunCommand(
@@ -1890,12 +1823,10 @@ export async function runRunCommand(
   const validatedAst = validateAndBuildAst(scenario, openApiContext);
   const scaffoldWarnings = await readScaffoldWarnings(cwd, config);
   const scaffoldUpdateCommand = resolveScaffoldUpdateCommand(cwd, config, scaffoldWarnings);
+  const outputPath = resolveOutputPath(cwd, config, options.scenario, options.write);
   const generated = prepareGeneratedK6Script({
-    cwd,
-    config,
     scenario,
-    scenarioInput: options.scenario,
-    write: options.write,
+    outputPath,
     openApiContext,
     fileRootDir: loadTestDir,
     validatedAst,
@@ -1961,11 +1892,7 @@ export async function runValidateCommand(
     commandName: 'validate',
     requireBaseUrl: false,
   });
-  const validation = validateScenarioAgainstOpenApi(
-    scenario,
-    openApiContext.registrySource,
-    { defaultModuleName: openApiContext.defaultModuleName },
-  );
+  const validation = validateScenarioOpenApi(scenario, openApiContext);
   const scaffoldWarnings = await readScaffoldWarnings(cwd, config);
   const scaffoldUpdateCommand = resolveScaffoldUpdateCommand(cwd, config, scaffoldWarnings);
 
