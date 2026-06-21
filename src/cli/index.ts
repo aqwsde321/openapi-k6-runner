@@ -70,8 +70,12 @@ import {
 } from './config-input.js';
 import {
   formatDisplayPath,
+  initStatusSymbol,
   normalizeCommandPath,
   shellQuote,
+  writeInitStatus,
+  writeLine,
+  type WritableLike,
 } from './display.js';
 import {
   DEFAULT_LOAD_TEST_DIR,
@@ -89,11 +93,6 @@ import {
 } from './scaffold-status.js';
 
 export type { CatalogResult } from './catalog.js';
-
-type WritableLike = {
-  write(chunk: string): unknown;
-  isTTY?: boolean;
-};
 
 type ReadableLike = NodeJS.ReadableStream & {
   isTTY?: boolean;
@@ -2155,41 +2154,6 @@ function formatK6SpawnError(error: unknown): Error {
   }
 
   return error instanceof Error ? error : new Error(String(error));
-}
-
-function writeLine(stream: WritableLike, message: string): void {
-  stream.write(`${message}\n`);
-}
-
-type InitStatus = 'success' | 'failure' | 'warning';
-
-function shouldColorInitOutput(stream: WritableLike): boolean {
-  return stream.isTTY === true && process.env.NO_COLOR === undefined && process.env.TERM !== 'dumb';
-}
-
-function colorizeInit(stream: WritableLike, code: number, message: string): string {
-  return shouldColorInitOutput(stream) ? `\u001b[${code}m${message}\u001b[0m` : message;
-}
-
-function initStatusSymbol(stream: WritableLike, status: InitStatus): string {
-  if (status === 'success') {
-    return colorizeInit(stream, 32, '✓');
-  }
-
-  if (status === 'failure') {
-    return colorizeInit(stream, 31, '✗');
-  }
-
-  return colorizeInit(stream, 33, '!');
-}
-
-function writeInitStatus(
-  stream: WritableLike,
-  status: InitStatus,
-  target: string,
-  message: string,
-): void {
-  writeLine(stream, `  ${initStatusSymbol(stream, status)} ${target}  ${message}`);
 }
 
 function formatRunScriptCommand(cwd: string, runScriptPath: string): string {
