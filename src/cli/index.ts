@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { Command, CommanderError } from 'commander';
-import { parse as parseDotEnv } from 'dotenv';
 import { spawn, spawnSync } from 'node:child_process';
 import { createWriteStream, realpathSync, type WriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
@@ -92,6 +91,7 @@ import {
   writeModuleRemoveSummary,
   writeModuleSetDefaultSummary,
 } from './module-output.js';
+import { loadLoadTestEnv } from './load-test-env.js';
 
 export type { CatalogResult } from './catalog.js';
 
@@ -447,24 +447,6 @@ async function loadOptionalConfig(
       error.code === 'ENOENT'
     ) {
       throw new Error(`${DEFAULT_CONFIG_PATH} was not found. Run openapi-k6 init or pass --config.`);
-    }
-
-    throw error;
-  }
-}
-
-async function loadLoadTestEnv(loadTestDir: string): Promise<Record<string, string>> {
-  try {
-    const raw = await fs.readFile(path.join(loadTestDir, '.env'), 'utf8');
-    return parseDotEnv(raw);
-  } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      error.code === 'ENOENT'
-    ) {
-      return {};
     }
 
     throw error;
