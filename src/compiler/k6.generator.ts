@@ -5,6 +5,7 @@ import {
   createModuleBaseUrlEnvName,
   findModuleBaseUrlEnvNameCollisions,
 } from '../core/module-env.js';
+import { formatUnsupportedConditionError, parseStatusCondition } from '../core/condition.js';
 import { compileValueExpression } from '../core/template.js';
 import { compileJsonPathSegments } from '../utils/jsonpath.js';
 
@@ -616,21 +617,13 @@ function renderCondition(
 }
 
 function compileCondition(condition: string, stepId: string): { operator: string; status: number } {
-  const match = /^status\s*(==|!=|>=|<)\s*(\d{3})$/.exec(condition.trim());
+  const parsed = parseStatusCondition(condition);
 
-  if (!match) {
-    throw new K6GenerationError(
-      `step "${stepId}": unsupported condition "${condition}"`,
-    );
+  if (parsed === undefined) {
+    throw new K6GenerationError(formatUnsupportedConditionError(stepId, condition));
   }
 
-  const operator = match[1] === '=='
-    ? '==='
-    : match[1] === '!='
-      ? '!=='
-      : match[1];
-
-  return { operator, status: Number(match[2]) };
+  return parsed;
 }
 
 function buildHeaders(
