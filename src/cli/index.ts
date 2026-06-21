@@ -66,6 +66,14 @@ import {
 } from './catalog.js';
 import { createCliProgram } from './program.js';
 import { runUiServerCommand } from './ui/server.js';
+import {
+  formatMissingConfigValueError,
+  isConfiguredValue,
+  normalizeConfiguredValue,
+  resolveConfiguredFilePath,
+  resolveConfiguredOpenApiInput,
+  resolveOpenApiInput,
+} from './config-input.js';
 
 export type { CatalogResult } from './catalog.js';
 
@@ -92,7 +100,6 @@ const COMMON_OPENAPI_PATHS = [
   '/swagger.json',
   '/swagger/v1/swagger.json',
 ];
-const TODO_VALUE = 'TODO';
 const CLI_VERSION = CURRENT_SCAFFOLD_VERSION;
 const CODEX_SKILL_NAME = 'openapi-k6-scenario';
 
@@ -419,14 +426,6 @@ function resolveSkillTargetDir(cwd: string, targetDir: string | undefined): stri
   }
 
   return path.join(homedir(), '.codex', 'skills', CODEX_SKILL_NAME);
-}
-
-function resolveOpenApiInput(cwd: string, value: string): string {
-  if (isHttpUrl(value)) {
-    return value;
-  }
-
-  return path.resolve(cwd, value);
 }
 
 function isHttpUrl(value: string): boolean {
@@ -881,81 +880,6 @@ function selectConfigModule(
   }
 
   return resolveConfigModule(config, moduleName);
-}
-
-function resolveConfiguredOpenApiInput(
-  cwd: string,
-  config: LoadTestConfig | undefined,
-  cliValue: string | undefined,
-  configValue: string | undefined,
-  message: string,
-  configFieldLabel: string,
-  commandName: string,
-): string {
-  if (cliValue !== undefined) {
-    return resolveOpenApiInput(cwd, cliValue);
-  }
-
-  if (config !== undefined && isConfiguredValue(configValue)) {
-    return resolveConfigFilePath(config, configValue);
-  }
-
-  if (config !== undefined) {
-    throw new Error(formatMissingConfigValueError(config.path, configFieldLabel, commandName));
-  }
-
-  throw new Error(message);
-}
-
-function resolveConfiguredFilePath(
-  cwd: string,
-  config: LoadTestConfig | undefined,
-  cliValue: string | undefined,
-  configValue: string | undefined,
-  message: string,
-  configFieldLabel: string,
-  commandName: string,
-): string {
-  if (cliValue !== undefined) {
-    return path.resolve(cwd, cliValue);
-  }
-
-  if (config !== undefined && isConfiguredValue(configValue)) {
-    return resolveConfigFilePath(config, configValue);
-  }
-
-  if (config !== undefined) {
-    throw new Error(formatMissingConfigValueError(config.path, configFieldLabel, commandName));
-  }
-
-  throw new Error(message);
-}
-
-function isConfiguredValue(value: string | undefined): value is string {
-  return value !== undefined && value.trim() !== '' && value.trim().toUpperCase() !== TODO_VALUE;
-}
-
-function formatMissingConfigValueError(
-  configPath: string,
-  configFieldLabel: string,
-  commandName: string,
-): string {
-  return [
-    `${configPath}: ${configFieldLabel} is not configured.`,
-    '',
-    'Edit:',
-    `  ${configPath}`,
-    '',
-    'Set:',
-    `  ${configFieldLabel}`,
-    '',
-    'After editing:',
-    '  rerun the command',
-  ].join('\n');
-}
-
-function normalizeConfiguredValue(value: string | undefined): string | undefined {
-  return isConfiguredValue(value) ? value.trim() : undefined;
 }
 
 function resolveScenarioPath(cwd: string, config: LoadTestConfig | undefined, value: string): string {
