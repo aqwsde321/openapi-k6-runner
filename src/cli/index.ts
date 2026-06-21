@@ -15,29 +15,17 @@ import {
   type ScenarioExecutionReporter,
   type ScenarioExecutionResult,
 } from '../executor/scenario.executor.js';
-import { syncOpenApiSnapshot } from '../openapi/openapi.catalog.js';
 import {
   CURRENT_SCAFFOLD_VERSION,
   initLoadTests,
   updateLoadTests,
 } from '../scaffold/load-test.init.js';
 import {
-  countCatalogTags,
-  filterCatalogOperations,
-  findDuplicateOperationWarnings,
-  normalizeCatalogFilters,
-  readCatalogFile,
-  shouldListCatalogOperations,
-  sortCatalogOperations,
   writeCatalogOutput,
   type CatalogResult,
 } from './catalog.js';
 import { createCliProgram } from './program.js';
 import { runUiServerCommand } from './ui/server.js';
-import {
-  resolveConfiguredFilePath,
-  resolveConfiguredOpenApiInput,
-} from './config-input.js';
 import {
   formatDisplayPath,
   initStatusSymbol,
@@ -63,6 +51,10 @@ import {
 } from './module-output.js';
 import { loadOptionalConfig } from './optional-config.js';
 import { runDoctorCommand as runDoctorCommandImpl } from './doctor-command.js';
+import {
+  runCatalogCommand as runCatalogCommandImpl,
+  runSyncCommand as runSyncCommandImpl,
+} from './catalog-command.js';
 import {
   runGenerateCommand as runGenerateCommandImpl,
   runRunCommand as runRunCommandImpl,
@@ -438,107 +430,14 @@ export async function runSyncCommand(
   options: SyncOptions,
   context: CliContext = {},
 ): Promise<SyncResult> {
-  const cwd = resolveCwd(context);
-  const config = await loadOptionalConfig(
-    cwd,
-    options.config,
-    options.openapi === undefined || options.write === undefined || options.catalog === undefined,
-  );
-  const moduleConfig = selectConfigModule(config, options.module);
-  const moduleName = moduleConfig?.name ?? '<none>';
-  const openapiPath = resolveConfiguredOpenApiInput(
-    cwd,
-    config,
-    options.openapi,
-    moduleConfig?.openapi,
-    '--openapi is required unless --config provides modules.<name>.openapi',
-    `modules.${moduleName}.openapi`,
-    'sync',
-  );
-  const snapshotPath = resolveConfiguredFilePath(
-    cwd,
-    config,
-    options.write,
-    moduleConfig?.snapshot,
-    '--write is required unless --config provides modules.<name>.snapshot',
-    `modules.${moduleName}.snapshot`,
-    'sync',
-  );
-  const catalogPath = resolveConfiguredFilePath(
-    cwd,
-    config,
-    options.catalog,
-    moduleConfig?.catalog,
-    '--catalog is required unless --config provides modules.<name>.catalog',
-    `modules.${moduleName}.catalog`,
-    'sync',
-  );
-  const result = await syncOpenApiSnapshot({
-    openapi: openapiPath,
-    write: snapshotPath,
-    catalog: catalogPath,
-  });
-
-  return {
-    openapiPath,
-    snapshotPath: result.snapshotPath,
-    catalogPath: result.catalogPath,
-    operationCount: result.operationCount,
-    ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
-  };
+  return runSyncCommandImpl(options, context);
 }
 
 export async function runCatalogCommand(
   options: CatalogOptions,
   context: CliContext = {},
 ): Promise<CatalogResult> {
-  const cwd = resolveCwd(context);
-
-  const synced = options.sync === true
-    ? await runSyncCommand({
-        config: options.config,
-        module: options.module,
-      }, context)
-    : undefined;
-  const config = await loadOptionalConfig(cwd, options.config, true);
-  const moduleConfig = selectConfigModule(config, options.module);
-  const moduleName = moduleConfig?.name ?? '<none>';
-  const catalogPath = resolveConfiguredFilePath(
-    cwd,
-    config,
-    undefined,
-    moduleConfig?.catalog,
-    'modules.<name>.catalog is required to search catalog',
-    `modules.${moduleName}.catalog`,
-    'catalog',
-  );
-  const catalog = await readCatalogFile(catalogPath, {
-    cwd,
-    config,
-    moduleName: moduleConfig?.name,
-    openapi: moduleConfig?.openapi,
-    options,
-  });
-  const filters = normalizeCatalogFilters(options);
-  const shouldList = shouldListCatalogOperations(filters) ||
-    options.ai === true ||
-    options.snippet === true;
-  const operations = shouldList
-    ? sortCatalogOperations(filterCatalogOperations(catalog.operations, filters))
-    : [];
-
-  return {
-    catalogPath,
-    source: catalog.source,
-    generatedAt: catalog.generatedAt,
-    totalOperationCount: catalog.operations.length,
-    operations,
-    tagCounts: countCatalogTags(catalog.operations),
-    warnings: shouldList ? findDuplicateOperationWarnings(operations) : [],
-    filters,
-    ...(moduleConfig === undefined ? {} : { moduleName: moduleConfig.name }),
-    ...(synced === undefined ? {} : { synced }),
-  };
+  return runCatalogCommandImpl(options, context);
 }
 
 export async function runModuleListCommand(
