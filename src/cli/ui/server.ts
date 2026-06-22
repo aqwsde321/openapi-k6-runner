@@ -1,14 +1,10 @@
 import { CommanderError } from 'commander';
-import { parse as parseDotEnv } from 'dotenv';
-import fs from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 
-import { loadTestConfig, resolveConfigFilePath, resolveConfigModule, type LoadTestConfig, type LoadTestModuleConfig } from '../../config/load-test.config.js';
-import { createModuleBaseUrlEnvName } from '../../core/module-env.js';
+import { loadTestConfig, resolveConfigModule, type LoadTestConfig } from '../../config/load-test.config.js';
 import type { ScenarioExecutionReporter } from '../../executor/scenario.executor.js';
-import { parseOpenApiFile } from '../../openapi/openapi.parser.js';
 import { DEFAULT_WORKSPACE_DIR } from '../../scaffold/load-test.init.js';
 import { UI_HTML } from './html.js';
 import { formatDisplayPath } from './paths.js';
@@ -25,6 +21,7 @@ import {
   type UiRunStatus,
 } from './run-state.js';
 import { readUiScenarioStepSources } from './scenario-files.js';
+import { checkUiServers } from './server-checks.js';
 import {
   createUiScenarioReaderContext,
   formatUiScenarioOption,
@@ -76,7 +73,6 @@ export interface UiServerDeps {
 
 const DEFAULT_LOAD_TEST_DIR = DEFAULT_WORKSPACE_DIR;
 const DEFAULT_CONFIG_PATH = `${DEFAULT_LOAD_TEST_DIR}/config.yaml`;
-const TODO_VALUE = 'TODO';
 
 function resolveCwd(context: CliContext): string {
   return path.resolve(context.cwd ?? process.cwd());
@@ -102,27 +98,6 @@ async function loadOptionalConfig(
 
     throw error;
   }
-}
-
-async function loadLoadTestEnv(loadTestDir: string): Promise<Record<string, string>> {
-  try {
-    const raw = await fs.readFile(path.join(loadTestDir, '.env'), 'utf8');
-    return parseDotEnv(raw);
-  } catch (error) {
-    if (isNodeErrorCode(error, 'ENOENT')) {
-      return {};
-    }
-
-    throw error;
-  }
-}
-
-function isConfiguredValue(value: string | undefined): value is string {
-  return value !== undefined && value.trim() !== '' && value.trim().toUpperCase() !== TODO_VALUE;
-}
-
-function normalizeConfiguredValue(value: string | undefined): string | undefined {
-  return isConfiguredValue(value) ? value.trim() : undefined;
 }
 
 function writeLine(stream: WritableLike, message: string): void {
@@ -192,8 +167,6 @@ export async function runUiServerCommand(
   };
 }
 
-type UiSnapshotStatus = 'present' | 'missing' | 'error';
-
 interface UiState {
   cwd: string;
   options: UiOptions;
@@ -247,7 +220,12 @@ async function handleUiRequest(
   }
 
   if (request.method === 'POST' && requestUrl.pathname === '/api/check-servers') {
-    writeUiJson(response, 200, await checkUiServers(state));
+    writeUiJson(response, 200, await checkUiServers({
+      cwd: state.cwd,
+      config: state.config,
+      env: state.context.env,
+      fetch: state.context.fetch,
+    }));
     return;
   }
 
@@ -404,220 +382,6 @@ function createUiFailureHint(message: string): string | undefined {
   }
 
   return undefined;
-}
-
-async function checkUiServers(state: UiState): Promise<{
-  checkedAt: string;
-  modules: Array<{
-    name: string;
-    baseUrl?: string;
-    source?: string;
-    status: 'unknown' | 'reachable' | 'failed';
-    httpStatus?: number;
-    durationMs?: number;
-    error?: string;
-    snapshot: {
-      path?: string;
-      status: UiSnapshotStatus;
-      error?: string;
-    };
-  }>;
-}> {
-  const loadTestDir = resolveLoadTestDir(state.cwd, state.config);
-  const runtimeEnv = {
-    ...(await loadLoadTestEnv(loadTestDir)),
-    ...(state.context.env ?? process.env),
-  };
-  const modules = [];
-
-  for (const moduleConfig of state.config.modules.values()) {
-    modules.push(await checkUiModuleServer(state, moduleConfig, runtimeEnv));
-  }
-
-  return {
-    checkedAt: new Date().toISOString(),
-    modules,
-  };
-}
-
-async function checkUiModuleServer(
-  state: UiState,
-  moduleConfig: LoadTestModuleConfig,
-  runtimeEnv: Record<string, string | undefined>,
-): Promise<{
-  name: string;
-  baseUrl?: string;
-  source?: string;
-  status: 'unknown' | 'reachable' | 'failed';
-  httpStatus?: number;
-  durationMs?: number;
-  error?: string;
-  snapshot: {
-    path?: string;
-    status: UiSnapshotStatus;
-    error?: string;
-  };
-}> {
-  const snapshot = await checkUiSnapshot(state, moduleConfig);
-  const resolved = await resolveUiModuleBaseUrl(state, moduleConfig, runtimeEnv);
-
-  if (resolved.baseUrl === undefined) {
-    return {
-      name: moduleConfig.name,
-      status: 'unknown',
-      error: 'baseUrl is not configured',
-      snapshot,
-    };
-  }
-
-  const startedAt = Date.now();
-
-  try {
-    const response = await fetchUiReachability(state.context.fetch ?? fetch, resolved.baseUrl);
-    return {
-      name: moduleConfig.name,
-      baseUrl: resolved.baseUrl,
-      source: resolved.source,
-      status: 'reachable',
-      httpStatus: response.status,
-      durationMs: Date.now() - startedAt,
-      snapshot,
-    };
-  } catch (error) {
-    return {
-      name: moduleConfig.name,
-      baseUrl: resolved.baseUrl,
-      source: resolved.source,
-      status: 'failed',
-      durationMs: Date.now() - startedAt,
-      error: formatUiError(error),
-      snapshot,
-    };
-  }
-}
-
-async function checkUiSnapshot(
-  state: UiState,
-  moduleConfig: LoadTestModuleConfig,
-): Promise<{ path?: string; status: UiSnapshotStatus; error?: string }> {
-  if (!isConfiguredValue(moduleConfig.snapshot)) {
-    return {
-      status: 'missing',
-      error: 'snapshot is not configured',
-    };
-  }
-
-  const snapshotPath = resolveConfigFilePath(state.config, moduleConfig.snapshot);
-  const displayPath = formatDisplayPath(state.cwd, snapshotPath);
-
-  try {
-    await fs.access(snapshotPath);
-    return {
-      path: displayPath,
-      status: 'present',
-    };
-  } catch (error) {
-    if (isNodeErrorCode(error, 'ENOENT')) {
-      return {
-        path: displayPath,
-        status: 'missing',
-        error: 'run openapi-k6 sync',
-      };
-    }
-
-    return {
-      path: displayPath,
-      status: 'error',
-      error: formatUiError(error),
-    };
-  }
-}
-
-function formatUiError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  const cause = error instanceof Error && 'cause' in error
-    ? (error as Error & { cause?: unknown }).cause
-    : undefined;
-
-  if (cause instanceof Error && cause.message && cause.message !== message) {
-    return `${message}: ${cause.message}`;
-  }
-
-  if (cause && typeof cause === 'object' && 'code' in cause && typeof cause.code === 'string') {
-    return `${message}: ${cause.code}`;
-  }
-
-  return message;
-}
-
-async function resolveUiModuleBaseUrl(
-  state: UiState,
-  moduleConfig: LoadTestModuleConfig,
-  runtimeEnv: Record<string, string | undefined>,
-): Promise<{ baseUrl?: string; source?: string }> {
-  const moduleEnvName = createModuleBaseUrlEnvName(moduleConfig.name);
-  const moduleEnv = normalizeConfiguredValue(runtimeEnv[moduleEnvName]);
-
-  if (moduleEnv !== undefined) {
-    return { baseUrl: moduleEnv, source: moduleEnvName };
-  }
-
-  const rootEnv = normalizeConfiguredValue(runtimeEnv.BASE_URL);
-
-  if (rootEnv !== undefined) {
-    return { baseUrl: rootEnv, source: 'BASE_URL' };
-  }
-
-  const moduleBaseUrl = normalizeConfiguredValue(moduleConfig.baseUrl);
-
-  if (moduleBaseUrl !== undefined) {
-    return { baseUrl: moduleBaseUrl, source: `modules.${moduleConfig.name}.baseUrl` };
-  }
-
-  const rootBaseUrl = normalizeConfiguredValue(state.config.baseUrl);
-
-  if (rootBaseUrl !== undefined) {
-    return { baseUrl: rootBaseUrl, source: 'baseUrl' };
-  }
-
-  if (isConfiguredValue(moduleConfig.snapshot)) {
-    try {
-      const registry = await parseOpenApiFile(resolveConfigFilePath(state.config, moduleConfig.snapshot));
-
-      if (registry.defaultServerUrl !== undefined) {
-        return { baseUrl: registry.defaultServerUrl, source: `modules.${moduleConfig.name}.snapshot servers[0].url` };
-      }
-    } catch {
-      return {};
-    }
-  }
-
-  return {};
-}
-
-async function fetchUiReachability(fetchImpl: typeof fetch, baseUrl: string): Promise<Response> {
-  const targetUrl = new URL(baseUrl);
-  const head = await fetchWithTimeout(fetchImpl, targetUrl, 'HEAD');
-
-  if (head.ok || head.status > 0) {
-    return head;
-  }
-
-  return fetchWithTimeout(fetchImpl, targetUrl, 'GET');
-}
-
-async function fetchWithTimeout(fetchImpl: typeof fetch, url: URL, method: 'GET' | 'HEAD'): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3000);
-
-  try {
-    return await fetchImpl(url, {
-      method,
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 async function readUiJsonBody(request: IncomingMessage): Promise<unknown> {
