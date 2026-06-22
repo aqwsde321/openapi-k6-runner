@@ -11,13 +11,24 @@ import { loadTestConfig, resolveConfigFilePath, resolveConfigModule, type LoadTe
 import { createModuleBaseUrlEnvName } from '../../core/module-env.js';
 import { collectTemplateReferences } from '../../core/template.js';
 import type { Scenario } from '../../core/types.js';
-import type { ScenarioExecutionReporter, ScenarioExecutionResult } from '../../executor/scenario.executor.js';
+import type { ScenarioExecutionReporter } from '../../executor/scenario.executor.js';
 import { parseOpenApiFile } from '../../openapi/openapi.parser.js';
 import { parseScenarioFile } from '../../parser/scenario.parser.js';
 import { DEFAULT_WORKSPACE_DIR } from '../../scaffold/load-test.init.js';
-import { createAnsiHtmlState, renderAnsiChunkToHtml, type AnsiHtmlState } from '../ansi-html.js';
-import { createScenarioConsoleReporter } from '../test.reporter.js';
 import { UI_HTML } from './html.js';
+import {
+  appendUiRunChunk,
+  appendUiRunTestResult,
+  createUiRunRecord,
+  createUiRunTestResult,
+  createUiRunWritable,
+  createUiScenarioReporter,
+  finishUiRun,
+  streamUiRunEvents,
+  type UiRunRecord,
+  type UiRunStatus,
+  type UiScenarioStepSource,
+} from './run-state.js';
 
 type WritableLike = {
   write(chunk: string): unknown;
@@ -271,7 +282,6 @@ export async function runUiServerCommand(
   };
 }
 
-type UiRunStatus = 'running' | 'passed' | 'failed';
 type UiSnapshotStatus = 'present' | 'missing' | 'error';
 
 interface UiState {
@@ -282,42 +292,6 @@ interface UiState {
   runCli: (argv: string[], context: CliContext) => Promise<void>;
   runs: Map<string, UiRunRecord>;
   nextRunId: number;
-}
-
-interface UiRunRecord {
-  id: string;
-  command: 'validate' | 'test';
-  scenario: string;
-  status: UiRunStatus;
-  exitCode?: number;
-  chunks: UiRunChunk[];
-  testResult?: UiRunTestResult;
-  clients: Set<ServerResponse>;
-  ansiHtmlState: AnsiHtmlState;
-}
-
-interface UiRunChunk {
-  stream: 'stdout' | 'stderr';
-  chunk: string;
-  html: string;
-}
-
-interface UiRunTestResult {
-  scenario: string;
-  status: 'passed' | 'failed';
-  durationMs: number;
-  steps: UiRunStepResult[];
-}
-
-interface UiRunStepResult {
-  index: number;
-  id: string;
-  status: 'passed' | 'failed';
-  durationMs: number;
-  source: UiScenarioStepSource;
-  method: string;
-  path: string;
-  responseStatus?: number;
 }
 
 async function handleUiRequest(
@@ -351,7 +325,14 @@ async function handleUiRequest(
 
   if (request.method === 'GET' && requestUrl.pathname.startsWith('/api/runs/') && requestUrl.pathname.endsWith('/events')) {
     const runId = requestUrl.pathname.slice('/api/runs/'.length, -'/events'.length);
-    streamUiRunEvents(state, runId, response);
+    const run = state.runs.get(runId);
+
+    if (run === undefined) {
+      writeUiJson(response, 404, { error: `run ${JSON.stringify(runId)} was not found` });
+      return;
+    }
+
+    streamUiRunEvents(run, response);
     return;
   }
 
@@ -542,15 +523,11 @@ async function startUiRun(
   const payload = parseUiRunPayload(body);
   const scenario = validateUiScenarioOption(state, payload.scenario);
   const runId = String(state.nextRunId++);
-  const run: UiRunRecord = {
+  const run = createUiRunRecord({
     id: runId,
     command: payload.command,
     scenario,
-    status: 'running',
-    chunks: [],
-    clients: new Set(),
-    ansiHtmlState: createAnsiHtmlState(),
-  };
+  });
 
   state.runs.set(runId, run);
   void runUiCliCommand(state, run, payload);
@@ -689,157 +666,6 @@ function createUiFailureHint(message: string): string | undefined {
   }
 
   return undefined;
-}
-
-function createUiRunWritable(run: UiRunRecord, stream: 'stdout' | 'stderr'): WritableLike {
-  return {
-    write(chunk: string | Uint8Array): unknown {
-      appendUiRunChunk(run, stream, typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8'));
-      return true;
-    },
-    isTTY: false,
-  };
-}
-
-function appendUiRunChunk(run: UiRunRecord, stream: 'stdout' | 'stderr', chunk: string): void {
-  const event = {
-    stream,
-    chunk,
-    html: renderAnsiChunkToHtml(chunk, run.ansiHtmlState),
-  };
-  run.chunks.push(event);
-  writeUiRunEvent(run, 'chunk', event);
-}
-
-function appendUiRunTestResult(run: UiRunRecord, result: UiRunTestResult): void {
-  run.testResult = result;
-  writeUiRunEvent(run, 'test-result', result);
-}
-
-function createUiRunTestResult(
-  result: ScenarioExecutionResult,
-  stepSources: UiScenarioStepSource[],
-): UiRunTestResult {
-  return {
-    scenario: result.scenario,
-    status: result.passed ? 'passed' : 'failed',
-    durationMs: Math.round(result.durationMs),
-    steps: result.steps.map((step) => ({
-      index: step.index,
-      id: step.id,
-      status: step.passed ? 'passed' : 'failed',
-      durationMs: Math.round(step.durationMs),
-      source: stepSources[step.index] ?? { kind: 'direct' },
-      method: step.method,
-      path: step.path,
-      ...(step.response === undefined ? {} : { responseStatus: step.response.status }),
-    })),
-  };
-}
-
-function createUiScenarioReporter(
-  stdout: WritableLike,
-  injectedReporter: ScenarioExecutionReporter | undefined,
-  resultReporter?: ScenarioExecutionReporter,
-): ScenarioExecutionReporter {
-  let reporter = createScenarioConsoleReporter(stdout, {
-    color: true,
-    live: false,
-  });
-
-  if (injectedReporter !== undefined) {
-    reporter = teeScenarioReporters(reporter, injectedReporter);
-  }
-
-  return resultReporter === undefined
-    ? reporter
-    : teeScenarioReporters(reporter, resultReporter);
-}
-
-function teeScenarioReporters(
-  left: ScenarioExecutionReporter,
-  right: ScenarioExecutionReporter,
-): ScenarioExecutionReporter {
-  return {
-    async onScenarioStart(event) {
-      await left.onScenarioStart?.(event);
-      await right.onScenarioStart?.(event);
-    },
-    async onStepStart(event) {
-      await left.onStepStart?.(event);
-      await right.onStepStart?.(event);
-    },
-    async onStepRequest(event) {
-      await left.onStepRequest?.(event);
-      await right.onStepRequest?.(event);
-    },
-    async onStepEnd(event) {
-      await left.onStepEnd?.(event);
-      await right.onStepEnd?.(event);
-    },
-    async onScenarioEnd(result) {
-      await left.onScenarioEnd?.(result);
-      await right.onScenarioEnd?.(result);
-    },
-  };
-}
-
-function finishUiRun(run: UiRunRecord, status: 'passed' | 'failed', exitCode: number): void {
-  run.status = status;
-  run.exitCode = exitCode;
-  writeUiRunEvent(run, 'done', {
-    status,
-    exitCode,
-  });
-
-  for (const client of run.clients) {
-    client.end();
-  }
-
-  run.clients.clear();
-}
-
-function streamUiRunEvents(state: UiState, runId: string, response: ServerResponse): void {
-  const run = state.runs.get(runId);
-
-  if (run === undefined) {
-    writeUiJson(response, 404, { error: `run ${JSON.stringify(runId)} was not found` });
-    return;
-  }
-
-  response.writeHead(200, {
-    'content-type': 'text/event-stream; charset=utf-8',
-    'cache-control': 'no-cache',
-    connection: 'keep-alive',
-  });
-
-  for (const chunk of run.chunks) {
-    writeSseEvent(response, 'chunk', chunk);
-  }
-
-  if (run.testResult !== undefined) {
-    writeSseEvent(response, 'test-result', run.testResult);
-  }
-
-  if (run.status !== 'running') {
-    writeSseEvent(response, 'done', {
-      status: run.status,
-      exitCode: run.exitCode ?? 1,
-    });
-    response.end();
-    return;
-  }
-
-  run.clients.add(response);
-  response.on('close', () => {
-    run.clients.delete(response);
-  });
-}
-
-function writeUiRunEvent(run: UiRunRecord, name: string, data: unknown): void {
-  for (const client of run.clients) {
-    writeSseEvent(client, name, data);
-  }
 }
 
 async function checkUiServers(state: UiState): Promise<{
@@ -1178,11 +1004,6 @@ async function readScenarioIncludes(filePath: string): Promise<string[]> {
   });
 }
 
-interface UiScenarioStepSource {
-  kind: 'direct' | 'use' | 'include';
-  reference?: string;
-}
-
 interface UiScenarioStepDefinition {
   path: string;
   code: string;
@@ -1414,11 +1235,6 @@ function writeUiJson(response: ServerResponse, statusCode: number, data: unknown
     'cache-control': 'no-cache',
   });
   response.end(JSON.stringify(data));
-}
-
-function writeSseEvent(response: ServerResponse, event: string, data: unknown): void {
-  response.write(`event: ${event}\n`);
-  response.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
 function normalizeUiHost(value: string | undefined): string {
