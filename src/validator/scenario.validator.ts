@@ -1,13 +1,12 @@
-import type { ApiOperation, ApiRegistry, Scenario, Step } from '../core/types.js';
+import type { ApiOperation, Scenario, Step } from '../core/types.js';
+import { resolveStepRegistry, type ApiRegistrySource } from '../core/api-registry.js';
+import { isSupportedStatusCondition } from '../core/condition.js';
 import { collectTemplateReferences } from '../core/template.js';
 import { resolveApiOperation } from '../openapi/openapi.resolver.js';
 import { compileJsonPathSegments } from '../utils/jsonpath.js';
 
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
-const CONDITION_PATTERN = /^status\s*(==|!=|>=|<)\s*\d{3}$/;
 const PLACEHOLDER_PATTERN = /^<[A-Za-z0-9_.-]+>$/;
-
-type ApiRegistrySource = ApiRegistry | Map<string, ApiRegistry>;
 
 export interface ScenarioValidationResult {
   scenarioName: string;
@@ -90,34 +89,6 @@ export function validateScenarioAgainstOpenApi(
 
 function validateScenarioVarPlaceholders(scenario: Scenario, issues: string[]): void {
   validatePlaceholderValue('scenario', 'vars', scenario.vars, issues);
-}
-
-function resolveStepRegistry(
-  step: Step,
-  registrySource: ApiRegistrySource,
-  options: ScenarioValidationOptions,
-): { registry: ApiRegistry; moduleName?: string } {
-  if (!(registrySource instanceof Map)) {
-    if (step.api.module !== undefined) {
-      throw new Error(`step "${step.id}": api.module requires a module registry`);
-    }
-
-    return { registry: registrySource };
-  }
-
-  const moduleName = step.api.module ?? options.defaultModuleName;
-
-  if (moduleName === undefined) {
-    throw new Error(`step "${step.id}": api.module is required because no fallback module was selected`);
-  }
-
-  const registry = registrySource.get(moduleName);
-
-  if (!registry) {
-    throw new Error(`step "${step.id}": api.module "${moduleName}" was not found`);
-  }
-
-  return { registry, moduleName };
 }
 
 function validateRequestTemplates(
@@ -288,7 +259,7 @@ function validateCondition(step: Step, issues: string[]): void {
     return;
   }
 
-  if (!CONDITION_PATTERN.test(step.condition.trim())) {
+  if (!isSupportedStatusCondition(step.condition)) {
     issues.push(`step "${step.id}": unsupported condition "${step.condition}"`);
   }
 }

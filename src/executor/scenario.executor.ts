@@ -2,6 +2,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 
+import {
+  evaluateStatusCondition,
+  formatUnsupportedConditionError,
+  parseStatusCondition,
+  type StatusCondition,
+} from '../core/condition.js';
 import type { ASTScenario, ASTStep, MultipartFile, StepRequest } from '../core/types.js';
 import { compileJsonPathSegments } from '../utils/jsonpath.js';
 
@@ -116,11 +122,6 @@ interface RuntimeState {
 interface RuntimeRequest {
   url: string;
   init: RequestInit;
-}
-
-interface ParsedCondition {
-  operator: '===' | '!==' | '>=' | '<';
-  status: number;
 }
 
 export class ScenarioExecutionError extends Error {
@@ -582,33 +583,18 @@ function readJsonPath(value: unknown, segments: Array<string | number>): unknown
   );
 }
 
-function parseCondition(condition: string, stepId: string): ParsedCondition {
-  const match = /^status\s*(==|!=|>=|<)\s*(\d{3})$/.exec(condition.trim());
+function parseCondition(condition: string, stepId: string): StatusCondition {
+  const parsed = parseStatusCondition(condition);
 
-  if (!match) {
-    throw new ScenarioExecutionError(`step "${stepId}": unsupported condition "${condition}"`);
+  if (parsed === undefined) {
+    throw new ScenarioExecutionError(formatUnsupportedConditionError(stepId, condition));
   }
 
-  const operator = match[1] === '=='
-    ? '==='
-    : match[1] === '!='
-      ? '!=='
-      : match[1];
-
-  return { operator: operator as ParsedCondition['operator'], status: Number(match[2]) };
+  return parsed;
 }
 
-function evaluateCondition(status: number, condition: ParsedCondition): boolean {
-  switch (condition.operator) {
-    case '===':
-      return status === condition.status;
-    case '!==':
-      return status !== condition.status;
-    case '>=':
-      return status >= condition.status;
-    case '<':
-      return status < condition.status;
-  }
+function evaluateCondition(status: number, condition: StatusCondition): boolean {
+  return evaluateStatusCondition(status, condition);
 }
 
 function isDefaultStatusPassed(status: number): boolean {

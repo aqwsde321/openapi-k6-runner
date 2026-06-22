@@ -2,15 +2,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
+import { formatScenarioVarNameIssue } from '../core/scenario-vars.js';
 import type { ApiReference, ExtractRule, MultipartFile, MultipartRequest, Scenario, Step, StepRequest } from '../core/types.js';
 
 interface ParsedStepEntry {
   step: Step;
   stepPath: string;
 }
-
-const TEMPLATE_REFERENCE_NAME_PATTERN = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
-const RESERVED_VAR_NAMES = new Set(['__proto__']);
 
 export interface ScenarioParseOptions {
   scenarioRootDir?: string;
@@ -261,16 +259,10 @@ function parseVars(value: unknown, pathLabel: string): Record<string, unknown> {
   const vars = expectRecord(value, `${pathLabel} must be an object`);
 
   for (const key of Object.keys(vars)) {
-    if (!key.trim()) {
-      throw new ScenarioParseError(`${pathLabel}: variable name must not be empty`);
-    }
+    const issue = formatScenarioVarNameIssue(key, `${pathLabel}.${key}`);
 
-    if (!TEMPLATE_REFERENCE_NAME_PATTERN.test(key)) {
-      throw new ScenarioParseError(`${pathLabel}.${key} must match ${TEMPLATE_REFERENCE_NAME_PATTERN.source} for {{vars.NAME}} references`);
-    }
-
-    if (RESERVED_VAR_NAMES.has(key)) {
-      throw new ScenarioParseError(`${pathLabel}.${key} is reserved and cannot be referenced as {{vars.${key}}}`);
+    if (issue !== undefined) {
+      throw new ScenarioParseError(issue);
     }
   }
 

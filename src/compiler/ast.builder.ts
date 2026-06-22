@@ -1,19 +1,17 @@
 import type {
   ApiOperation,
-  ApiRegistry,
   ASTScenario,
   ASTStep,
   Scenario,
   Step,
   StepRequest,
 } from '../core/types.js';
+import { resolveStepRegistry, type ApiRegistrySource } from '../core/api-registry.js';
 import { resolveApiOperation } from '../openapi/openapi.resolver.js';
 
 export interface AstBuildOptions {
   defaultModuleName?: string;
 }
-
-type ApiRegistrySource = ApiRegistry | Map<string, ApiRegistry>;
 
 export function buildAst(
   scenario: Scenario,
@@ -45,34 +43,6 @@ function buildAstStep(
     ...(step.extract === undefined ? {} : { extract: step.extract }),
     ...(step.condition === undefined ? {} : { condition: step.condition }),
   };
-}
-
-function resolveStepRegistry(
-  step: Step,
-  registrySource: ApiRegistrySource,
-  options: AstBuildOptions,
-): { registry: ApiRegistry; moduleName?: string } {
-  if (!(registrySource instanceof Map)) {
-    if (step.api.module !== undefined) {
-      throw new Error(`step "${step.id}": api.module requires a module registry`);
-    }
-
-    return { registry: registrySource };
-  }
-
-  const moduleName = step.api.module ?? options.defaultModuleName;
-
-  if (moduleName === undefined) {
-    throw new Error(`step "${step.id}": api.module is required because no fallback module was selected`);
-  }
-
-  const registry = registrySource.get(moduleName);
-
-  if (!registry) {
-    throw new Error(`step "${step.id}": api.module "${moduleName}" was not found`);
-  }
-
-  return { registry, moduleName };
 }
 
 function normalizeRequest(request: StepRequest | undefined): StepRequest {
