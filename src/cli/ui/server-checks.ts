@@ -3,12 +3,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { resolveConfigFilePath, type LoadTestConfig, type LoadTestModuleConfig } from '../../config/load-test.config.js';
-import { createModuleBaseUrlEnvName } from '../../core/module-env.js';
-import { parseOpenApiFile } from '../../openapi/openapi.parser.js';
+import { isConfiguredValue, resolveUiModuleBaseUrl } from './base-url.js';
 import { formatDisplayPath } from './paths.js';
 import { resolveLoadTestDir } from './scenarios.js';
-
-const TODO_VALUE = 'TODO';
 
 export type UiSnapshotStatus = 'present' | 'missing' | 'error';
 
@@ -167,51 +164,6 @@ function formatUiError(error: unknown): string {
   return message;
 }
 
-async function resolveUiModuleBaseUrl(
-  context: UiServerCheckContext,
-  moduleConfig: LoadTestModuleConfig,
-  runtimeEnv: Record<string, string | undefined>,
-): Promise<{ baseUrl?: string; source?: string }> {
-  const moduleEnvName = createModuleBaseUrlEnvName(moduleConfig.name);
-  const moduleEnv = normalizeConfiguredValue(runtimeEnv[moduleEnvName]);
-
-  if (moduleEnv !== undefined) {
-    return { baseUrl: moduleEnv, source: moduleEnvName };
-  }
-
-  const rootEnv = normalizeConfiguredValue(runtimeEnv.BASE_URL);
-
-  if (rootEnv !== undefined) {
-    return { baseUrl: rootEnv, source: 'BASE_URL' };
-  }
-
-  const moduleBaseUrl = normalizeConfiguredValue(moduleConfig.baseUrl);
-
-  if (moduleBaseUrl !== undefined) {
-    return { baseUrl: moduleBaseUrl, source: `modules.${moduleConfig.name}.baseUrl` };
-  }
-
-  const rootBaseUrl = normalizeConfiguredValue(context.config.baseUrl);
-
-  if (rootBaseUrl !== undefined) {
-    return { baseUrl: rootBaseUrl, source: 'baseUrl' };
-  }
-
-  if (isConfiguredValue(moduleConfig.snapshot)) {
-    try {
-      const registry = await parseOpenApiFile(resolveConfigFilePath(context.config, moduleConfig.snapshot));
-
-      if (registry.defaultServerUrl !== undefined) {
-        return { baseUrl: registry.defaultServerUrl, source: `modules.${moduleConfig.name}.snapshot servers[0].url` };
-      }
-    } catch {
-      return {};
-    }
-  }
-
-  return {};
-}
-
 async function fetchUiReachability(fetchImpl: typeof fetch, baseUrl: string): Promise<Response> {
   const targetUrl = new URL(baseUrl);
   const head = await fetchWithTimeout(fetchImpl, targetUrl, 'HEAD');
@@ -235,14 +187,6 @@ async function fetchWithTimeout(fetchImpl: typeof fetch, url: URL, method: 'GET'
   } finally {
     clearTimeout(timeout);
   }
-}
-
-function isConfiguredValue(value: string | undefined): value is string {
-  return value !== undefined && value.trim() !== '' && value.trim().toUpperCase() !== TODO_VALUE;
-}
-
-function normalizeConfiguredValue(value: string | undefined): string | undefined {
-  return isConfiguredValue(value) ? value.trim() : undefined;
 }
 
 function isNodeErrorCode(error: unknown, code: string): boolean {
