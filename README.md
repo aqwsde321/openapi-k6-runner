@@ -3,12 +3,14 @@
 [![npm version](https://img.shields.io/npm/v/openapi-k6?label=npm)](https://www.npmjs.com/package/openapi-k6)
 [![Publish](https://github.com/aqwsde321/openapi-k6-runner/actions/workflows/publish.yml/badge.svg)](https://github.com/aqwsde321/openapi-k6-runner/actions/workflows/publish.yml)
 
-OpenAPI에서 API 흐름을 **Scenario YAML**로 작성하고, k6 실행 전에 `validate`와 `test`로 먼저 검증하는 CLI입니다.
+openapi-k6는 OpenAPI 기반 API 흐름을 k6 테스트로 바꾸는 CLI입니다.
+Postman처럼 endpoint 하나를 따로 호출하는 대신, 로그인 응답의 `token`을 다음 요청의 `Authorization`에 넣고 생성 API의 `id`를 조회 API에 넘기는 식의 연결된 흐름을 **Scenario YAML**로 작성합니다.
+작성한 scenario는 먼저 `validate`로 YAML/OpenAPI 정합성을 확인하고, `test`로 실제 API 흐름을 1회 호출해 값 연결과 조건을 검증한 뒤, k6가 실행할 JS 파일로 생성합니다.
 
-핵심 흐름은 단순합니다.
+기본 흐름은 아래 순서입니다.
 
 ```text
-OpenAPI 가져오기 -> scenario 작성 -> validate/test -> run
+init/sync -> catalog로 endpoint 확인 -> scenario 작성 -> validate -> test -> generate -> k6 run
 ```
 
 AI coding agent에게 맡기려면 [AI agent로 시작하기](#ai-agent로-시작하기)를 먼저 보고, 직접 실행하려면 [빠른 시작](#빠른-시작)을 봅니다.

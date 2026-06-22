@@ -9,8 +9,11 @@ describe('README usage guide', () => {
   it('keeps the root entrypoint focused on the first successful scenario run', async () => {
     const readme = await readFile(path.join(repoRoot, 'README.md'), 'utf8');
 
-    expect(readme).toContain('OpenAPI에서 API 흐름을 **Scenario YAML**로 작성하고');
-    expect(readme).toContain('OpenAPI 가져오기 -> scenario 작성 -> validate/test -> run');
+    expect(readme).toContain('openapi-k6는 OpenAPI 기반 API 흐름을 k6 테스트로 바꾸는 CLI입니다.');
+    expect(readme).toContain('Postman처럼 endpoint 하나를 따로 호출하는 대신');
+    expect(readme).toContain('로그인 응답의 `token`을 다음 요청의 `Authorization`에 넣고');
+    expect(readme).toContain('test`로 실제 API 흐름을 1회 호출해 값 연결과 조건을 검증한 뒤');
+    expect(readme).toContain('init/sync -> catalog로 endpoint 확인 -> scenario 작성 -> validate -> test -> generate -> k6 run');
     expect(readme).toContain('AI coding agent에게 맡기려면 [AI agent로 시작하기](#ai-agent로-시작하기)를 먼저 보고, 직접 실행하려면 [빠른 시작](#빠른-시작)을 봅니다.');
 
     expect(readme).toContain('## AI agent로 시작하기');
