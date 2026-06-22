@@ -1,6 +1,5 @@
 import { CommanderError } from 'commander';
 import { parse as parseDotEnv } from 'dotenv';
-import { existsSync, type Dirent } from 'node:fs';
 import fs from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -8,13 +7,11 @@ import path from 'node:path';
 
 import { loadTestConfig, resolveConfigFilePath, resolveConfigModule, type LoadTestConfig, type LoadTestModuleConfig } from '../../config/load-test.config.js';
 import { createModuleBaseUrlEnvName } from '../../core/module-env.js';
-import { collectTemplateReferences } from '../../core/template.js';
-import type { Scenario } from '../../core/types.js';
 import type { ScenarioExecutionReporter } from '../../executor/scenario.executor.js';
 import { parseOpenApiFile } from '../../openapi/openapi.parser.js';
-import { parseScenarioFile } from '../../parser/scenario.parser.js';
 import { DEFAULT_WORKSPACE_DIR } from '../../scaffold/load-test.init.js';
 import { UI_HTML } from './html.js';
+import { formatDisplayPath } from './paths.js';
 import {
   appendUiRunChunk,
   appendUiRunTestResult,
@@ -27,13 +24,16 @@ import {
   type UiRunRecord,
   type UiRunStatus,
 } from './run-state.js';
+import { readUiScenarioStepSources } from './scenario-files.js';
 import {
-  readScenarioIncludes,
-  readTopLevelStringArray,
-  readUiScenarioStepDefinitions,
-  readUiScenarioStepSources,
-  type UiScenarioReaderContext,
-} from './scenario-files.js';
+  createUiScenarioReaderContext,
+  formatUiScenarioOption,
+  listUiScenarios,
+  readUiScenarioDetail,
+  resolveLoadTestDir,
+  resolveUiScenarioPath,
+  validateUiScenarioOption,
+} from './scenarios.js';
 
 type WritableLike = {
   write(chunk: string): unknown;
@@ -125,103 +125,8 @@ function normalizeConfiguredValue(value: string | undefined): string | undefined
   return isConfiguredValue(value) ? value.trim() : undefined;
 }
 
-function resolveScenarioPath(cwd: string, config: LoadTestConfig | undefined, value: string): string {
-  if (isScenarioKey(value)) {
-    const explicitPath = path.resolve(cwd, value);
-
-    if (hasScenarioKeySeparator(value) && existsSync(explicitPath)) {
-      return explicitPath;
-    }
-
-    return path.join(resolveLoadTestDir(cwd, config), 'scenarios', `${normalizeScenarioKey(value)}.yaml`);
-  }
-
-  return path.resolve(cwd, value);
-}
-
-function resolveScenarioName(scenario: string): string {
-  return path.basename(scenario, path.extname(scenario));
-}
-
-function resolveLoadTestDir(cwd: string, config: LoadTestConfig | undefined): string {
-  return config?.dir ?? path.resolve(cwd, DEFAULT_LOAD_TEST_DIR);
-}
-
-function resolveScenarioRootDir(cwd: string, config: LoadTestConfig | undefined): string {
-  return path.join(resolveLoadTestDir(cwd, config), 'scenarios');
-}
-
-function parseWorkspaceScenarioFile(
-  cwd: string,
-  config: LoadTestConfig | undefined,
-  scenarioPath: string,
-): Promise<Scenario> {
-  return parseScenarioFile(scenarioPath, {
-    scenarioRootDir: resolveScenarioRootDir(cwd, config),
-  });
-}
-
-function isScenarioKey(value: string): boolean {
-  const trimmed = value.trim();
-
-  if (
-    trimmed === '' ||
-    path.isAbsolute(trimmed) ||
-    path.win32.isAbsolute(trimmed) ||
-    path.extname(trimmed) !== ''
-  ) {
-    return false;
-  }
-
-  const segments = splitScenarioKey(trimmed);
-  return segments.length > 0 && segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
-}
-
-function normalizeScenarioKey(value: string): string {
-  return splitScenarioKey(value.trim()).join('/');
-}
-
-function splitScenarioKey(value: string): string[] {
-  return value.split(/[\\/]+/);
-}
-
-function hasScenarioKeySeparator(value: string): boolean {
-  return value.includes('/') || value.includes('\\');
-}
-
-function formatScenarioKey(relativeFilePath: string): string {
-  const parsed = path.parse(relativeFilePath);
-  return path.join(parsed.dir, parsed.name).split(path.sep).join('/');
-}
-
-function isLocalRelativePath(relativePath: string): boolean {
-  return relativePath !== '' &&
-    relativePath !== '..' &&
-    !relativePath.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relativePath) &&
-    !path.win32.isAbsolute(relativePath);
-}
-
-function isScenarioFile(fileName: string): boolean {
-  return ['.yaml', '.yml', '.json'].includes(path.extname(fileName).toLowerCase());
-}
-
 function writeLine(stream: WritableLike, message: string): void {
   stream.write(`${message}\n`);
-}
-
-function formatDisplayPath(cwd: string, filePath: string): string {
-  const relativePath = path.relative(cwd, filePath);
-
-  if (relativePath && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)) {
-    return normalizeCommandPath(relativePath);
-  }
-
-  return filePath;
-}
-
-function normalizeCommandPath(value: string): string {
-  return value.split(path.sep).join('/');
 }
 
 function shellQuote(value: string): string {
@@ -347,179 +252,6 @@ async function handleUiRequest(
   }
 
   writeUiJson(response, 404, { error: 'Not found' });
-}
-
-async function listUiScenarios(state: UiState): Promise<{
-  configPath: string;
-  scenarioDir: string;
-  defaultModule?: string;
-  moduleCount: number;
-  scenarios: Array<{
-    id: string;
-    name: string;
-    group: string;
-    path: string;
-    stepCount?: number;
-    modules?: string[];
-    env?: string[];
-    vars?: string[];
-    error?: string;
-  }>;
-}> {
-  const scenarioDir = path.join(resolveLoadTestDir(state.cwd, state.config), 'scenarios');
-  const files = await listUiScenarioFiles(scenarioDir);
-  const scenarios = [];
-
-  for (const filePath of files) {
-    try {
-      const scenario = await parseWorkspaceScenarioFile(state.cwd, state.config, filePath);
-      const analysis = analyzeUiScenario(scenario);
-      scenarios.push({
-        id: formatUiScenarioOption(state.cwd, scenarioDir, filePath),
-        name: scenario.name,
-        group: formatUiScenarioGroup(scenarioDir, filePath),
-        path: formatDisplayPath(state.cwd, filePath),
-        stepCount: scenario.steps.length,
-        modules: analysis.modules,
-        env: analysis.env,
-        vars: analysis.vars,
-      });
-    } catch (error) {
-      scenarios.push({
-        id: formatDisplayPath(state.cwd, filePath),
-        name: resolveScenarioName(filePath),
-        group: formatUiScenarioGroup(scenarioDir, filePath),
-        path: formatDisplayPath(state.cwd, filePath),
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  return {
-    configPath: formatDisplayPath(state.cwd, state.config.path),
-    scenarioDir: formatDisplayPath(state.cwd, scenarioDir),
-    ...(state.config.defaultModule === undefined ? {} : { defaultModule: state.config.defaultModule }),
-    moduleCount: state.config.modules.size,
-    scenarios,
-  };
-}
-
-async function readUiScenarioDetail(
-  state: UiState,
-  scenarioOption: string,
-): Promise<{
-  id: string;
-  name: string;
-  path: string;
-  stepCount: number;
-  modules: string[];
-  env: string[];
-  vars: string[];
-  includes: string[];
-  fixtures: string[];
-  steps: Array<{
-    id: string;
-    source: {
-      kind: 'direct' | 'use' | 'include';
-      reference?: string;
-    };
-    module?: string;
-    operationId?: string;
-    method?: string;
-    path?: string;
-    condition?: string;
-    extract?: string[];
-    definition?: {
-      path: string;
-      code: string;
-    };
-  }>;
-}> {
-  const scenarioPath = resolveUiScenarioPath(state, scenarioOption);
-  const scenario = await parseWorkspaceScenarioFile(state.cwd, state.config, scenarioPath);
-  const analysis = analyzeUiScenario(scenario);
-  const scenarioReader = createUiScenarioReaderContext(state);
-  const stepSources = await readUiScenarioStepSources(scenarioReader, scenarioPath);
-  const stepDefinitions = await readUiScenarioStepDefinitions(scenarioReader, scenarioPath);
-
-  return {
-    id: formatUiScenarioOption(state.cwd, path.join(resolveLoadTestDir(state.cwd, state.config), 'scenarios'), scenarioPath),
-    name: scenario.name,
-    path: formatDisplayPath(state.cwd, scenarioPath),
-    stepCount: scenario.steps.length,
-    modules: analysis.modules,
-    env: analysis.env,
-    vars: analysis.vars,
-    includes: await readScenarioIncludes(scenarioPath),
-    fixtures: await readTopLevelStringArray(scenarioPath, 'fixtures'),
-    steps: scenario.steps.map((step, index) => ({
-      id: step.id,
-      source: stepSources[index] ?? { kind: 'direct' },
-      ...(step.api.module === undefined ? {} : { module: step.api.module }),
-      ...(step.api.operationId === undefined ? {} : { operationId: step.api.operationId }),
-      ...(step.api.method === undefined ? {} : { method: step.api.method }),
-      ...(step.api.path === undefined ? {} : { path: step.api.path }),
-      ...(step.condition === undefined ? {} : { condition: step.condition }),
-      ...(step.extract === undefined ? {} : { extract: Object.keys(step.extract) }),
-      ...(stepDefinitions[index] === undefined ? {} : { definition: stepDefinitions[index] }),
-    })),
-  };
-}
-
-function analyzeUiScenario(scenario: Scenario): {
-  modules: string[];
-  env: string[];
-  vars: string[];
-} {
-  const modules = new Set<string>();
-  const env = new Set<string>();
-  const vars = new Set<string>();
-
-  for (const step of scenario.steps) {
-    if (step.api.module !== undefined) {
-      modules.add(step.api.module);
-    }
-
-    collectUiTemplateReferences(step.request, env, vars);
-  }
-
-  collectUiTemplateReferences(scenario.vars, env, vars);
-
-  return {
-    modules: [...modules].sort(),
-    env: [...env].sort(),
-    vars: [...vars].sort(),
-  };
-}
-
-function collectUiTemplateReferences(value: unknown, env: Set<string>, vars: Set<string>): void {
-  if (typeof value === 'string') {
-    try {
-      for (const reference of collectTemplateReferences(value)) {
-        if (reference.type === 'env') {
-          env.add(reference.name);
-        } else if (reference.type === 'vars') {
-          vars.add(reference.name);
-        }
-      }
-    } catch {
-      return;
-    }
-    return;
-  }
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      collectUiTemplateReferences(item, env, vars);
-    }
-    return;
-  }
-
-  if (value && typeof value === 'object') {
-    for (const item of Object.values(value)) {
-      collectUiTemplateReferences(item, env, vars);
-    }
-  }
 }
 
 async function startUiRun(
@@ -886,91 +618,6 @@ async function fetchWithTimeout(fetchImpl: typeof fetch, url: URL, method: 'GET'
   } finally {
     clearTimeout(timeout);
   }
-}
-
-async function listUiScenarioFiles(directoryPath: string): Promise<string[]> {
-  let entries: Dirent[];
-
-  try {
-    entries = await fs.readdir(directoryPath, { withFileTypes: true });
-  } catch (error) {
-    if (isNodeErrorCode(error, 'ENOENT')) {
-      return [];
-    }
-
-    throw error;
-  }
-
-  const files: string[] = [];
-
-  for (const entry of entries) {
-    const entryPath = path.join(directoryPath, entry.name);
-
-    if (entry.isDirectory()) {
-      if (entry.name !== 'partials' && entry.name !== 'fixtures') {
-        files.push(...await listUiScenarioFiles(entryPath));
-      }
-    } else if (entry.isFile() && isScenarioFile(entry.name) && !entry.name.endsWith('.example')) {
-      files.push(entryPath);
-    }
-  }
-
-  return files.sort((left, right) => left.localeCompare(right));
-}
-
-function formatUiScenarioOption(cwd: string, scenarioDir: string, filePath: string): string {
-  const relative = path.relative(scenarioDir, filePath);
-
-  if (isLocalRelativePath(relative) && path.extname(relative).toLowerCase() === '.yaml') {
-    const scenarioKey = formatScenarioKey(relative);
-
-    if (isScenarioKey(scenarioKey)) {
-      return scenarioKey;
-    }
-  }
-
-  return formatDisplayPath(cwd, filePath);
-}
-
-function formatUiScenarioGroup(scenarioDir: string, filePath: string): string {
-  const relative = path.relative(scenarioDir, filePath);
-  const group = path.dirname(relative).split(path.sep).join('/');
-  return group === '.' ? 'root' : group;
-}
-
-function validateUiScenarioOption(state: UiState, value: string): string {
-  resolveUiScenarioPath(state, value);
-  return value;
-}
-
-function resolveUiScenarioPath(state: UiState, value: string): string {
-  const scenarioDir = path.join(resolveLoadTestDir(state.cwd, state.config), 'scenarios');
-  const keyedScenarioPath = isScenarioKey(value)
-    ? path.join(scenarioDir, `${normalizeScenarioKey(value)}.yaml`)
-    : undefined;
-  const scenarioPath = keyedScenarioPath !== undefined && existsSync(keyedScenarioPath)
-    ? keyedScenarioPath
-    : resolveScenarioPath(state.cwd, state.config, value);
-  const relative = path.relative(scenarioDir, scenarioPath);
-
-  if (
-    relative === '' ||
-    relative.startsWith('..') ||
-    path.isAbsolute(relative) ||
-    relative.split(path.sep).includes('partials') ||
-    relative.split(path.sep).includes('fixtures')
-  ) {
-    throw new Error(`scenario must be inside ${formatDisplayPath(state.cwd, scenarioDir)}`);
-  }
-
-  return scenarioPath;
-}
-
-function createUiScenarioReaderContext(state: UiState): UiScenarioReaderContext {
-  return {
-    resolveScenarioPath: (value) => resolveUiScenarioPath(state, value),
-    formatDisplayPath: (filePath) => formatDisplayPath(state.cwd, filePath),
-  };
 }
 
 async function readUiJsonBody(request: IncomingMessage): Promise<unknown> {
