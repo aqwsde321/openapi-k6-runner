@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-06-22
+
+### Changed
+
+- README 첫 설명을 endpoint 단건 호출이 아니라 응답값을 다음 요청에 연결하는 scenario 흐름과 k6 JS 생성 흐름 중심으로 정리했습니다.
+
 ## [0.9.0] - 2026-06-19
 
 ### Added
@@ -221,7 +227,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.2...v0.8.0
 [0.7.2]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.1...v0.7.2
