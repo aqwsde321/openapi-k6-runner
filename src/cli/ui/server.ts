@@ -1,14 +1,21 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import type { AddressInfo } from 'node:net';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import path from 'node:path';
 
 import { loadTestConfig, resolveConfigModule, type LoadTestConfig } from '../../config/load-test.config.js';
 import type { ScenarioExecutionReporter } from '../../executor/scenario.executor.js';
 import { DEFAULT_WORKSPACE_DIR } from '../../scaffold/load-test.init.js';
-import { UI_HTML } from './html.js';
 import { streamUiRunEvents, type UiRunRecord } from './run-state.js';
 import { startUiRun } from './run-command.js';
 import { checkUiServers } from './server-checks.js';
+import {
+  closeUiServer,
+  listenUiServer,
+  normalizeUiHost,
+  parseUiPort,
+  readUiJsonBody,
+  writeUiHtml,
+  writeUiJson,
+} from './server-http.js';
 import {
   listUiScenarios,
   readUiScenarioDetail,
@@ -204,124 +211,4 @@ async function handleUiRequest(
   }
 
   writeUiJson(response, 404, { error: 'Not found' });
-}
-
-async function readUiJsonBody(request: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  let totalLength = 0;
-
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    totalLength += buffer.length;
-
-    if (totalLength > 1024 * 1024) {
-      throw new Error('request body is too large');
-    }
-
-    chunks.push(buffer);
-  }
-
-  if (chunks.length === 0) {
-    return {};
-  }
-
-  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
-}
-
-function writeUiHtml(response: ServerResponse): void {
-  response.writeHead(200, {
-    'content-type': 'text/html; charset=utf-8',
-    'cache-control': 'no-cache',
-  });
-  response.end(UI_HTML);
-}
-
-function writeUiJson(response: ServerResponse, statusCode: number, data: unknown): void {
-  if (response.headersSent) {
-    response.end();
-    return;
-  }
-
-  response.writeHead(statusCode, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-cache',
-  });
-  response.end(JSON.stringify(data));
-}
-
-function normalizeUiHost(value: string | undefined): string {
-  const host = value?.trim() ?? '127.0.0.1';
-
-  if (!host) {
-    throw new Error('--host must not be empty');
-  }
-
-  return host;
-}
-
-function parseUiPort(value: string | undefined): number {
-  if (value === undefined) {
-    return 3766;
-  }
-
-  const port = Number(value);
-
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    throw new Error('--port must be an integer between 0 and 65535');
-  }
-
-  return port;
-}
-
-async function listenUiServer(
-  server: Server,
-  host: string,
-  port: number,
-  explicitPort: boolean,
-): Promise<number> {
-  const maxAttempts = explicitPort || port === 0 ? 1 : 10;
-
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const candidatePort = port === 0 ? 0 : port + attempt;
-
-    try {
-      return await listenUiServerOnce(server, host, candidatePort);
-    } catch (error) {
-      if (explicitPort || !isNodeErrorCode(error, 'EADDRINUSE')) {
-        throw error;
-      }
-    }
-  }
-
-  throw new Error(`No available port found starting at ${port}`);
-}
-
-function listenUiServerOnce(server: Server, host: string, port: number): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const onError = (error: Error) => {
-      server.off('listening', onListening);
-      reject(error);
-    };
-    const onListening = () => {
-      server.off('error', onError);
-      const address = server.address() as AddressInfo;
-      resolve(address.port);
-    };
-
-    server.once('error', onError);
-    server.once('listening', onListening);
-    server.listen(port, host);
-  });
-}
-
-function closeUiServer(server: Server): Promise<void> {
-  return new Promise((resolve, reject) => {
-    server.close((error) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve();
-      }
-    });
-  });
 }
