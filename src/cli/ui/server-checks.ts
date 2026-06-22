@@ -5,7 +5,7 @@ import path from 'node:path';
 import { resolveConfigFilePath, type LoadTestConfig, type LoadTestModuleConfig } from '../../config/load-test.config.js';
 import { isConfiguredValue, resolveUiModuleBaseUrl } from './base-url.js';
 import { formatDisplayPath } from './paths.js';
-import { resolveLoadTestDir } from './scenarios.js';
+import { resolveLoadTestDir } from './scenario-paths.js';
 
 export type UiSnapshotStatus = 'present' | 'missing' | 'error';
 

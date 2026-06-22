@@ -23,7 +23,7 @@ import {
   resolveLoadTestDir,
   resolveUiScenarioPath,
   validateUiScenarioOption,
-} from './scenarios.js';
+} from './scenario-paths.js';
 
 const DEFAULT_CONFIG_PATH = `${DEFAULT_WORKSPACE_DIR}/config.yaml`;
 
