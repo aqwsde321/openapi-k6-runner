@@ -14,7 +14,7 @@
 
 ### Changed
 
-- README, init scaffold README, Codex 스킬 안내에서 `.env`는 비밀/접속 값에 한정하고 공개 테스트 데이터는 `vars`/`--var-file`/`--var` 또는 `{{k6.*}}`로 관리하도록 기준을 명확히 했습니다.
+- README, init scaffold README, Codex 스킬 안내에서 `.env`는 비밀/접속 값에 한정하고, synthetic unique 값은 `{{k6.run.id}}-{{k6.scenario.iterationInTest}}` 패턴을 먼저 사용하도록 기준을 명확히 했습니다.
 
 ## [0.9.1] - 2026-06-22
 

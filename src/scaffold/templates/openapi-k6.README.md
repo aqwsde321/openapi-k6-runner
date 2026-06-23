@@ -99,6 +99,8 @@ K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_OPEN=true k6 run __GENERATED_OUTPUT_ARG__
 
 - 공개 테스트 데이터는 scenario `vars:` 또는 `--var-file`, `--var`로 관리합니다.
 - 값 우선순위는 `vars:` < CLI `--var-file` < CLI `--var`입니다.
+- email, externalId, 주문번호처럼 고유값만 필요하면 fixture dataset보다 `{{k6.run.id}}-{{k6.scenario.iterationInTest}}` 패턴을 우선 사용합니다.
+- 기존 계정, tenant, branch, 권한처럼 미리 준비된 상태 조합이 필요할 때만 `--var-file`로 데이터 묶음을 관리합니다.
 - k6 scenario 시작 timestamp 기반 prefix는 `{{k6.run.id}}`로 참조합니다. 필요하면 `OPENAPI_K6_RUN_ID` 환경변수로 고정할 수 있습니다.
 - k6 실행에서 반복마다 바뀌는 값은 `{{k6.scenario.iterationInTest}}`, `{{k6.vu.idInTest}}`, `{{k6.vu.iterationInScenario}}`처럼 참조합니다.
 - `test` 명령은 기본 1회 API 흐름 검증이므로 k6 값은 `1 VU`, 첫 iteration 기준으로 해석합니다. `--iterations 3`을 붙이면 k6 없이도 iteration 값 증가를 확인합니다.

@@ -308,7 +308,8 @@ npx --yes openapi-k6 test -s <scenario-key> --var sku=ABC-002
 
 ### 반복마다 달라지는 k6 값
 
-k6 실행에서 요청 값이 모두 같으면 k6 실행 context를 참조합니다.
+회원가입, 주문 생성, 외부 ID 생성처럼 매 요청마다 고유값만 필요하면 별도 계정 목록이나 fixture를 만들기보다 k6 실행 context를 먼저 사용합니다.
+대부분의 부하 테스트 데이터는 아래처럼 `{{k6.run.id}}`와 `{{k6.scenario.iterationInTest}}`를 조합하면 충분합니다.
 
 ```yaml
 name: create-users
@@ -325,6 +326,16 @@ steps:
         email: "load-{{k6.run.id}}-{{k6.scenario.iterationInTest}}@{{vars.emailDomain}}"
         externalId: "{{k6.run.id}}-vu{{k6.vu.idInTest}}-iter{{k6.vu.iterationInScenario}}"
 ```
+
+실행별로 대략 이런 값이 만들어집니다.
+
+```text
+load-1761123456789-0@example.test
+load-1761123456789-1@example.test
+load-1761123456789-2@example.test
+```
+
+이미 준비된 계정 N개를 번갈아 로그인해야 하거나 tenant/branch/권한 조합처럼 고정 fixture가 필요한 경우에만 `--var-file`로 데이터 묶음을 관리합니다.
 
 지원 값:
 
