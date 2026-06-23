@@ -20,6 +20,8 @@ const HTTP_CALLS: Record<string, string> = {
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 const ENV_TEMPLATE_PATTERN = /{{\s*env\.([A-Z_][A-Z0-9_]*)\s*}}/g;
 const VARS_TEMPLATE_PATTERN = /{{\s*vars\.([A-Za-z_$][A-Za-z0-9_$]*)\s*}}/g;
+const K6_RUN_ID_TEMPLATE_PATTERN = /{{\s*k6\.run\.id\s*}}/g;
+const K6_TEMPLATE_PATTERN = /{{\s*k6\.(scenario\.(?:iterationInInstance|iterationInTest)|vu\.(?:idInInstance|idInTest|iterationInInstance|iterationInScenario))\s*}}/g;
 
 export interface K6GeneratorOptions {
   baseUrl?: string;
@@ -39,9 +41,12 @@ export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions =
   const baseUrlPlan = buildBaseUrlPlan(ast, options);
   const secretEnvNames = collectEnvReferenceNames(ast);
   const needsVars = Object.keys(ast.vars ?? {}).length > 0 || collectVarsReferenceNames(ast).length > 0;
+  const needsK6RunId = hasK6RunIdReferences(ast);
+  const needsK6Execution = needsK6RunId || hasK6ExecutionReferences(ast);
 
   const lines: string[] = [
     "import http from 'k6/http';",
+    ...(needsK6Execution ? ["import exec from 'k6/execution';"] : []),
   ];
 
   const k6Imports = [
@@ -64,7 +69,7 @@ export function generateK6Script(ast: ASTScenario, options: K6GeneratorOptions =
       : [`const OPENAPI_K6_SECRET_ENV_NAMES = ${JSON.stringify(secretEnvNames)};`]),
     ...renderMultipartFileDeclarations(ast, options),
     '',
-    ...renderHelpers(ast, secretEnvNames),
+    ...renderHelpers(ast, secretEnvNames, needsK6RunId),
     '',
     'export default function () {',
     '  const context = {};',
@@ -177,13 +182,22 @@ function collectStepModuleNames(ast: ASTScenario): string[] {
   return names;
 }
 
-function renderHelpers(ast: ASTScenario, secretEnvNames: string[]): string[] {
+function renderHelpers(ast: ASTScenario, secretEnvNames: string[], needsK6RunId: boolean): string[] {
   const hasSecretEnvReferences = secretEnvNames.length > 0;
   const helpers = [
     'function joinUrl(baseUrl, endpointPath) {',
     "  return `${baseUrl.replace(/\\/+$/, '')}/${endpointPath.replace(/^\\/+/, '')}`;",
     '}',
   ];
+
+  if (needsK6RunId) {
+    helpers.push(
+      '',
+      'function openapiK6RunId() {',
+      '  return __ENV.OPENAPI_K6_RUN_ID || String(exec.scenario.startTime);',
+      '}',
+    );
+  }
 
   if (hasSecretEnvReferences) {
     helpers.push(
@@ -318,6 +332,48 @@ function collectVarsReferenceNames(ast: ASTScenario): string[] {
   }
 
   return [...names].sort();
+}
+
+function hasK6RunIdReferences(ast: ASTScenario): boolean {
+  return ast.steps.some((step) => hasK6RunIdReferencesInValue(step.request));
+}
+
+function hasK6RunIdReferencesInValue(value: unknown): boolean {
+  if (typeof value === 'string') {
+    K6_RUN_ID_TEMPLATE_PATTERN.lastIndex = 0;
+    return K6_RUN_ID_TEMPLATE_PATTERN.test(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.some(hasK6RunIdReferencesInValue);
+  }
+
+  if (isRecord(value)) {
+    return Object.values(value).some(hasK6RunIdReferencesInValue);
+  }
+
+  return false;
+}
+
+function hasK6ExecutionReferences(ast: ASTScenario): boolean {
+  return ast.steps.some((step) => hasK6ExecutionReferencesInValue(step.request));
+}
+
+function hasK6ExecutionReferencesInValue(value: unknown): boolean {
+  if (typeof value === 'string') {
+    K6_TEMPLATE_PATTERN.lastIndex = 0;
+    return K6_TEMPLATE_PATTERN.test(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.some(hasK6ExecutionReferencesInValue);
+  }
+
+  if (isRecord(value)) {
+    return Object.values(value).some(hasK6ExecutionReferencesInValue);
+  }
+
+  return false;
 }
 
 function collectVarsReferenceNamesFromValue(value: unknown, names: Set<string>): void {

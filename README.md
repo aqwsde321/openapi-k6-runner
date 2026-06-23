@@ -68,6 +68,7 @@ npx --yes openapi-k6 catalog --query <검색어>
 # openapi-k6/scenarios/<scenario-key>.yaml 작성
 npx --yes openapi-k6 validate -s <scenario-key>
 npx --yes openapi-k6 test -s <scenario-key>
+npx --yes openapi-k6 test -s <scenario-key> --iterations 3
 npx --yes openapi-k6 generate -s <scenario-key>
 k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1 --iterations 1
 ```
@@ -188,6 +189,8 @@ steps:
 ```
 
 `{{env.*}}` 값은 `test` 전에 `openapi-k6/.env`에 둡니다.
+`.env`에는 토큰, 비밀번호, 서버 주소처럼 환경별 비밀/접속 값만 둡니다.
+SKU, tenant, 검색어 같은 공개 테스트 데이터는 scenario `vars:` 또는 `--var-file`, `--var`로 관리합니다.
 비밀값은 scenario YAML에 직접 쓰지 않습니다.
 `catalog --ai` 초안의 `<...>` placeholder가 scenario에 남아 있으면 `validate`가 실패합니다.
 
@@ -225,7 +228,7 @@ npx --yes openapi-k6 run -s <scenario-key>
 | 필요 | 사용 |
 | --- | --- |
 | 브라우저에서 scenario 선택/검증 | `npx --yes openapi-k6 ui` |
-| 반복 값 관리 | scenario `vars:` 또는 `--var-file`, `--var` |
+| 반복 값 관리 | scenario `vars:`, `--var-file`, `--var`, `{{k6.*}}` |
 | 다른 scenario 재사용 | `steps` 안에서 `- use: auth/login` |
 | 여러 서버 연결 | `npx --yes openapi-k6 module add auth --base-url <url> --sync` |
 | 작업 공간 점검 | `npx --yes openapi-k6 doctor` |
@@ -302,6 +305,51 @@ npx --yes openapi-k6 test -s <scenario-key> --var sku=ABC-002
 ```
 
 우선순위는 `vars:` < CLI `--var-file` < CLI `--var`입니다.
+
+### 반복마다 달라지는 k6 값
+
+회원가입, 주문 생성, 외부 ID 생성처럼 매 요청마다 고유값만 필요하면 별도 계정 목록이나 fixture를 만들기보다 k6 실행 context를 먼저 사용합니다.
+대부분의 부하 테스트 데이터는 아래처럼 `{{k6.run.id}}`와 `{{k6.scenario.iterationInTest}}`를 조합하면 충분합니다.
+
+```yaml
+name: create-users
+
+vars:
+  emailDomain: example.test
+
+steps:
+  - id: create-user
+    api:
+      operationId: createUser
+    request:
+      body:
+        email: "load-{{k6.run.id}}-{{k6.scenario.iterationInTest}}@{{vars.emailDomain}}"
+        externalId: "{{k6.run.id}}-vu{{k6.vu.idInTest}}-iter{{k6.vu.iterationInScenario}}"
+```
+
+실행별로 대략 이런 값이 만들어집니다.
+
+```text
+load-1761123456789-0@example.test
+load-1761123456789-1@example.test
+load-1761123456789-2@example.test
+```
+
+이미 준비된 계정 N개를 번갈아 로그인해야 하거나 tenant/branch/권한 조합처럼 고정 fixture가 필요한 경우에만 `--var-file`로 데이터 묶음을 관리합니다.
+
+지원 값:
+
+- `{{k6.run.id}}`: k6 scenario 시작 timestamp 기반 run id. `OPENAPI_K6_RUN_ID` 환경변수로 고정할 수도 있습니다.
+- `{{k6.scenario.iterationInTest}}`: scenario 전체에서 0부터 증가하는 iteration 번호
+- `{{k6.scenario.iterationInInstance}}`: 현재 k6 instance 안에서 0부터 증가하는 iteration 번호
+- `{{k6.vu.idInTest}}`: 테스트 전체에서 유일한 VU id
+- `{{k6.vu.idInInstance}}`: 현재 k6 instance 안의 VU id
+- `{{k6.vu.iterationInScenario}}`: 현재 VU가 이 scenario에서 실행한 iteration 번호
+- `{{k6.vu.iterationInInstance}}`: 현재 VU가 현재 instance에서 실행한 iteration 번호
+
+`test` 명령은 k6가 아니라 1회 API 흐름 검증이므로 `1 VU`, 첫 iteration 기준으로 해석합니다.
+`test --iterations 3`처럼 실행하면 k6 없이도 `{{k6.scenario.iterationInTest}}`와 VU iteration 값이 `0`, `1`, `2`로 증가하는지 확인할 수 있습니다.
+실제 `k6 run`에서는 generated script가 `k6/execution` 값을 사용해 반복마다 달라집니다.
 
 ### 기존 호환 기능
 

@@ -572,7 +572,7 @@ function createScenarioValidationHints(issues: string[]): string[] {
     }
 
     if (issue.includes(' has invalid template:')) {
-      addHint('Use template names like {{token}}, {{env.NAME}}, or {{vars.NAME}}; names must be identifier-like.');
+      addHint('Use template names like {{token}}, {{env.NAME}}, {{vars.NAME}}, or {{k6.scenario.iterationInTest}}; names must be supported identifiers.');
     }
 
     if (issue.includes('operationId "') && issue.includes(' was not found')) {

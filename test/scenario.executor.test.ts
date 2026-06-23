@@ -66,6 +66,76 @@ describe('scenario executor', () => {
     expect(report).not.toContain('local-secret');
   });
 
+  it('resolves k6 execution templates as the first VU and iteration during test execution', async () => {
+    const requests: string[] = [];
+    const result = await executeAstScenario({
+      name: 'unique-user',
+      steps: [
+        {
+          id: 'create-user',
+          method: 'POST',
+          path: '/users',
+          pathParameters: [],
+          request: {
+            body: {
+              email: 'user-{{k6.scenario.iterationInTest}}-vu{{k6.vu.idInTest}}@example.test',
+              iteration: '{{k6.vu.iterationInScenario}}',
+            },
+          },
+        },
+      ],
+    }, {
+      baseUrl: 'https://api.test.local',
+      env: {},
+      fetch: async (_input, init) => {
+        requests.push(String(init?.body ?? ''));
+        return jsonResponse({ ok: true }, 201, 'Created');
+      },
+    });
+
+    expect(result.passed).toBe(true);
+    expect(JSON.parse(requests[0])).toEqual({
+      email: 'user-0-vu1@example.test',
+      iteration: 0,
+    });
+  });
+
+  it('uses supplied k6 execution values during test execution', async () => {
+    const requests: string[] = [];
+    const result = await executeAstScenario({
+      name: 'custom-k6-values',
+      steps: [
+        {
+          id: 'create-order',
+          method: 'POST',
+          path: '/orders',
+          pathParameters: [],
+          request: {
+            body: {
+              externalId: '{{k6.run.id}}-{{k6.scenario.iterationInTest}}',
+            },
+          },
+        },
+      ],
+    }, {
+      baseUrl: 'https://api.test.local',
+      env: {},
+      k6: {
+        'run.id': 'run-abc',
+        'scenario.iterationInTest': 7,
+      },
+      fetch: async (_input, init) => {
+        requests.push(String(init?.body ?? ''));
+        return jsonResponse({ ok: true }, 201, 'Created');
+      },
+    });
+
+    expect(result.passed).toBe(true);
+    expect(JSON.parse(requests[0])).toEqual({
+      externalId: 'run-abc-7',
+    });
+  });
+
   it('emits reporter events during scenario execution', async () => {
     const events: string[] = [];
     const result = await executeAstScenario({

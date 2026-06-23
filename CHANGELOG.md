@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-23
+
+### Added
+
+- Scenario YAML에서 `{{k6.scenario.iterationInTest}}`, `{{k6.vu.idInTest}}` 같은 k6 실행 context 값을 참조해 generated k6 실행마다 달라지는 request 값을 만들 수 있게 했습니다.
+- Scenario YAML에서 `{{k6.run.id}}`를 참조해 k6 scenario 시작 timestamp 기반 prefix를 만들 수 있게 했습니다. `OPENAPI_K6_RUN_ID` 환경변수로 값을 고정할 수 있습니다.
+- `openapi-k6 test --iterations <count>` 옵션을 추가해 k6 없이도 반복 실행 시 `{{k6.*}}` 값이 증가하는지 검증할 수 있게 했습니다.
+
+### Changed
+
+- README, init scaffold README, Codex 스킬 안내에서 `.env`는 비밀/접속 값에 한정하고, synthetic unique 값은 `{{k6.run.id}}-{{k6.scenario.iterationInTest}}` 패턴을 먼저 사용하도록 기준을 명확히 했습니다.
+
 ## [0.9.1] - 2026-06-22
 
 ### Changed
@@ -227,7 +239,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.7.2...v0.8.0
