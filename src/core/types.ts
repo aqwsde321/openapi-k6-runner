@@ -1,5 +1,6 @@
 export interface Scenario {
   name: string;
+  description?: string;
   vars?: Record<string, unknown>;
   steps: Step[];
 }

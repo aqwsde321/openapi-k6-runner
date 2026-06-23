@@ -162,9 +162,12 @@ POST   /auth/login
 각 step에는 `id`와 `api`가 필요합니다.
 `request`, `extract`, `condition`은 필요한 경우만 둡니다.
 `condition`을 생략하면 `test`와 `run`은 HTTP status `< 400`을 성공으로 봅니다.
+`description`은 선택 필드이며 UI의 시나리오 요약에 표시됩니다.
 
 ```yaml
 name: smoke
+description: |-
+  로그인 후 내 정보를 조회하는 기본 인증 흐름입니다.
 
 steps:
   - id: login

@@ -88,6 +88,7 @@ K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_OPEN=true k6 run __GENERATED_OUTPUT_ARG__
 
 - `operationId`가 유일하면 `api.operationId`를 우선 사용합니다.
 - `operationId`가 없거나 애매하면 `api.method`와 `api.path`를 사용합니다.
+- scenario 설명이 필요하면 루트 `description:`에 작성합니다. UI의 시나리오 요약에 표시됩니다.
 - 폴더는 UI 카테고리로 사용합니다. 예: `__DIRECTORY__/scenarios/auth/login.yaml`은 `-s auth/login`으로 실행합니다.
 - UI에서 폴더는 접고 펼칠 수 있으며, 재사용된 step은 요청 단계와 최근 실행 결과에서 `시나리오 사용: auth/login`처럼 출처가 표시됩니다.
 - `catalog --ai` 초안의 `<...>` placeholder가 남아 있으면 `validate`가 실패합니다.

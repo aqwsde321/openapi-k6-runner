@@ -348,6 +348,14 @@ export const UI_HTML = String.raw`<!doctype html>
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .scenario-description {
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.45;
+      max-width: 76ch;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
     .row {
       display: flex;
       align-items: center;
@@ -1203,9 +1211,13 @@ export const UI_HTML = String.raw`<!doctype html>
       const detail = state.detail;
       els.detailTitle.textContent = detail.name;
       setStatus(els.detailStatus, state.lastRun.get(detail.id) || 'not run');
+      const description = detail.description && detail.description.trim()
+        ? '<div class="scenario-description">' + escapeHtml(detail.description.trim()) + '</div>'
+        : '';
       els.scenarioSummary.innerHTML =
         '<div class="stack" style="gap: 6px;">' +
           '<div class="muted">' + escapeHtml(formatUiPath(detail.path)) + '</div>' +
+          description +
           '<div class="row"><span class="pill">' + escapeHtml(formatStepCount(detail.stepCount)) + '</span></div>' +
         '</div>';
       for (const index of Array.from(state.openStepIndexes)) {
