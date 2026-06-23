@@ -40,7 +40,7 @@ Do not edit scaffold-managed files unless the user explicitly asks: workspace `R
 4. Resolve the API flow with the user only if multiple plausible endpoints or required business data cannot be inferred.
 5. Before writing or editing Scenario YAML, summarize the process and planned API calls, then get explicit user confirmation.
 6. After confirmation, write or update one scenario file under the workspace `scenarios/**/*.yaml`.
-7. Start with plain steps: `id`, `api`, `request`, `extract`, `condition`.
+7. Start with top-level `name`, `description`, and plain steps: `id`, `api`, `request`, `extract`, `condition`.
 8. Run `npx --yes openapi-k6@latest validate -s <scenario-key>`.
 9. Fix validation failures from the reported errors and fix hints.
 10. Run `npx --yes openapi-k6@latest test -s <scenario-key>` when the backend is reachable and required env/vars are available.
@@ -55,6 +55,7 @@ Do not create or modify Scenario YAML until the user confirms the plan.
 The confirmation summary must include:
 
 - Scenario purpose, target scenario key, and target scenario file path.
+- Scenario description to write in top-level `description:`.
 - API call sequence with method/path or operationId.
 - Required request data, including which values come from `{{env.*}}`, `{{vars.*}}`, or `{{k6.*}}`.
 - Values extracted from earlier responses and where they are reused.
@@ -67,6 +68,7 @@ If the user replies with a short affirmative response such as `ã…‡`, `ok`, or `ã
 
 - Prefer `api.operationId` when it is unique and stable.
 - Use `api.method` and `api.path` when `operationId` is missing or ambiguous.
+- Add top-level `description:` for every entry scenario so the UI summary explains what the scenario verifies. Keep it to 1-3 concise lines about the business flow, API target, and success criteria.
 - Do not leave `<...>` placeholders before validation.
 - Keep secrets out of Scenario YAML. Use `{{env.NAME}}` only for secrets and environment-specific connection values, and tell the user which workspace `.env` values are required.
 - Do not put ordinary test data in `.env`. Use `vars:` for repeated non-secret values.

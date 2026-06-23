@@ -26,6 +26,8 @@ describe('scenario parser', () => {
       scenarioPath,
       [
         'name: login-and-order',
+        'description: |',
+        '  로그인 후 주문을 생성하는 흐름입니다.',
         'steps:',
         '  - id: login',
         '    api:',
@@ -52,6 +54,7 @@ describe('scenario parser', () => {
 
     expect(scenario).toEqual({
       name: 'login-and-order',
+      description: '로그인 후 주문을 생성하는 흐름입니다.\n',
       steps: [
         {
           id: 'login',
@@ -69,6 +72,21 @@ describe('scenario parser', () => {
         },
       ],
     });
+  });
+
+  it('rejects non-string scenario descriptions', () => {
+    expect(() =>
+      parseScenarioSource([
+        'name: invalid-description',
+        'description:',
+        '  value: object',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '',
+      ].join('\n')),
+    ).toThrowError('<inline>: description must be a string');
   });
 
   it('parses a valid JSON scenario file', async () => {

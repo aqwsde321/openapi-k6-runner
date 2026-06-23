@@ -48,6 +48,7 @@ export interface UiScenarioList {
 export interface UiScenarioDetail {
   id: string;
   name: string;
+  description?: string;
   path: string;
   stepCount: number;
   modules: string[];
@@ -121,6 +122,7 @@ export async function readUiScenarioDetail(
   return {
     id: formatUiScenarioOption(context.cwd, path.join(resolveLoadTestDir(context.cwd, context.config), 'scenarios'), scenarioPath),
     name: scenario.name,
+    ...(scenario.description === undefined ? {} : { description: scenario.description }),
     path: formatDisplayPath(context.cwd, scenarioPath),
     stepCount: scenario.steps.length,
     modules: analysis.modules,

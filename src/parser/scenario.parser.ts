@@ -55,6 +55,7 @@ export async function parseScenarioFile(
 
   return {
     name: parsed.name,
+    ...(parsed.description === undefined ? {} : { description: parsed.description }),
     ...(parsed.vars === undefined ? {} : { vars: parsed.vars }),
     steps: finalizeSteps(parsed.steps),
   };
@@ -81,6 +82,8 @@ export function parseScenarioDocument(document: unknown, sourcePath = '<inline>'
     throw new ScenarioParseError(`${sourcePath}: fixtures require parseScenarioFile`);
   }
 
+  const description = parseScenarioDescription(root.description, sourcePath);
+
   const vars = root.vars === undefined
     ? undefined
     : parseVars(root.vars, `${sourcePath}: vars`);
@@ -103,6 +106,7 @@ export function parseScenarioDocument(document: unknown, sourcePath = '<inline>'
 
   return {
     name,
+    ...(description === undefined ? {} : { description }),
     ...(vars === undefined ? {} : { vars }),
     steps,
   };
@@ -112,7 +116,7 @@ async function parseScenarioFileInternal(
   filePath: string,
   context: ScenarioFileParseContext,
   requireName: boolean,
-): Promise<{ name?: string; vars?: Record<string, unknown>; steps: ParsedStepEntry[] }> {
+): Promise<{ name?: string; description?: string; vars?: Record<string, unknown>; steps: ParsedStepEntry[] }> {
   let source: string;
   let document: unknown;
 
@@ -140,6 +144,9 @@ async function parseScenarioFileInternal(
 
   const root = expectRecord(document, `${filePath}: scenario must be an object`);
   const name = parseScenarioName(root.name, filePath, requireName);
+  const description = requireName
+    ? parseScenarioDescription(root.description, filePath)
+    : undefined;
   const fixtureVars = await parseScenarioFixtureVars(root.fixtures, filePath, requireName, context);
   const ownVars = parseScenarioVars(root.vars, filePath, requireName);
   const vars = mergeScenarioVars(fixtureVars, ownVars);
@@ -147,6 +154,7 @@ async function parseScenarioFileInternal(
 
   return {
     ...(name === undefined ? {} : { name }),
+    ...(description === undefined ? {} : { description }),
     ...(vars === undefined ? {} : { vars }),
     steps,
   };
@@ -164,6 +172,14 @@ function parseScenarioName(value: unknown, sourcePath: string, requireName: bool
   }
 
   return name;
+}
+
+function parseScenarioDescription(value: unknown, sourcePath: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return expectString(value, `${sourcePath}: description must be a string`);
 }
 
 function parseScenarioVars(

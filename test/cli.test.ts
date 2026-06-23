@@ -1777,6 +1777,7 @@ describe('openapi-k6 CLI', () => {
       const detail = await (await fetch(`${ui.url}/api/scenario?scenario=smoke`)).json() as {
         id: string;
         name: string;
+        description?: string;
         steps: Array<{ id: string; operationId?: string }>;
       };
       const nestedDetail = await (await fetch(`${ui.url}/api/scenario?scenario=${encodeURIComponent('auth/login')}`)).json() as {
@@ -1828,6 +1829,8 @@ describe('openapi-k6 CLI', () => {
 
       expect(html).toContain('openapi-k6 UI');
       expect(html).toContain('ansi-green');
+      expect(html).toContain('.scenario-description');
+      expect(html).toContain('detail.description && detail.description.trim()');
       expect(html).toContain('.scenario-item-head');
       expect(html).toContain('.scenario-group-title');
       expect(html).toContain('.scenario-group-caret');
@@ -1944,6 +1947,7 @@ describe('openapi-k6 CLI', () => {
       expect(detail).toMatchObject({
         id: 'smoke',
         name: 'smoke',
+        description: 'Smoke scenario for the UI summary.',
         steps: [expect.objectContaining({ id: 'health', operationId: 'getHealth' })],
       });
       expect(nestedDetail).toMatchObject({
@@ -5778,6 +5782,7 @@ describe('openapi-k6 CLI', () => {
       path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'),
       [
         'name: smoke',
+        'description: Smoke scenario for the UI summary.',
         'steps:',
         '  - id: health',
         '    api:',

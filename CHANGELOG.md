@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-23
+
+### Added
+
+- Scenario YAML 루트 `description:` 필드를 추가해 UI의 시나리오 요약 영역에서 업무 흐름과 검증 목적을 확인할 수 있게 했습니다.
+
+### Changed
+
+- README, init scaffold README, Codex 스킬 안내에서 새 scenario 작성 시 `description:`을 함께 작성하도록 기준을 추가했습니다.
+
 ## [0.10.0] - 2026-06-23
 
 ### Added
@@ -239,7 +249,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.8.0...v0.9.0
