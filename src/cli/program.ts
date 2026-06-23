@@ -180,6 +180,16 @@ function collectRepeatedOption(value: string, previous: string[] | undefined): s
   return [...(previous ?? []), value];
 }
 
+function parsePositiveIntegerOption(value: string): number {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new CommanderError(1, 'openapi-k6.invalid-option', `--iterations must be a positive integer: ${JSON.stringify(value)}`);
+  }
+
+  return parsed;
+}
+
 export function createProgram(context: CliContext = {}): Command {
   return createCliProgram(context, {
     cliVersion: CLI_VERSION,
@@ -496,6 +506,7 @@ export function createCliProgram(context: CliContext = {}, deps: CliProgramDeps)
     .option('-m, --module <name>', 'Module name from config')
     .option('--var-file <path>', 'Load scenario vars from a YAML object file; repeatable', collectRepeatedOption)
     .option('--var <name=value>', 'Override one scenario var; repeatable and parsed as a YAML value', collectRepeatedOption)
+    .option('--iterations <count>', 'Run the Node.js API-flow test this many times', parsePositiveIntegerOption)
     .option('--no-color', 'Disable ANSI color output')
     .action(async (options: TestOptions) => {
       const colorEnv = context.env ?? process.env;

@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import type { LoadTestConfig } from '../config/load-test.config.js';
 import { executeAstScenario } from '../executor/scenario.executor.js';
+import type { K6ExecutionValues, ScenarioExecutionResult } from '../executor/scenario.executor.js';
 import type {
   CliContext,
   GenerateOptions,
@@ -242,17 +243,43 @@ export async function runTestCommand(
   const scaffoldWarnings = await readScaffoldWarnings(cwd, config);
   const scaffoldUpdateCommand = resolveScaffoldUpdateCommand(cwd, config, scaffoldWarnings);
 
-  const result = await executeAstScenario(validatedAst.ast, {
-    baseUrl: openApiContext.baseUrl ?? '',
-    moduleBaseUrls: openApiContext.moduleBaseUrls,
-    fileRootDir: loadTestDir,
-    env: runtimeEnv,
-    fetch: context.fetch,
-    reporter: context.testReporter,
-  });
+  const iterationCount = options.iterations ?? 1;
+  if (!Number.isInteger(iterationCount) || iterationCount < 1) {
+    throw new Error('--iterations must be a positive integer');
+  }
+
+  const runId = runtimeEnv.OPENAPI_K6_RUN_ID ?? 'test-run';
+  let result: ScenarioExecutionResult | undefined;
+  let durationMs = 0;
+
+  for (let iteration = 0; iteration < iterationCount; iteration += 1) {
+    result = await executeAstScenario(validatedAst.ast, {
+      baseUrl: openApiContext.baseUrl ?? '',
+      moduleBaseUrls: openApiContext.moduleBaseUrls,
+      fileRootDir: loadTestDir,
+      env: runtimeEnv,
+      k6: createTestK6ExecutionValues(runId, iteration),
+      fetch: context.fetch,
+      reporter: context.testReporter,
+    });
+    durationMs += result.durationMs;
+
+    if (!result.passed) {
+      break;
+    }
+  }
+
+  if (result === undefined) {
+    throw new Error('--iterations must be a positive integer');
+  }
+
+  const finalResult = {
+    ...result,
+    durationMs,
+  };
 
   return {
-    ...result,
+    ...finalResult,
     scenarioPath,
     openapiPath: openApiContext.openapiPath,
     ...(openApiContext.openapiPaths === undefined ? {} : { openapiPaths: openApiContext.openapiPaths }),
@@ -260,6 +287,18 @@ export async function runTestCommand(
     ...(openApiContext.moduleNames === undefined ? {} : { moduleNames: openApiContext.moduleNames }),
     ...(scaffoldWarnings.length === 0 ? {} : { scaffoldWarnings }),
     ...(scaffoldUpdateCommand === undefined ? {} : { scaffoldUpdateCommand }),
+  };
+}
+
+function createTestK6ExecutionValues(runId: string, iteration: number): K6ExecutionValues {
+  return {
+    'run.id': runId,
+    'scenario.iterationInInstance': iteration,
+    'scenario.iterationInTest': iteration,
+    'vu.idInInstance': 1,
+    'vu.idInTest': 1,
+    'vu.iterationInInstance': iteration,
+    'vu.iterationInScenario': iteration,
   };
 }
 

@@ -4216,6 +4216,62 @@ describe('openapi-k6 CLI', () => {
     expect(runGenerated).toContain('const VARS = {"sku":"CLI-SKU","tenantId":"tenant-stage","quantity":3};');
   });
 
+  it('runs Node.js scenario tests multiple times with k6 execution values', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
+        '  - id: create-order',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        externalId: "{{k6.run.id}}-{{k6.scenario.iterationInTest}}"',
+        '        vuIteration: "{{k6.vu.iterationInScenario}}"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const requestBodies: unknown[] = [];
+    await runCli(
+      ['test', '-s', 'smoke', '--iterations', '3', '--no-color'],
+      {
+        cwd: workspace,
+        stdout: createSink(),
+        stderr: createSink(),
+        env: {
+          OPENAPI_K6_RUN_ID: 'cli-test-run',
+        },
+        fetch: async (_input, init) => {
+          requestBodies.push(JSON.parse(String(init?.body)));
+          return new Response(JSON.stringify({ id: 'order-1' }), {
+            status: 201,
+            statusText: 'Created',
+          });
+        },
+      },
+    );
+
+    expect(requestBodies).toEqual([
+      { externalId: 'cli-test-run-0', vuIteration: 0 },
+      { externalId: 'cli-test-run-1', vuIteration: 1 },
+      { externalId: 'cli-test-run-2', vuIteration: 2 },
+    ]);
+  });
+
   it('fails clearly for invalid CLI scenario var overrides', async () => {
     await writeValidationOpenApi(workspace);
     await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });

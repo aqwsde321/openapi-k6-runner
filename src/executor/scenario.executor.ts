@@ -15,10 +15,20 @@ const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 const CONTEXT_REFERENCE = '[A-Za-z_$][A-Za-z0-9_$]*';
 const ENV_REFERENCE = 'env\\.[A-Z_][A-Z0-9_]*';
 const VARS_REFERENCE = 'vars\\.[A-Za-z_$][A-Za-z0-9_$]*';
-const TEMPLATE_REFERENCE = `(?:${ENV_REFERENCE}|${VARS_REFERENCE}|${CONTEXT_REFERENCE})`;
+const K6_REFERENCE = 'k6\\.(?:run\\.id|scenario\\.(?:iterationInInstance|iterationInTest)|vu\\.(?:idInInstance|idInTest|iterationInInstance|iterationInScenario))';
+const TEMPLATE_REFERENCE = `(?:${ENV_REFERENCE}|${VARS_REFERENCE}|${K6_REFERENCE}|${CONTEXT_REFERENCE})`;
 const TEMPLATE_PATTERN = new RegExp(`{{\\s*(${TEMPLATE_REFERENCE})\\s*}}`, 'g');
 const FULL_TEMPLATE_PATTERN = new RegExp(`^{{\\s*(${TEMPLATE_REFERENCE})\\s*}}$`);
 const DEFAULT_RESPONSE_BODY_LIMIT = 2000;
+const DEFAULT_TEST_K6_VALUES: K6ExecutionValues = {
+  'run.id': 'test-run',
+  'scenario.iterationInInstance': 0,
+  'scenario.iterationInTest': 0,
+  'vu.idInInstance': 1,
+  'vu.idInTest': 1,
+  'vu.iterationInInstance': 0,
+  'vu.iterationInScenario': 0,
+};
 
 type FetchLike = typeof fetch;
 type MaybePromise<T> = T | Promise<T>;
@@ -28,9 +38,20 @@ export interface ScenarioExecutorOptions {
   moduleBaseUrls?: Record<string, string | undefined>;
   fileRootDir?: string;
   env?: Record<string, string | undefined>;
+  k6?: Partial<K6ExecutionValues>;
   fetch?: FetchLike;
   responseBodyLimit?: number;
   reporter?: ScenarioExecutionReporter;
+}
+
+export interface K6ExecutionValues {
+  'run.id': string;
+  'scenario.iterationInInstance': number;
+  'scenario.iterationInTest': number;
+  'vu.idInInstance': number;
+  'vu.idInTest': number;
+  'vu.iterationInInstance': number;
+  'vu.iterationInScenario': number;
 }
 
 export interface ScenarioExecutionReporter {
@@ -116,6 +137,7 @@ interface RuntimeState {
   context: Record<string, unknown>;
   env: Record<string, string | undefined>;
   vars: Record<string, unknown>;
+  k6: K6ExecutionValues;
   secretValues: Set<string>;
 }
 
@@ -146,6 +168,10 @@ export async function executeAstScenario(
     context: {},
     env: options.env ?? process.env,
     vars: ast.vars ?? {},
+    k6: {
+      ...DEFAULT_TEST_K6_VALUES,
+      ...(options.k6 ?? {}),
+    },
     secretValues: new Set(),
   };
   const fetchImpl = options.fetch ?? fetch;
@@ -697,6 +723,10 @@ function resolveTemplateReference(reference: string, state: RuntimeState): unkno
     }
 
     return state.vars[name];
+  }
+
+  if (reference.startsWith('k6.')) {
+    return state.k6[reference.slice('k6.'.length) as keyof K6ExecutionValues];
   }
 
   if (!Object.prototype.hasOwnProperty.call(state.context, reference)) {

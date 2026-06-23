@@ -54,6 +54,7 @@ export interface TestOptions {
   config?: string;
   module?: string;
   color?: boolean;
+  iterations?: number;
   varFile?: string[];
   var?: string[];
 }

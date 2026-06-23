@@ -1,7 +1,8 @@
 const CONTEXT_REFERENCE = '[A-Za-z_$][A-Za-z0-9_$]*';
 const ENV_REFERENCE = 'env\\.[A-Z_][A-Z0-9_]*';
 const VARS_REFERENCE = 'vars\\.[A-Za-z_$][A-Za-z0-9_$]*';
-const TEMPLATE_REFERENCE = `(?:${ENV_REFERENCE}|${VARS_REFERENCE}|${CONTEXT_REFERENCE})`;
+const K6_REFERENCE = 'k6\\.(?:run\\.id|scenario\\.(?:iterationInInstance|iterationInTest)|vu\\.(?:idInInstance|idInTest|iterationInInstance|iterationInScenario))';
+const TEMPLATE_REFERENCE = `(?:${ENV_REFERENCE}|${VARS_REFERENCE}|${K6_REFERENCE}|${CONTEXT_REFERENCE})`;
 const TEMPLATE_PATTERN = new RegExp(`{{\\s*(${TEMPLATE_REFERENCE})\\s*}}`, 'g');
 const FULL_TEMPLATE_PATTERN = new RegExp(`^{{\\s*(${TEMPLATE_REFERENCE})\\s*}}$`);
 
@@ -14,7 +15,7 @@ export class TemplateCompileError extends Error {
 
 export interface TemplateReference {
   raw: string;
-  type: 'context' | 'env' | 'vars';
+  type: 'context' | 'env' | 'k6' | 'vars';
   name: string;
 }
 
@@ -117,7 +118,23 @@ function compileTemplateReference(reference: string): string {
     return `VARS.${reference.slice('vars.'.length)}`;
   }
 
+  if (reference.startsWith('k6.')) {
+    return compileK6Reference(reference);
+  }
+
   return `context.${reference}`;
+}
+
+function compileK6Reference(reference: string): string {
+  if (reference === 'k6.run.id') {
+    return 'openapiK6RunId()';
+  }
+
+  if (reference.startsWith('k6.scenario.')) {
+    return `exec.scenario.${reference.slice('k6.scenario.'.length)}`;
+  }
+
+  return `exec.vu.${reference.slice('k6.vu.'.length)}`;
 }
 
 function compileLiteralTemplatePart(source: string, value: string): string {
@@ -145,6 +162,14 @@ function parseTemplateReference(reference: string): TemplateReference {
       raw: reference,
       type: 'vars',
       name: reference.slice('vars.'.length),
+    };
+  }
+
+  if (reference.startsWith('k6.')) {
+    return {
+      raw: reference,
+      type: 'k6',
+      name: reference.slice('k6.'.length),
     };
   }
 

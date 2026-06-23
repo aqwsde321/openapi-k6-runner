@@ -277,9 +277,13 @@ describe('k6 generator', () => {
     expect(compileValueExpression('{{token}}')).toBe('context.token');
     expect(compileValueExpression('{{env.API_TOKEN}}')).toBe('__ENV.API_TOKEN');
     expect(compileValueExpression('{{vars.sku}}')).toBe('VARS.sku');
+    expect(compileValueExpression('{{k6.run.id}}')).toBe('openapiK6RunId()');
+    expect(compileValueExpression('{{k6.scenario.iterationInTest}}')).toBe('exec.scenario.iterationInTest');
+    expect(compileValueExpression('{{k6.vu.idInTest}}')).toBe('exec.vu.idInTest');
     expect(compileValueExpression('Bearer {{token}}')).toBe('`Bearer ${context.token}`');
     expect(compileValueExpression('Bearer {{env.API_TOKEN}}')).toBe('`Bearer ${__ENV.API_TOKEN}`');
     expect(compileValueExpression('SKU {{vars.sku}}')).toBe('`SKU ${VARS.sku}`');
+    expect(compileValueExpression('user-{{k6.scenario.iterationInTest}}')).toBe('`user-${exec.scenario.iterationInTest}`');
     expect(compileValueExpression({
       headers: ['X-Trace-{{traceId}}'],
       body: { userId: '{{userId}}', password: '{{env.USER_PASSWORD}}' },
@@ -289,10 +293,12 @@ describe('k6 generator', () => {
   });
 
   it('collects template references with the same syntax as template compilation', () => {
-    expect(collectTemplateReferences('Bearer {{token}} / {{ env.API_TOKEN }} / {{ vars.sku }}')).toEqual([
+    expect(collectTemplateReferences('Bearer {{token}} / {{ env.API_TOKEN }} / {{ vars.sku }} / {{ k6.run.id }} / {{ k6.scenario.iterationInTest }}')).toEqual([
       { raw: 'token', type: 'context', name: 'token' },
       { raw: 'env.API_TOKEN', type: 'env', name: 'API_TOKEN' },
       { raw: 'vars.sku', type: 'vars', name: 'sku' },
+      { raw: 'k6.run.id', type: 'k6', name: 'run.id' },
+      { raw: 'k6.scenario.iterationInTest', type: 'k6', name: 'scenario.iterationInTest' },
     ]);
     expect(collectTemplateReferences('plain text')).toEqual([]);
     expect(() => collectTemplateReferences('Bearer {{bad-name}}')).toThrowError(TemplateCompileError);
@@ -359,6 +365,64 @@ describe('k6 generator', () => {
     expect(script).toContain('const VARS = {"sku":"ABC-001","tenantId":"tenant-main"};');
     expect(script).toContain('const body0 = JSON.stringify({ "sku": VARS.sku });');
     expect(script).toContain('const params0 = { headers: { "Content-Type": "application/json", "X-Tenant": VARS.tenantId }, tags: tags0 };');
+    await expectValidJavaScript(workspace, script);
+  });
+
+  it('generates k6 execution references for per-iteration values', async () => {
+    const script = generateK6Script(
+      {
+        name: 'unique-order',
+        vars: {
+          emailDomain: 'example.test',
+        },
+        steps: [
+          {
+            id: 'create-user',
+            method: 'POST',
+            path: '/users',
+            pathParameters: [],
+            request: {
+              body: {
+                email: 'user-{{k6.scenario.iterationInTest}}@{{vars.emailDomain}}',
+                vu: '{{k6.vu.idInTest}}',
+              },
+            },
+          },
+        ],
+      },
+      { baseUrl: 'https://api.test.local' },
+    );
+
+    expect(script).toContain("import exec from 'k6/execution';");
+    expect(script).toContain('const body0 = JSON.stringify({ "email": `user-${exec.scenario.iterationInTest}@${VARS.emailDomain}`, "vu": exec.vu.idInTest });');
+    await expectValidJavaScript(workspace, script);
+  });
+
+  it('generates a run id helper when k6.run.id is referenced', async () => {
+    const script = generateK6Script(
+      {
+        name: 'run-id-order',
+        steps: [
+          {
+            id: 'create-order',
+            method: 'POST',
+            path: '/orders',
+            pathParameters: [],
+            request: {
+              body: {
+                externalId: 'order-{{k6.run.id}}',
+              },
+            },
+          },
+        ],
+      },
+      { baseUrl: 'https://api.test.local' },
+    );
+
+    expect(script).toContain("import exec from 'k6/execution';");
+    expect(script).toContain('function openapiK6RunId() {');
+    expect(script).toContain('return __ENV.OPENAPI_K6_RUN_ID || String(exec.scenario.startTime);');
+    expect(script).toContain('const body0 = JSON.stringify({ "externalId": `order-${openapiK6RunId()}` });');
     await expectValidJavaScript(workspace, script);
   });
 

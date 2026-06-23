@@ -18,13 +18,13 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
    - scenario key와 파일 경로
    - 업무 프로세스
    - API 호출 순서와 method/path 또는 operationId
-   - request 값과 `{{env.*}}`, `{{vars.*}}` 처리
+   - request 값과 `{{env.*}}`, `{{vars.*}}`, `{{k6.*}}` 처리
    - response extract 값과 다음 step 재사용 위치
    - 기존 scenario 재사용 여부
    - 모호한 endpoint 선택지와 필요한 테스트 데이터
 6. 사용자가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 `__DIRECTORY__/scenarios/**/*.yaml`을 작성하거나 수정합니다.
-7. 처음에는 `id`, `api`와 필요한 `request`, `extract`, `condition`만 채웁니다. 반복 값은 `vars` 또는 CLI `--var-file`, `--var`로 관리하고, 다른 scenario의 흐름이 필요할 때만 `use`를 사용합니다.
-8. 비밀 값은 scenario YAML에 직접 쓰지 말고 `{{env.NAME}}`으로 참조합니다. 실제 값은 `__ENV_PATH__`에만 둡니다.
+7. 처음에는 `id`, `api`와 필요한 `request`, `extract`, `condition`만 채웁니다. 공개 테스트 데이터는 `vars` 또는 CLI `--var-file`, `--var`로 관리하고, 반복마다 달라질 값은 `{{k6.*}}`를 사용합니다.
+8. 비밀 값은 scenario YAML에 직접 쓰지 말고 `{{env.NAME}}`으로 참조합니다. 실제 값은 `__ENV_PATH__`에만 둡니다. `.env`에는 비밀/접속 값만 둡니다.
 9. `__VALIDATE_NAME_COMMAND__`를 먼저 통과시킨 뒤, 가능한 경우 `__TEST_NAME_COMMAND__`로 실제 API 흐름을 1회 검증합니다.
 10. `generate`는 파일 쓰기 전에 정적 검증을 수행합니다. `run`의 k6 check 실패는 명령 실패로 처리됩니다. validate/test 전에는 `run`, 장시간 k6 실행을 하지 않습니다.
 11. CLI가 `Scaffold update available`을 표시하면 `__UPDATE_COMMAND__`를 실행하고 이 README를 다시 확인합니다. 기존 workspace에는 `init --force`를 쓰지 않습니다.
@@ -50,6 +50,7 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 | 최신 sync 후 AI 초안 | `__CATALOG_SYNC_AI_COMMAND__` |
 | 정적 검증 | `__VALIDATE_NAME_COMMAND__` |
 | 실행 검증 | `__TEST_NAME_COMMAND__` |
+| 반복 실행 검증 | `__TEST_NAME_COMMAND__ --iterations 3` |
 | 정적 검증 후 k6 스크립트 생성 | `__GENERATE_NAME_COMMAND__` |
 | 검증+생성+실행 편의 명령 | `__RUN_NAME_COMMAND__` |
 | 로컬 UI | `__UI_COMMAND__` |
@@ -96,8 +97,11 @@ K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_OPEN=true k6 run __GENERATED_OUTPUT_ARG__
 
 ## 재사용 규칙
 
-- 반복 값은 scenario `vars:` 또는 `--var-file`, `--var`로 관리합니다.
+- 공개 테스트 데이터는 scenario `vars:` 또는 `--var-file`, `--var`로 관리합니다.
 - 값 우선순위는 `vars:` < CLI `--var-file` < CLI `--var`입니다.
+- k6 scenario 시작 timestamp 기반 prefix는 `{{k6.run.id}}`로 참조합니다. 필요하면 `OPENAPI_K6_RUN_ID` 환경변수로 고정할 수 있습니다.
+- k6 실행에서 반복마다 바뀌는 값은 `{{k6.scenario.iterationInTest}}`, `{{k6.vu.idInTest}}`, `{{k6.vu.iterationInScenario}}`처럼 참조합니다.
+- `test` 명령은 기본 1회 API 흐름 검증이므로 k6 값은 `1 VU`, 첫 iteration 기준으로 해석합니다. `--iterations 3`을 붙이면 k6 없이도 iteration 값 증가를 확인합니다.
 - 다른 폴더의 scenario steps는 `steps` 안의 `- use: auth/login`처럼 scenario root 기준 key로 재사용합니다.
 - `use` 값은 `auth/login`처럼 확장자 없는 scenario key여야 하며, `auth/login.yaml`이나 `auth/login.v2`는 사용할 수 없습니다.
 - `use` 대상 파일에는 `vars:`를 두지 않고 entry scenario에서 관리합니다.

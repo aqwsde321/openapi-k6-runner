@@ -6,6 +6,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- Scenario YAML에서 `{{k6.scenario.iterationInTest}}`, `{{k6.vu.idInTest}}` 같은 k6 실행 context 값을 참조해 generated k6 실행마다 달라지는 request 값을 만들 수 있게 했습니다.
+- Scenario YAML에서 `{{k6.run.id}}`를 참조해 k6 scenario 시작 timestamp 기반 prefix를 만들 수 있게 했습니다. `OPENAPI_K6_RUN_ID` 환경변수로 값을 고정할 수 있습니다.
+- `openapi-k6 test --iterations <count>` 옵션을 추가해 k6 없이도 반복 실행 시 `{{k6.*}}` 값이 증가하는지 검증할 수 있게 했습니다.
+
+### Changed
+
+- README, init scaffold README, Codex 스킬 안내에서 `.env`는 비밀/접속 값에 한정하고 공개 테스트 데이터는 `vars`/`--var-file`/`--var` 또는 `{{k6.*}}`로 관리하도록 기준을 명확히 했습니다.
+
 ## [0.9.1] - 2026-06-22
 
 ### Changed
