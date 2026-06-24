@@ -69,7 +69,22 @@ export interface UiRunStepResult {
   request?: UiRunRequestValue;
   response?: UiRunResponseValue;
   input?: UiRunStepInputValue;
+  condition?: UiRunStepConditionValue;
+  extracts: UiRunStepExtractValue[];
+  error?: string;
   responseStatus?: number;
+}
+
+export interface UiRunStepConditionValue {
+  expression: string;
+  passed: boolean;
+}
+
+export interface UiRunStepExtractValue {
+  name: string;
+  path: string;
+  passed: boolean;
+  error?: string;
 }
 
 export interface UiRunStepInputValue {
@@ -205,6 +220,12 @@ export function createUiRunTestResult(
       source: stepSources[step.index] ?? { kind: 'direct' },
       method: step.method,
       path: step.path,
+      extracts: step.extracts.map((extract) => ({
+        name: extract.name,
+        path: extract.path,
+        passed: extract.passed,
+        ...(extract.error === undefined ? {} : { error: extract.error }),
+      })),
       ...(includeValues && step.url !== undefined ? { url: step.url } : {}),
       ...(includeValues && step.request !== undefined ? { request: step.request } : {}),
       ...(includeValues && step.response !== undefined
@@ -228,6 +249,15 @@ export function createUiRunTestResult(
               ...(step.input.sensitive === undefined ? {} : { sensitive: step.input.sensitive }),
             },
           }),
+      ...(step.condition === undefined
+        ? {}
+        : {
+            condition: {
+              expression: step.condition.expression,
+              passed: step.condition.passed,
+            },
+          }),
+      ...(step.error === undefined ? {} : { error: step.error }),
       ...(step.response === undefined ? {} : { responseStatus: step.response.status }),
     })),
   };

@@ -192,6 +192,16 @@ export const UI_HTML = String.raw`<!doctype html>
       gap: 10px;
       background: #fbfcfe;
     }
+    .panel-subhead {
+      align-items: center;
+      background: #fbfcfe;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      flex-shrink: 0;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      padding: 9px 12px;
+    }
     .panel-title { margin: 0; font-size: 13px; font-weight: 750; }
     .panel-body { padding: 12px; overflow: auto; min-height: 0; }
     input, button {
@@ -235,6 +245,17 @@ export const UI_HTML = String.raw`<!doctype html>
     input:focus-visible {
       outline: 3px solid var(--focus);
       outline-offset: 2px;
+    }
+    .sr-only {
+      border: 0;
+      clip: rect(0, 0, 0, 0);
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      padding: 0;
+      position: absolute;
+      white-space: nowrap;
+      width: 1px;
     }
     .scenario-list {
       display: flex;
@@ -388,6 +409,10 @@ export const UI_HTML = String.raw`<!doctype html>
       margin-bottom: 8px;
     }
     .section-heading h3 {
+      margin: 0;
+    }
+    .run-results-heading h3 {
+      font-size: 12px;
       margin: 0;
     }
     .run-values-toggle {
@@ -752,6 +777,19 @@ export const UI_HTML = String.raw`<!doctype html>
       font-size: 11px;
       justify-self: end;
     }
+    .run-step-result-actions {
+      align-items: center;
+      display: flex;
+      gap: 6px;
+      justify-self: end;
+      min-width: 0;
+    }
+    .run-step-copy {
+      border-radius: 6px;
+      font-size: 11px;
+      height: 24px;
+      padding: 0 8px;
+    }
     .run-step-values {
       border-left: 2px solid var(--line);
       display: grid;
@@ -794,7 +832,52 @@ export const UI_HTML = String.raw`<!doctype html>
       font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
       white-space: pre-wrap;
       border-top: 1px solid var(--terminal-line);
+      padding-right: 48px;
       tab-size: 2;
+    }
+    .terminal-frame {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      position: relative;
+    }
+    .log-copy-button {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.24);
+      color: #f3f7ff;
+      position: absolute;
+      right: 8px;
+      top: 8px;
+      z-index: 1;
+    }
+    .log-copy-button:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.16);
+      border-color: rgba(255, 255, 255, 0.42);
+    }
+    .copy-icon {
+      display: block;
+      height: 15px;
+      position: relative;
+      width: 15px;
+    }
+    .copy-icon::before,
+    .copy-icon::after {
+      border: 1.6px solid currentColor;
+      border-radius: 2px;
+      content: "";
+      height: 10px;
+      position: absolute;
+      width: 9px;
+    }
+    .copy-icon::before {
+      left: 1px;
+      opacity: 0.58;
+      top: 1px;
+    }
+    .copy-icon::after {
+      background: var(--terminal);
+      left: 4px;
+      top: 4px;
     }
     .terminal .ansi-bold { font-weight: 800; }
     .terminal .ansi-dim { opacity: 0.68; }
@@ -903,15 +986,15 @@ export const UI_HTML = String.raw`<!doctype html>
         <h2 class="panel-title" id="detailTitle">시나리오</h2>
         <span id="detailStatus" class="pill">미실행</span>
       </div>
+      <div class="panel-subhead run-results-heading">
+        <h3>최근 실행 결과</h3>
+        <button id="runValuesToggle" class="run-values-toggle" type="button" disabled>요청/응답 숨김</button>
+      </div>
       <div class="panel-body stack">
         <div id="scenarioSummary" class="section">
           <div class="empty">왼쪽에서 시나리오를 선택하세요.</div>
         </div>
-        <div class="section">
-          <div class="section-heading">
-            <h3>최근 실행 결과</h3>
-            <button id="runValuesToggle" class="run-values-toggle" type="button" disabled>요청/응답 숨김</button>
-          </div>
+        <div class="section run-results-section">
           <div id="runSummary" class="run-summary"><div class="muted">실행 기록 없음</div></div>
         </div>
         <div class="section">
@@ -932,7 +1015,13 @@ export const UI_HTML = String.raw`<!doctype html>
         </div>
         <span id="runHint" class="hint">시나리오를 선택하세요.</span>
       </div>
-      <pre id="output" class="terminal">시나리오를 선택한 뒤 검증/실행하세요.</pre>
+      <div class="terminal-frame">
+        <button id="copyLogBtn" class="icon-button log-copy-button" type="button" disabled aria-label="실행 로그 복사" title="실행 로그 복사">
+          <span class="copy-icon" aria-hidden="true"></span>
+          <span class="sr-only">실행 로그 복사</span>
+        </button>
+        <pre id="output" class="terminal">시나리오를 선택한 뒤 검증/실행하세요.</pre>
+      </div>
     </section>
   </main>
   <div id="connectionOverlay" class="connection-overlay" role="alert" aria-live="assertive">
@@ -978,6 +1067,7 @@ export const UI_HTML = String.raw`<!doctype html>
       serverList: document.getElementById('serverList'),
       validateBtn: document.getElementById('validateBtn'),
       testBtn: document.getElementById('testBtn'),
+      copyLogBtn: document.getElementById('copyLogBtn'),
       clearBtn: document.getElementById('clearBtn'),
       runValuesToggle: document.getElementById('runValuesToggle'),
       output: document.getElementById('output'),
@@ -1089,16 +1179,19 @@ export const UI_HTML = String.raw`<!doctype html>
 
     function resetOutput() {
       els.output.innerHTML = '';
+      updateCopyLogButton();
     }
 
     function appendOutputChunk(chunk) {
       els.output.insertAdjacentHTML('beforeend', chunk.html !== undefined ? chunk.html : escapeHtml(chunk.chunk || ''));
       els.output.scrollTop = els.output.scrollHeight;
+      updateCopyLogButton();
     }
 
     function appendOutputHtml(html) {
       els.output.insertAdjacentHTML('beforeend', html);
       els.output.scrollTop = els.output.scrollHeight;
+      updateCopyLogButton();
     }
 
     function statusTone(value) {
@@ -1221,7 +1314,8 @@ export const UI_HTML = String.raw`<!doctype html>
         return !query ||
           scenario.name.toLowerCase().includes(query) ||
           scenario.path.toLowerCase().includes(query) ||
-          scenario.group.toLowerCase().includes(query);
+          scenario.group.toLowerCase().includes(query) ||
+          (scenario.description || '').toLowerCase().includes(query);
       });
       els.scenarioCount.textContent = String(items.length);
       const groups = [];
@@ -1284,6 +1378,7 @@ export const UI_HTML = String.raw`<!doctype html>
           els.output.innerHTML = latestItem.html || '';
           els.output.scrollTop = els.output.scrollHeight;
           setStatus(els.runStatus, latestItem.status);
+          updateCopyLogButton();
         } else {
           resetOutput();
           setStatus(els.runStatus, 'idle');
@@ -1506,6 +1601,56 @@ export const UI_HTML = String.raw`<!doctype html>
       return String(value).replace(/\u001b\[[0-9;]*m/g, '');
     }
 
+    function readActiveOutputText() {
+      const activeItem = findRunById(state.activeOutputRunId);
+      if (activeItem && activeItem.text) return stripAnsi(activeItem.text);
+      return stripAnsi(els.output.textContent || '');
+    }
+
+    function updateCopyLogButton() {
+      els.copyLogBtn.disabled = readActiveOutputText().trim().length === 0;
+    }
+
+    async function copyText(value) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        try {
+          await navigator.clipboard.writeText(value);
+          return;
+        } catch (_error) {
+          // Fall through to the textarea copy path for browsers without clipboard permission.
+        }
+      }
+
+      const textarea = document.createElement('textarea');
+      textarea.value = value;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const copied = document.execCommand('copy');
+      textarea.remove();
+      if (!copied) throw new Error('클립보드에 복사하지 못했습니다.');
+    }
+
+    async function copyExecutionLog() {
+      const text = readActiveOutputText();
+      if (!text.trim()) {
+        setHint('복사할 실행 로그가 없습니다.', 'warn');
+        updateCopyLogButton();
+        return;
+      }
+
+      try {
+        await copyText(text);
+        setHint('실행 로그를 복사했습니다.', '');
+      } catch (error) {
+        setHint(error instanceof Error ? error.message : String(error), 'bad');
+      }
+    }
+
     function summarizeRunText(value) {
       const lines = stripAnsi(value)
         .split(/\r?\n/)
@@ -1568,6 +1713,16 @@ export const UI_HTML = String.raw`<!doctype html>
     }
 
     function renderRunStepValues(step) {
+      const values = formatRunStepValues(step);
+      const body = [
+        renderStepValueBlock('요청', values.request),
+        renderStepValueBlock('응답', values.response)
+      ].filter(Boolean).join('');
+
+      return body ? '<div class="run-step-values">' + body + '</div>' : '';
+    }
+
+    function formatRunStepValues(step) {
       const request = step.request || {};
       const response = step.response;
       const requestParts = [];
@@ -1583,12 +1738,60 @@ export const UI_HTML = String.raw`<!doctype html>
         responseParts.push('body:\n' + formatBodyValue(response.body || ''));
       }
 
-      const body = [
-        renderStepValueBlock('요청', requestParts.join('\n\n')),
-        renderStepValueBlock('응답', responseParts.join('\n\n'))
-      ].filter(Boolean).join('');
+      return {
+        request: requestParts.join('\n\n'),
+        response: responseParts.join('\n\n')
+      };
+    }
 
-      return body ? '<div class="run-step-values">' + body + '</div>' : '';
+    function formatRunStepValuesText(step) {
+      const values = formatRunStepValues(step);
+      return [
+        values.request ? 'request values:\n' + values.request : '',
+        values.response ? 'response values:\n' + values.response : ''
+      ].filter(Boolean).join('\n\n');
+    }
+
+    function formatRunStepAssertionsText(step) {
+      const lines = [];
+      if (step.condition) {
+        lines.push('check: ' + (step.condition.passed ? 'PASS' : 'FAIL') + ' ' + step.condition.expression);
+      }
+      for (const extract of step.extracts || []) {
+        let message = 'extract: ' + (extract.passed ? 'PASS ' : 'FAIL ') + extract.name;
+        if (extract.path) message += ' (' + extract.path + ')';
+        if (extract.error) message += ' - ' + extract.error;
+        lines.push(message);
+      }
+      if (step.error) lines.push('error: ' + step.error);
+      return lines.join('\n');
+    }
+
+    function formatRunStepCopyText(item, step) {
+      const index = typeof step.index === 'number' ? step.index + 1 : '';
+      const title = (index ? index + '. ' : '') + step.id;
+      const lines = [
+        'scenario: ' + (item.scenarioName || item.scenario),
+        'command: ' + item.command,
+        'run status: ' + formatStatusLabel(item.status),
+        'step: ' + title,
+        'step status: ' + formatStatusLabel(step.status || 'unknown')
+      ];
+      const source = formatStepSource(step.source);
+      const api = ((step.method || '') + ' ' + (step.path || '')).trim();
+      if (source) lines.push('source: ' + source);
+      if (api) lines.push('request: ' + api);
+      if (step.input && step.input.name) {
+        lines.push('input: ' + step.input.name + ' (' + step.input.source + ', ' + (step.input.provided ? 'provided' : 'missing') + ')');
+      }
+      if (typeof step.responseStatus === 'number') lines.push('response: HTTP ' + step.responseStatus);
+      if (typeof step.durationMs === 'number') lines.push('duration: ' + Math.round(step.durationMs) + 'ms');
+
+      return [
+        lines.join('\n'),
+        formatRunStepAssertionsText(step),
+        state.showRunValues ? formatRunStepValuesText(step) : ''
+      ].filter(Boolean).join('\n\n') + '\n';
     }
 
     function renderRunStepResults(item) {
@@ -1604,7 +1807,10 @@ export const UI_HTML = String.raw`<!doctype html>
               '<span class="run-step-result-title">' + escapeHtml(title) + ' <span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span></span>' +
               '<span class="run-step-result-meta">' + escapeHtml(formatStepResultMeta(step)) + '</span>' +
             '</span>' +
-            '<span class="pill run-step-result-source">' + escapeHtml(formatStepSource(step.source)) + '</span>' +
+            '<span class="run-step-result-actions">' +
+              '<button class="run-step-copy" type="button" data-copy-run-step data-run-id="' + escapeHtml(item.id) + '" data-step-index="' + escapeHtml(String(step.index)) + '">복사</button>' +
+              '<span class="pill run-step-result-source">' + escapeHtml(formatStepSource(step.source)) + '</span>' +
+            '</span>' +
           '</div>' +
           (state.showRunValues ? renderRunStepValues(step) : '') +
         '</div>';
@@ -1733,6 +1939,7 @@ export const UI_HTML = String.raw`<!doctype html>
       const runScenario = state.selected;
       if (!runScenario) return;
       setStatus(els.runStatus, 'running');
+      state.activeOutputRunId = null;
       resetOutput();
       let result;
       try {
@@ -1887,6 +2094,28 @@ export const UI_HTML = String.raw`<!doctype html>
       }
     }
 
+    async function copyRunStep(event) {
+      const button = event.target && event.target.closest ? event.target.closest('[data-copy-run-step]') : null;
+      if (!button) return;
+      event.preventDefault();
+
+      const runId = button.getAttribute('data-run-id') || '';
+      const stepIndex = button.getAttribute('data-step-index') || '';
+      const item = findRunById(runId);
+      const step = item ? (item.stepResults || []).find((candidate) => String(candidate.index) === stepIndex) : null;
+      if (!item || !step) {
+        setHint('복사할 step 결과를 찾을 수 없습니다.', 'bad');
+        return;
+      }
+
+      try {
+        await copyText(formatRunStepCopyText(item, step));
+        setHint('step 내용을 복사했습니다.', '');
+      } catch (error) {
+        setHint(error instanceof Error ? error.message : String(error), 'bad');
+      }
+    }
+
     els.searchInput.addEventListener('input', renderScenarioList);
     els.checkServersBtn.addEventListener('click', checkServers);
     els.reconnectBtn.addEventListener('click', reconnectUi);
@@ -1895,8 +2124,10 @@ export const UI_HTML = String.raw`<!doctype html>
       renderRunSummary();
     });
     els.runSummary.addEventListener('submit', submitRunInput);
+    els.runSummary.addEventListener('click', copyRunStep);
     els.validateBtn.addEventListener('click', () => runCommand('validate'));
     els.testBtn.addEventListener('click', () => runCommand('test'));
+    els.copyLogBtn.addEventListener('click', copyExecutionLog);
     els.clearBtn.addEventListener('click', clearRunOutput);
     setInterval(checkUiConnection, UI_CONNECTION_CHECK_INTERVAL_MS);
 

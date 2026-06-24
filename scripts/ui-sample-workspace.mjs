@@ -161,6 +161,7 @@ function createOpenApi(baseUrl) {
 function createHealthScenario() {
   return [
     'name: health',
+    'description: Basic API health check for direct scenario search.',
     'steps:',
     '  - id: health',
     '    api:',
@@ -173,6 +174,7 @@ function createHealthScenario() {
 function createLoginScenario() {
   return [
     'name: login',
+    'description: Auth login flow used by reusable scenario search.',
     'steps:',
     '  - id: login',
     '    api:',
@@ -191,6 +193,7 @@ function createLoginScenario() {
 function createUseLoginScenario() {
   return [
     'name: use-login',
+    'description: Order creation flow that intentionally fails after reused login.',
     'steps:',
     '  - use: auth/login',
     '  - id: create-order',
@@ -209,6 +212,7 @@ function createUseLoginScenario() {
 function createUseHealthScenario() {
   return [
     'name: use-health',
+    'description: Reused health scenario followed by a direct health check.',
     'steps:',
     '  - use: health',
     '  - id: direct-health',

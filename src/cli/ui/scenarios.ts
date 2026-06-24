@@ -36,6 +36,7 @@ export interface UiScenarioList {
   scenarios: Array<{
     id: string;
     name: string;
+    description?: string;
     group: string;
     path: string;
     stepCount?: number;
@@ -82,6 +83,7 @@ export async function listUiScenarios(context: UiScenarioContext): Promise<UiSce
       scenarios.push({
         id: formatUiScenarioOption(context.cwd, scenarioDir, filePath),
         name: scenario.name,
+        ...(scenario.description === undefined ? {} : { description: scenario.description }),
         group: formatUiScenarioGroup(scenarioDir, filePath),
         path: formatDisplayPath(context.cwd, filePath),
         stepCount: scenario.steps.length,

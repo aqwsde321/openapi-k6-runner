@@ -1772,7 +1772,7 @@ describe('openapi-k6 CLI', () => {
       const scenarios = await (await fetch(`${ui.url}/api/scenarios`)).json() as {
         defaultModule?: string;
         moduleCount: number;
-        scenarios: Array<{ id: string; name: string; group: string; path: string; stepCount?: number }>;
+        scenarios: Array<{ id: string; name: string; description?: string; group: string; path: string; stepCount?: number }>;
       };
       const detail = await (await fetch(`${ui.url}/api/scenario?scenario=smoke`)).json() as {
         id: string;
@@ -1840,8 +1840,15 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('<button id="validateBtn" class="blue" disabled>validate</button>');
       expect(html).toContain('<button id="testBtn" class="primary" disabled>test</button>');
       expect(html).toContain('<button id="clearBtn">clear</button>');
+      expect(html).toContain('id="copyLogBtn" class="icon-button log-copy-button"');
+      expect(html).toContain('aria-label="실행 로그 복사"');
+      expect(html).toContain('class="copy-icon"');
+      expect(html).toContain('class="terminal-frame"');
       expect(html).toContain('id="runValuesToggle"');
       expect(html).toContain('class="run-values-toggle"');
+      expect(html).toContain('class="panel-subhead run-results-heading"');
+      expect(html).toContain('class="section run-results-section"');
+      expect(html).toContain('flex-shrink: 0;');
       expect(html).toContain('요청/응답 숨김');
       expect(html).toContain('요청/응답 보기');
       expect(html).not.toContain('id="showValuesToggle"');
@@ -1894,6 +1901,7 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('reconnectUi');
       expect(html).toContain('const selectedExists = state.selected && state.scenarios.some');
       expect(html).toContain('els.reconnectBtn.addEventListener');
+      expect(html).toContain("(scenario.description || '').toLowerCase().includes(query)");
       expect(html).toContain('상세 정보를 불러오지 못했습니다.');
       expect(html).toContain('시나리오 목록을 불러오지 못했습니다.');
       expect(html).toContain('summarizeRunText');
@@ -1918,6 +1926,12 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('runItem.stepResults = Array.isArray(data.steps) ? data.steps : [];');
       expect(html).toContain('run-step-results');
       expect(html).toContain('run-step-values');
+      expect(html).toContain('run-step-copy');
+      expect(html).toContain('data-copy-run-step');
+      expect(html).toContain('copyRunStep');
+      expect(html).toContain('formatRunStepCopyText');
+      expect(html).toContain('copyExecutionLog');
+      expect(html).toContain('readActiveOutputText');
       expect(html).toContain("showValues: command === 'test'");
       expect(html).toContain('state.showRunValues = !state.showRunValues;');
       expect(html).toContain('formatStepSource');
@@ -1949,7 +1963,13 @@ describe('openapi-k6 CLI', () => {
         expect.objectContaining({ id: 'auth/login', name: 'login', group: 'auth', stepCount: 1 }),
         expect.objectContaining({ id: dottedScenarioId, name: 'login-v2', group: 'auth', stepCount: 1 }),
         expect.objectContaining({ id: 'order/use-login', name: 'use-login', group: 'order', stepCount: 2 }),
-        expect.objectContaining({ id: 'smoke', name: 'smoke', group: 'root', stepCount: 1 }),
+        expect.objectContaining({
+          id: 'smoke',
+          name: 'smoke',
+          description: 'Smoke scenario for the UI summary.',
+          group: 'root',
+          stepCount: 1,
+        }),
       ]));
       expect(scenarios.scenarios.some((scenario) => scenario.path.includes('partials/login.yaml'))).toBe(false);
       expect(detail).toMatchObject({
@@ -2008,6 +2028,7 @@ describe('openapi-k6 CLI', () => {
       expect(testEvents).toContain('event: test-result');
       expect(testEvents).toContain('"id":"health"');
       expect(testEvents).toContain('"source":{"kind":"direct"}');
+      expect(testEvents).toContain('"extracts":[]');
       expect(testEvents).toContain('"url":"https://app-api.test.local/app-health"');
       expect(testEvents).toContain('"response":{"status":200');
       expect(testEvents).toContain('"body":"{\\"ok\\":true}"');
@@ -2017,6 +2038,7 @@ describe('openapi-k6 CLI', () => {
       expect(useTestEvents).toContain('"status":"failed"');
       expect(useTestEvents).toContain('"id":"health"');
       expect(useTestEvents).toContain('"source":{"kind":"use","reference":"auth/login"}');
+      expect(useTestEvents).toContain('"condition":{"expression":"status == 201","passed":false}');
       expect(useTestEvents).toContain('"responseStatus":200');
       expect(useTestEvents).not.toContain('"id":"second-health"');
       expect(reportedScenarios).toEqual(['smoke', 'use-login']);
