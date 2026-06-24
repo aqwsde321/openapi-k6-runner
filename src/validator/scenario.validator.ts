@@ -1,4 +1,4 @@
-import type { ApiOperation, Scenario, Step } from '../core/types.js';
+import { isInputStep, type ApiOperation, type ApiStep, type Scenario } from '../core/types.js';
 import { resolveStepRegistry, type ApiRegistrySource } from '../core/api-registry.js';
 import { isSupportedStatusCondition } from '../core/condition.js';
 import { collectTemplateReferences } from '../core/template.js';
@@ -49,6 +49,11 @@ export function validateScenarioAgainstOpenApi(
   validateScenarioVarPlaceholders(scenario, issues);
 
   for (const step of scenario.steps) {
+    if (isInputStep(step)) {
+      registerInputName(step, availableContextNames);
+      continue;
+    }
+
     let operation: ApiOperation;
 
     validateCondition(step, issues);
@@ -92,7 +97,7 @@ function validateScenarioVarPlaceholders(scenario: Scenario, issues: string[]): 
 }
 
 function validateRequestTemplates(
-  step: Step,
+  step: ApiStep,
   availableContextNames: Set<string>,
   availableVarsNames: Set<string>,
   issues: string[],
@@ -110,12 +115,12 @@ function validateRequestTemplates(
   validateMultipartFileMetadataTemplates(step, availableContextNames, availableVarsNames, issues);
 }
 
-function validateRequestPlaceholders(step: Step, issues: string[]): void {
+function validateRequestPlaceholders(step: ApiStep, issues: string[]): void {
   validatePlaceholderValue(`step "${step.id}"`, 'request', step.request, issues);
 }
 
 function validatePathParamTemplates(
-  step: Step,
+  step: ApiStep,
   operation: ApiOperation,
   availableContextNames: Set<string>,
   availableVarsNames: Set<string>,
@@ -140,7 +145,7 @@ function validatePathParamTemplates(
 }
 
 function validateMultipartFileMetadataTemplates(
-  step: Step,
+  step: ApiStep,
   availableContextNames: Set<string>,
   availableVarsNames: Set<string>,
   issues: string[],
@@ -201,7 +206,7 @@ function validatePlaceholderValue(
 }
 
 function validateTemplateValue(
-  step: Step,
+  step: ApiStep,
   pathLabel: string,
   value: unknown,
   availableContextNames: Set<string>,
@@ -248,13 +253,17 @@ function appendTemplatePath(pathLabel: string, key: string): string {
     : `${pathLabel}[${JSON.stringify(key)}]`;
 }
 
-function registerExtractNames(step: Step, availableContextNames: Set<string>): void {
+function registerInputName(step: { input: { name: string } }, availableContextNames: Set<string>): void {
+  availableContextNames.add(step.input.name);
+}
+
+function registerExtractNames(step: ApiStep, availableContextNames: Set<string>): void {
   for (const name of Object.keys(step.extract ?? {})) {
     availableContextNames.add(name);
   }
 }
 
-function validateCondition(step: Step, issues: string[]): void {
+function validateCondition(step: ApiStep, issues: string[]): void {
   if (step.condition === undefined) {
     return;
   }
@@ -264,7 +273,7 @@ function validateCondition(step: Step, issues: string[]): void {
   }
 }
 
-function validateExtracts(step: Step, issues: string[]): void {
+function validateExtracts(step: ApiStep, issues: string[]): void {
   for (const [name, rule] of Object.entries(step.extract ?? {})) {
     try {
       compileJsonPathSegments(rule.from);
@@ -276,7 +285,7 @@ function validateExtracts(step: Step, issues: string[]): void {
 }
 
 function validatePathParams(
-  step: Step,
+  step: ApiStep,
   operation: ApiOperation,
   issues: string[],
   warnings: string[],
@@ -324,7 +333,7 @@ function readPathTemplateParameterNames(endpointPath: string): string[] {
 }
 
 function validateRequiredParameters(
-  step: Step,
+  step: ApiStep,
   operation: ApiOperation,
   location: 'query' | 'header',
   issues: string[],
@@ -358,7 +367,7 @@ function readRequiredParameterNames(
   });
 }
 
-function hasProvidedParameter(step: Step, location: 'query' | 'header', name: string): boolean {
+function hasProvidedParameter(step: ApiStep, location: 'query' | 'header', name: string): boolean {
   const request = step.request;
 
   if (location === 'query') {
@@ -383,7 +392,7 @@ function requestFieldName(location: 'query' | 'header'): string {
 }
 
 function validateRequestPayloadSupport(
-  step: Step,
+  step: ApiStep,
   operation: ApiOperation,
   issues: string[],
 ): void {
@@ -405,7 +414,7 @@ function validateRequestPayloadSupport(
 }
 
 function validateRequestBodyContentTypes(
-  step: Step,
+  step: ApiStep,
   operation: ApiOperation,
   issues: string[],
 ): void {
@@ -448,7 +457,7 @@ function isJsonContentType(contentType: string): boolean {
 }
 
 function validateRequiredRequestBody(
-  step: Step,
+  step: ApiStep,
   operation: ApiOperation,
   issues: string[],
 ): void {
@@ -464,7 +473,7 @@ function validateRequiredRequestBody(
 }
 
 function validateRequiredRequestBodyFields(
-  step: Step,
+  step: ApiStep,
   operation: ApiOperation,
   issues: string[],
 ): void {

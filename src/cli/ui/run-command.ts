@@ -2,7 +2,7 @@ import { CommanderError } from 'commander';
 import path from 'node:path';
 
 import type { LoadTestConfig } from '../../config/load-test.config.js';
-import type { ScenarioExecutionReporter } from '../../executor/scenario.executor.js';
+import type { ScenarioExecutionReporter, ScenarioInputProvider } from '../../executor/scenario.executor.js';
 import { DEFAULT_WORKSPACE_DIR } from '../../scaffold/load-test.init.js';
 import { formatDisplayPath } from './paths.js';
 import {
@@ -13,6 +13,7 @@ import {
   createUiRunWritable,
   createUiScenarioReporter,
   finishUiRun,
+  requestUiRunInput,
   type UiRunRecord,
   type UiRunStatus,
 } from './run-state.js';
@@ -46,6 +47,7 @@ export interface UiRunCliContext {
   fetch?: typeof fetch;
   interactive?: boolean;
   captureRequestResponseValues?: boolean;
+  inputProvider?: ScenarioInputProvider;
   testReporter?: ScenarioExecutionReporter;
 }
 
@@ -153,7 +155,11 @@ async function runUiCliCommand(
       stderr,
       env: state.context.env,
       fetch: state.context.fetch,
+      interactive: false,
       captureRequestResponseValues: payload.showValues,
+      inputProvider: payload.command === 'test'
+        ? (request) => requestUiRunInput(run, request)
+        : state.context.inputProvider,
       testReporter,
     });
     finishUiRun(run, 'passed', 0);

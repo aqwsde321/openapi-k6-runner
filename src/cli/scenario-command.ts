@@ -1,9 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createInterface } from 'node:readline/promises';
 
 import type { LoadTestConfig } from '../config/load-test.config.js';
 import { executeAstScenario } from '../executor/scenario.executor.js';
-import type { K6ExecutionValues, ScenarioExecutionResult } from '../executor/scenario.executor.js';
+import type { K6ExecutionValues, ScenarioExecutionResult, ScenarioInputProvider } from '../executor/scenario.executor.js';
 import type {
   CliContext,
   GenerateOptions,
@@ -261,6 +262,7 @@ export async function runTestCommand(
       k6: createTestK6ExecutionValues(runId, iteration),
       fetch: context.fetch,
       captureRequestResponseValues: context.captureRequestResponseValues === true,
+      inputProvider: context.inputProvider ?? createCliInputProvider(context),
       reporter: context.testReporter,
     });
     durationMs += result.durationMs;
@@ -288,6 +290,30 @@ export async function runTestCommand(
     ...(openApiContext.moduleNames === undefined ? {} : { moduleNames: openApiContext.moduleNames }),
     ...(scaffoldWarnings.length === 0 ? {} : { scaffoldWarnings }),
     ...(scaffoldUpdateCommand === undefined ? {} : { scaffoldUpdateCommand }),
+  };
+}
+
+function createCliInputProvider(context: CliContext): ScenarioInputProvider | undefined {
+  const stdin = context.stdin ?? process.stdin;
+  const stdout = context.stdout ?? process.stdout;
+
+  if (context.interactive === false || stdin.isTTY !== true || stdout.isTTY !== true) {
+    return undefined;
+  }
+
+  return async (request) => {
+    const readline = createInterface({
+      input: stdin,
+      output: stdout as NodeJS.WritableStream,
+      terminal: true,
+    });
+    const label = request.label ?? request.name;
+
+    try {
+      return await readline.question(`${label}: `);
+    } finally {
+      readline.close();
+    }
   };
 }
 

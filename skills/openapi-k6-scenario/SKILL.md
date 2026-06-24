@@ -57,7 +57,7 @@ The confirmation summary must include:
 - Scenario purpose, target scenario key, and target scenario file path.
 - Scenario description to write in top-level `description:`.
 - API call sequence with method/path or operationId.
-- Required request data, including which values come from `{{env.*}}`, `{{vars.*}}`, or `{{k6.*}}`.
+- Required request data, including which values come from `{{env.*}}`, `{{vars.*}}`, `{{k6.*}}`, or a manual `input` step.
 - Values extracted from earlier responses and where they are reused.
 - Existing scenarios to `use`, partials to include, or new reusable files to create.
 - Assumptions, ambiguous endpoint choices, and test data the user must provide.
@@ -72,6 +72,7 @@ If the user replies with a short affirmative response such as `ã…‡`, `ok`, or `ã
 - Do not leave `<...>` placeholders before validation.
 - Keep secrets out of Scenario YAML. Use `{{env.NAME}}` only for secrets and environment-specific connection values, and tell the user which workspace `.env` values are required.
 - Do not put ordinary test data in `.env`. Use `vars:` for repeated non-secret values.
+- Use an `input` step for values that are only known during execution and cannot be extracted from an API response, such as SMS or email verification codes. Reference the entered value in later steps as `{{inputName}}`, and tell CI/non-interactive users to pass `--var inputName=<value>`.
 - Use `fixtures:` or `--var-file` for environment-specific non-secret data.
 - Use `--var name=value` only for one-off overrides.
 - Use the value precedence `fixtures:` < `vars:` < `--var-file` < `--var`.

@@ -159,7 +159,8 @@ POST   /auth/login
 처음 확인은 이 파일을 수정해도 되고, 실제 흐름은 새 YAML 파일로 만들어도 됩니다.
 폴더는 UI의 카테고리로 쓰입니다. 예를 들어 `openapi-k6/scenarios/auth/login.yaml`은 UI에서 `auth` 그룹에 표시되고, CLI에서는 `-s auth/login`으로 실행합니다.
 
-각 step에는 `id`와 `api`가 필요합니다.
+API 호출 step에는 `id`와 `api`가 필요합니다.
+SMS/메일 인증번호처럼 실행 중에 사람이 넣어야 하는 값은 `input` step을 사용합니다.
 `request`, `extract`, `condition`은 필요한 경우만 둡니다.
 `condition`을 생략하면 `test`와 `run`은 HTTP status `< 400`을 성공으로 봅니다.
 `description`은 선택 필드이며 UI의 시나리오 요약에 표시됩니다.
@@ -196,6 +197,28 @@ steps:
 SKU, tenant, 검색어 같은 공개 테스트 데이터는 scenario `vars:` 또는 `--var-file`, `--var`로 관리합니다.
 비밀값은 scenario YAML에 직접 쓰지 않습니다.
 `catalog --ai` 초안의 `<...>` placeholder가 scenario에 남아 있으면 `validate`가 실패합니다.
+
+서버 응답에서 자동 추출할 수 없고 실행 중에만 알 수 있는 값은 `input` step으로 받습니다.
+예를 들어 SMS 인증번호는 먼저 발송 API를 실행한 뒤, CLI TTY나 UI에서 값을 입력받아 다음 step의 `{{signupPhoneCode}}`로 사용합니다.
+CI나 비대화형 실행에서는 프롬프트를 띄울 수 없으므로 `--var signupPhoneCode=123456`처럼 미리 넘깁니다.
+
+```yaml
+name: signup-with-sms
+
+steps:
+  - id: enter-phone-code
+    input:
+      name: signupPhoneCode
+      label: SMS 인증번호
+
+  - id: verify-phone-code
+    api:
+      method: POST
+      path: /phone-verification/verify
+    request:
+      body:
+        code: "{{signupPhoneCode}}"
+```
 
 ## 4. 검증과 실행
 

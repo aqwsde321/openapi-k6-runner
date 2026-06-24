@@ -121,6 +121,45 @@ describe('scenario parser', () => {
     });
   });
 
+  it('parses input steps for values supplied during execution', () => {
+    const scenario = parseScenarioSource([
+      'name: signup-with-sms',
+      'steps:',
+      '  - id: enter-phone-code',
+      '    input:',
+      '      name: signupPhoneCode',
+      '      label: SMS 인증번호',
+      '      sensitive: true',
+      '',
+    ].join('\n'));
+
+    expect(scenario.steps[0]).toEqual({
+      id: 'enter-phone-code',
+      input: {
+        name: 'signupPhoneCode',
+        label: 'SMS 인증번호',
+        required: true,
+        sensitive: true,
+      },
+    });
+  });
+
+  it('rejects steps that mix api and input', () => {
+    expect(() =>
+      parseScenarioSource([
+        'name: invalid-input',
+        'steps:',
+        '  - id: enter-phone-code',
+        '    input:',
+        '      name: signupPhoneCode',
+        '    api:',
+        '      method: POST',
+        '      path: /phone-verification/verify',
+        '',
+      ].join('\n')),
+    ).toThrowError('<inline>: steps[0]: step can contain only one of api or input');
+  });
+
   it('expands included scenario steps from relative files', async () => {
     const scenarioPath = path.join(workspace, 'smoke.yaml');
     await mkdir(path.join(workspace, 'partials'), { recursive: true });
@@ -438,9 +477,11 @@ describe('scenario parser', () => {
       '',
     ].join('\n'));
 
-    expect(scenario.steps[0]?.api).toEqual({
-      module: 'auth',
-      operationId: 'loginUser',
+    expect(scenario.steps[0]).toMatchObject({
+      api: {
+        module: 'auth',
+        operationId: 'loginUser',
+      },
     });
   });
 
@@ -696,18 +737,20 @@ describe('scenario parser', () => {
       '',
     ].join('\n'));
 
-    expect(scenario.steps[0]?.request).toEqual({
-      headers: { Authorization: 'Bearer {{token}}' },
-      multipart: {
-        fields: {
-          title: 'Main image',
-          sortOrder: 1,
-        },
-        files: {
-          image: {
-            path: 'fixtures/product.png',
-            filename: 'product.png',
-            contentType: 'image/png',
+    expect(scenario.steps[0]).toMatchObject({
+      request: {
+        headers: { Authorization: 'Bearer {{token}}' },
+        multipart: {
+          fields: {
+            title: 'Main image',
+            sortOrder: 1,
+          },
+          files: {
+            image: {
+              path: 'fixtures/product.png',
+              filename: 'product.png',
+              contentType: 'image/png',
+            },
           },
         },
       },
@@ -804,7 +847,7 @@ describe('scenario parser', () => {
       ].join('\n'),
     );
 
-    expect(scenario.steps[0]?.api).toEqual({ method: 'GET', path: '/users' });
+    expect(scenario.steps[0]).toMatchObject({ api: { method: 'GET', path: '/users' } });
   });
 
   it('fails when api is missing from a step', () => {

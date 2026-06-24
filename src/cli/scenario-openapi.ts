@@ -12,7 +12,7 @@ import {
   createModuleBaseUrlEnvName,
   findModuleBaseUrlEnvNameCollisions,
 } from '../core/module-env.js';
-import type { ApiRegistry, Scenario } from '../core/types.js';
+import { isInputStep, type ApiRegistry, type Scenario } from '../core/types.js';
 import { parseOpenApiFile } from '../openapi/openapi.parser.js';
 import {
   formatMissingConfigValueError,
@@ -167,10 +167,13 @@ export async function loadScenarioOpenApiContext(options: {
 }
 
 function collectExplicitModuleUses(scenario: Scenario): ScenarioModuleUse[] {
-  return scenario.steps.flatMap((step) =>
-    step.api.module === undefined
-      ? []
-      : [{ moduleName: step.api.module, stepId: step.id, explicit: true }]);
+  return scenario.steps.flatMap((step) => {
+    if (isInputStep(step) || step.api.module === undefined) {
+      return [];
+    }
+
+    return [{ moduleName: step.api.module, stepId: step.id, explicit: true }];
+  });
 }
 
 function resolveFallbackModuleForScenario(
@@ -178,7 +181,8 @@ function resolveFallbackModuleForScenario(
   moduleName: string | undefined,
   scenario: Scenario,
 ): LoadTestModuleConfig | undefined {
-  const hasUnqualifiedStep = scenario.steps.some((step) => step.api.module === undefined);
+  const hasUnqualifiedStep = scenario.steps.some((step) =>
+    !isInputStep(step) && step.api.module === undefined);
 
   if (hasUnqualifiedStep || moduleName !== undefined) {
     return resolveConfigModule(config, moduleName);
@@ -194,6 +198,10 @@ function collectRequiredModuleUses(
   const uses = new Map<string, ScenarioModuleUse>();
 
   for (const step of scenario.steps) {
+    if (isInputStep(step)) {
+      continue;
+    }
+
     const moduleName = step.api.module ?? fallbackModuleName;
 
     if (moduleName === undefined) {

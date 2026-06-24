@@ -373,6 +373,135 @@ describe('scenario executor', () => {
     expect(result.steps[0].error).toBe('Missing context.orderId for template "{{orderId}}"');
   });
 
+  it('uses scenario vars to satisfy input steps without prompting', async () => {
+    const bodies: string[] = [];
+    const result = await executeAstScenario({
+      name: 'signup-with-var-input',
+      vars: {
+        signupPhoneCode: '123456',
+      },
+      steps: [
+        {
+          id: 'enter-phone-code',
+          input: {
+            name: 'signupPhoneCode',
+            required: true,
+          },
+        },
+        {
+          id: 'verify-phone-code',
+          method: 'POST',
+          path: '/phone-verification/verify',
+          pathParameters: [],
+          request: {
+            body: {
+              code: '{{signupPhoneCode}}',
+            },
+          },
+        },
+      ],
+    }, {
+      baseUrl: 'https://api.test.local',
+      env: {},
+      inputProvider: () => {
+        throw new Error('inputProvider should not be called');
+      },
+      fetch: async (_input, init) => {
+        bodies.push(String(init?.body ?? ''));
+        return jsonResponse({ ok: true }, 200, 'OK');
+      },
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.steps[0].input).toMatchObject({
+      name: 'signupPhoneCode',
+      source: 'vars',
+      provided: true,
+    });
+    expect(JSON.parse(bodies[0])).toEqual({ code: '123456' });
+  });
+
+  it('prompts for missing input steps through the input provider', async () => {
+    const result = await executeAstScenario({
+      name: 'signup-with-provider-input',
+      steps: [
+        {
+          id: 'enter-phone-code',
+          input: {
+            name: 'signupPhoneCode',
+            label: 'SMS 인증번호',
+            required: true,
+          },
+        },
+        {
+          id: 'verify-phone-code',
+          method: 'POST',
+          path: '/phone-verification/verify',
+          pathParameters: [],
+          request: {
+            body: {
+              code: '{{signupPhoneCode}}',
+            },
+          },
+        },
+      ],
+    }, {
+      baseUrl: 'https://api.test.local',
+      env: {},
+      inputProvider: async (request) => {
+        expect(request.name).toBe('signupPhoneCode');
+        expect(request.label).toBe('SMS 인증번호');
+        return '654321';
+      },
+      fetch: async (_input, init) => {
+        expect(JSON.parse(String(init?.body ?? ''))).toEqual({ code: '654321' });
+        return jsonResponse({ ok: true }, 200, 'OK');
+      },
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.steps[0].input).toMatchObject({
+      name: 'signupPhoneCode',
+      source: 'prompt',
+      provided: true,
+    });
+  });
+
+  it('fails fast when a required input is unavailable', async () => {
+    const requests: string[] = [];
+    const result = await executeAstScenario({
+      name: 'missing-input',
+      steps: [
+        {
+          id: 'enter-phone-code',
+          input: {
+            name: 'signupPhoneCode',
+            required: true,
+          },
+        },
+        {
+          id: 'verify-phone-code',
+          method: 'POST',
+          path: '/phone-verification/verify',
+          pathParameters: [],
+          request: {},
+        },
+      ],
+    }, {
+      baseUrl: 'https://api.test.local',
+      env: {},
+      fetch: async (input) => {
+        requests.push(String(input));
+        return jsonResponse({ ok: true }, 200, 'OK');
+      },
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.steps.map((step) => step.id)).toEqual(['enter-phone-code']);
+    expect(result.steps[0].error).toContain('Pass --var signupPhoneCode=<value>');
+    expect(requests).toEqual([]);
+  });
+
   it('captures request and response values only when enabled', async () => {
     const ast: ASTScenario = {
       name: 'request-response-values',

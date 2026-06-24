@@ -8,7 +8,7 @@ import {
   parseStatusCondition,
   type StatusCondition,
 } from '../core/condition.js';
-import type { ASTScenario, ASTStep, MultipartFile, StepRequest } from '../core/types.js';
+import { isASTInputStep, type ASTApiStep, type ASTInputStep, type ASTScenario, type ASTStep, type MultipartFile, type StepRequest } from '../core/types.js';
 import { compileJsonPathSegments } from '../utils/jsonpath.js';
 
 const BODY_METHODS = new Set(['POST', 'PUT', 'PATCH']);
@@ -42,6 +42,7 @@ export interface ScenarioExecutorOptions {
   fetch?: FetchLike;
   responseBodyLimit?: number;
   captureRequestResponseValues?: boolean;
+  inputProvider?: ScenarioInputProvider;
   reporter?: ScenarioExecutionReporter;
 }
 
@@ -92,6 +93,20 @@ export interface StepEndEvent {
   secretValues: string[];
 }
 
+export interface ScenarioInputRequest {
+  scenario: string;
+  index: number;
+  totalSteps: number;
+  id: string;
+  name: string;
+  label?: string;
+  required: boolean;
+  sensitive?: boolean;
+  secretValues: string[];
+}
+
+export type ScenarioInputProvider = (request: ScenarioInputRequest) => MaybePromise<unknown>;
+
 export interface ScenarioExecutionResult {
   scenario: string;
   baseUrl: string;
@@ -111,9 +126,18 @@ export interface StepExecutionResult {
   passed: boolean;
   request?: StepRequestResult;
   response?: StepResponseResult;
+  input?: StepInputResult;
   condition?: ConditionExecutionResult;
   extracts: ExtractExecutionResult[];
   error?: string;
+}
+
+export interface StepInputResult {
+  name: string;
+  label?: string;
+  source: 'vars' | 'prompt' | 'none';
+  provided: boolean;
+  sensitive?: boolean;
 }
 
 export interface StepRequestResult {
@@ -204,6 +228,7 @@ export async function executeAstScenario(
       fileRootDir,
       state,
       captureRequestResponseValues: options.captureRequestResponseValues === true,
+      inputProvider: options.inputProvider,
       reporter,
       scenario: ast.name,
       totalSteps: ast.steps.length,
@@ -246,6 +271,10 @@ export function formatScenarioExecutionReport(
 
     if (step.url !== undefined) {
       lines.push(`url: ${maskText(step.url, result.secretValues)}`);
+    }
+
+    if (step.input !== undefined) {
+      lines.push(`input: ${step.input.name} ${step.input.provided ? 'provided' : 'missing'}`);
     }
 
     if (step.response !== undefined) {
@@ -296,11 +325,22 @@ async function executeStep(
     fileRootDir: string;
     state: RuntimeState;
     captureRequestResponseValues: boolean;
+    inputProvider?: ScenarioInputProvider;
     reporter?: ScenarioExecutionReporter;
     scenario: string;
     totalSteps: number;
   },
 ): Promise<StepExecutionResult> {
+  if (isASTInputStep(step)) {
+    return executeInputStep(step, index, {
+      state: options.state,
+      inputProvider: options.inputProvider,
+      reporter: options.reporter,
+      scenario: options.scenario,
+      totalSteps: options.totalSteps,
+    });
+  }
+
   const startedAt = performance.now();
   const method = step.method.toUpperCase();
   let url: string | undefined;
@@ -392,6 +432,134 @@ async function executeStep(
   return result;
 }
 
+async function executeInputStep(
+  step: ASTInputStep,
+  index: number,
+  options: {
+    state: RuntimeState;
+    inputProvider?: ScenarioInputProvider;
+    reporter?: ScenarioExecutionReporter;
+    scenario: string;
+    totalSteps: number;
+  },
+): Promise<StepExecutionResult> {
+  const startedAt = performance.now();
+  const method = 'INPUT';
+  const startEvent: StepStartEvent = {
+    scenario: options.scenario,
+    index,
+    totalSteps: options.totalSteps,
+    id: step.id,
+    method,
+    path: step.input.name,
+    secretValues: [...options.state.secretValues],
+  };
+
+  await options.reporter?.onStepStart?.(startEvent);
+
+  let source: StepInputResult['source'] = 'none';
+  let provided = false;
+
+  try {
+    let value: unknown;
+
+    if (Object.prototype.hasOwnProperty.call(options.state.vars, step.input.name)) {
+      value = options.state.vars[step.input.name];
+      source = 'vars';
+    } else {
+      value = await options.inputProvider?.({
+        scenario: options.scenario,
+        index,
+        totalSteps: options.totalSteps,
+        id: step.id,
+        name: step.input.name,
+        ...(step.input.label === undefined ? {} : { label: step.input.label }),
+        required: step.input.required,
+        ...(step.input.sensitive === undefined ? {} : { sensitive: step.input.sensitive }),
+        secretValues: [...options.state.secretValues],
+      });
+      source = value === undefined ? 'none' : 'prompt';
+    }
+
+    provided = isProvidedInputValue(value);
+
+    if (!provided && step.input.required) {
+      throw new ScenarioExecutionError(
+        `step "${step.id}": input ${step.input.name} is required. Pass --var ${step.input.name}=<value> or provide it in the UI prompt.`,
+      );
+    }
+
+    if (provided) {
+      options.state.context[step.input.name] = value;
+
+      if (step.input.sensitive === true) {
+        options.state.secretValues.add(String(value));
+      }
+    }
+
+    const result: StepExecutionResult = {
+      index,
+      id: step.id,
+      method,
+      path: step.input.name,
+      durationMs: performance.now() - startedAt,
+      passed: true,
+      input: formatStepInputResult(step, source, provided),
+      extracts: [],
+    };
+
+    await options.reporter?.onStepEnd?.({
+      scenario: options.scenario,
+      index,
+      totalSteps: options.totalSteps,
+      result,
+      secretValues: [...options.state.secretValues],
+    });
+
+    return result;
+  } catch (error) {
+    const result: StepExecutionResult = {
+      index,
+      id: step.id,
+      method,
+      path: step.input.name,
+      durationMs: performance.now() - startedAt,
+      passed: false,
+      input: formatStepInputResult(step, source, provided),
+      extracts: [],
+      error: error instanceof Error ? error.message : String(error),
+    };
+
+    await options.reporter?.onStepEnd?.({
+      scenario: options.scenario,
+      index,
+      totalSteps: options.totalSteps,
+      result,
+      secretValues: [...options.state.secretValues],
+    });
+
+    return result;
+  }
+}
+
+function isProvidedInputValue(value: unknown): boolean {
+  return value !== undefined && value !== null && String(value).trim() !== '';
+}
+
+function formatStepInputResult(
+  step: ASTInputStep,
+  source: StepInputResult['source'],
+  provided: boolean,
+): StepInputResult {
+  return {
+    name: step.input.name,
+    ...(step.input.label === undefined ? {} : { label: step.input.label }),
+    source,
+    provided,
+    ...(step.input.sensitive === undefined ? {} : { sensitive: step.input.sensitive }),
+  };
+}
+
 function normalizeModuleBaseUrls(value: Record<string, string | undefined> | undefined): Map<string, string> {
   const urls = new Map<string, string>();
 
@@ -407,7 +575,7 @@ function normalizeModuleBaseUrls(value: Record<string, string | undefined> | und
 }
 
 function resolveStepBaseUrl(
-  step: ASTStep,
+  step: ASTApiStep,
   fallbackBaseUrl: string,
   moduleBaseUrls: Map<string, string>,
 ): string {
@@ -419,7 +587,7 @@ function resolveStepBaseUrl(
 }
 
 async function buildRuntimeRequest(
-  step: ASTStep,
+  step: ASTApiStep,
   method: string,
   baseUrl: string,
   fileRootDir: string,
@@ -462,7 +630,7 @@ async function buildRuntimeRequest(
 }
 
 function buildRequestDetails(
-  step: ASTStep,
+  step: ASTApiStep,
   headers: Record<string, string>,
   body: RequestInit['body'],
   state: RuntimeState,
@@ -474,7 +642,7 @@ function buildRequestDetails(
 }
 
 function formatRequestBodyDetails(
-  step: ASTStep,
+  step: ASTApiStep,
   body: NonNullable<RequestInit['body']>,
   state: RuntimeState,
 ): string {
@@ -510,7 +678,7 @@ function formatMultipartDetails(multipart: NonNullable<StepRequest['multipart']>
   };
 }
 
-function compilePath(step: ASTStep, state: RuntimeState): string {
+function compilePath(step: ASTApiStep, state: RuntimeState): string {
   const pathParams = step.request.pathParams ?? {};
   const pathParamPattern = /{([^}]+)}/g;
   let cursor = 0;
@@ -577,7 +745,7 @@ function buildHeaders(
   return headers;
 }
 
-async function buildMultipartBody(step: ASTStep, fileRootDir: string, state: RuntimeState): Promise<FormData> {
+async function buildMultipartBody(step: ASTApiStep, fileRootDir: string, state: RuntimeState): Promise<FormData> {
   const multipart = step.request.multipart;
 
   if (multipart === undefined) {
@@ -624,7 +792,7 @@ function validateMultipartFilePath(filePath: string): void {
   }
 }
 
-function evaluateExtracts(step: ASTStep, body: string, state: RuntimeState): ExtractExecutionResult[] {
+function evaluateExtracts(step: ASTApiStep, body: string, state: RuntimeState): ExtractExecutionResult[] {
   const entries = Object.entries(step.extract ?? {});
 
   if (entries.length === 0) {

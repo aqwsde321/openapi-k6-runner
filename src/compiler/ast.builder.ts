@@ -1,10 +1,11 @@
-import type {
-  ApiOperation,
-  ASTScenario,
-  ASTStep,
-  Scenario,
-  Step,
-  StepRequest,
+import {
+  isInputStep,
+  type ApiOperation,
+  type ASTScenario,
+  type ASTStep,
+  type Scenario,
+  type Step,
+  type StepRequest,
 } from '../core/types.js';
 import { resolveStepRegistry, type ApiRegistrySource } from '../core/api-registry.js';
 import { resolveApiOperation } from '../openapi/openapi.resolver.js';
@@ -30,6 +31,13 @@ function buildAstStep(
   registrySource: ApiRegistrySource,
   options: AstBuildOptions,
 ): ASTStep {
+  if (isInputStep(step)) {
+    return {
+      id: step.id,
+      input: { ...step.input },
+    };
+  }
+
   const { registry, moduleName } = resolveStepRegistry(step, registrySource, options);
   const operation = resolveApiOperation(registry, step.api, step.id);
 

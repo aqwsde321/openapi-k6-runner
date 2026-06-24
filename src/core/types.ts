@@ -5,12 +5,26 @@ export interface Scenario {
   steps: Step[];
 }
 
-export interface Step {
+export type Step = ApiStep | InputStep;
+
+export interface ApiStep {
   id: string;
   api: ApiReference;
   request?: StepRequest;
   extract?: Record<string, ExtractRule>;
   condition?: string;
+}
+
+export interface InputStep {
+  id: string;
+  input: StepInput;
+}
+
+export interface StepInput {
+  name: string;
+  label?: string;
+  required: boolean;
+  sensitive?: boolean;
 }
 
 export interface ApiReference {
@@ -107,7 +121,9 @@ export interface ASTScenario {
   steps: ASTStep[];
 }
 
-export interface ASTStep {
+export type ASTStep = ASTApiStep | ASTInputStep;
+
+export interface ASTApiStep {
   id: string;
   moduleName?: string;
   method: string;
@@ -116,4 +132,25 @@ export interface ASTStep {
   request: StepRequest;
   extract?: Record<string, ExtractRule>;
   condition?: string;
+}
+
+export interface ASTInputStep {
+  id: string;
+  input: StepInput;
+}
+
+export function isApiStep(step: Step): step is ApiStep {
+  return 'api' in step;
+}
+
+export function isInputStep(step: Step): step is InputStep {
+  return 'input' in step;
+}
+
+export function isASTApiStep(step: ASTStep): step is ASTApiStep {
+  return 'method' in step;
+}
+
+export function isASTInputStep(step: ASTStep): step is ASTInputStep {
+  return 'input' in step;
 }

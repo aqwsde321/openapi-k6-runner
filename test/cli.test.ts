@@ -2025,6 +2025,98 @@ describe('openapi-k6 CLI', () => {
     }
   });
 
+  it('lets UI test runs resume after submitting an input step value', async () => {
+    await mkdir(path.join(workspace, 'openapi-k6/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/openapi/app.openapi.yaml'),
+      [
+        'openapi: 3.0.3',
+        'info:',
+        '  title: App API',
+        '  version: 1.0.0',
+        'paths:',
+        '  /phone-verification/verify:',
+        '    post:',
+        '      requestBody:',
+        '        content:',
+        '          application/json:',
+        '            schema:',
+        '              type: object',
+        '      responses:',
+        '        "200":',
+        '          description: OK',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/manual-code.yaml'),
+      [
+        'name: manual-code',
+        'steps:',
+        '  - id: enter-phone-code',
+        '    input:',
+        '      name: signupPhoneCode',
+        '      label: SMS 인증번호',
+        '  - id: verify-phone-code',
+        '    api:',
+        '      method: POST',
+        '      path: /phone-verification/verify',
+        '    request:',
+        '      body:',
+        '        code: "{{signupPhoneCode}}"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://api.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    const requestBodies: string[] = [];
+    const ui = await runUiCommand(
+      { host: '127.0.0.1', port: '0' },
+      {
+        cwd: workspace,
+        stdout: createSink(),
+        stderr: createSink(),
+        env: {},
+        fetch: async (_input, init) => {
+          requestBodies.push(String(init?.body ?? ''));
+          return new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' });
+        },
+      },
+    );
+
+    try {
+      const run = await (await fetch(`${ui.url}/api/run`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ command: 'test', scenario: 'manual-code' }),
+      })).json() as { runId: string };
+      const eventsResponse = await fetch(`${ui.url}/api/runs/${run.runId}/events`);
+      const events = eventsResponse.text();
+
+      await submitUiInputWhenReady(ui.url, run.runId, 'signupPhoneCode', '123456');
+      const eventText = await events;
+
+      expect(requestBodies.map((body) => JSON.parse(body))).toEqual([{ code: '123456' }]);
+      expect(eventText).toContain('event: input-request');
+      expect(eventText).toContain('"name":"signupPhoneCode"');
+      expect(eventText).toContain('event: input-submitted');
+      expect(eventText).toContain('event: test-result');
+      expect(eventText).toContain('"status":"passed"');
+    } finally {
+      await ui.close();
+    }
+  });
+
   it('checks configured module base URLs from the UI server', async () => {
     await writeRunFixtures();
     const targetServer = createServer((_request, response) => {
@@ -4830,6 +4922,85 @@ describe('openapi-k6 CLI', () => {
     expect(stdout.output()).toContain('summary: ✓ PASS');
   });
 
+  it('prompts for input steps in interactive CLI test runs', async () => {
+    await mkdir(path.join(workspace, 'openapi-k6/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/openapi/app.openapi.yaml'),
+      [
+        'openapi: 3.0.3',
+        'info:',
+        '  title: App API',
+        '  version: 1.0.0',
+        'paths:',
+        '  /phone-verification/verify:',
+        '    post:',
+        '      requestBody:',
+        '        content:',
+        '          application/json:',
+        '            schema:',
+        '              type: object',
+        '      responses:',
+        '        "200":',
+        '          description: OK',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/manual-code.yaml'),
+      [
+        'name: manual-code',
+        'steps:',
+        '  - id: enter-phone-code',
+        '    input:',
+        '      name: signupPhoneCode',
+        '      label: SMS 인증번호',
+        '  - id: verify-phone-code',
+        '    api:',
+        '      method: POST',
+        '      path: /phone-verification/verify',
+        '    request:',
+        '      body:',
+        '        code: "{{signupPhoneCode}}"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://api.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+    const stdin = createInput();
+    const stdout = createCapture({ isTTY: true });
+    const requestBodies: string[] = [];
+    const run = runCli(
+      ['test', '--config', 'openapi-k6/config.yaml', '--scenario', 'manual-code', '--no-color'],
+      {
+        cwd: workspace,
+        stdin,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        fetch: async (_input, init) => {
+          requestBodies.push(String(init?.body ?? ''));
+          return new Response(JSON.stringify({ ok: true }), { status: 200, statusText: 'OK' });
+        },
+      },
+    );
+
+    await waitForOutput(stdout.output, 'SMS 인증번호:');
+    stdin.write('123456\n');
+    await run;
+
+    expect(requestBodies.map((body) => JSON.parse(body))).toEqual([{ code: '123456' }]);
+    expect(stdout.output()).toContain('summary: ✓ PASS');
+  });
+
   it('streams scenario test output before the request finishes', async () => {
     await mkdir(path.join(workspace, 'openapi-k6/openapi'), { recursive: true });
     await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
@@ -5867,6 +6038,31 @@ describe('openapi-k6 CLI', () => {
       'utf8',
     );
     await chmod(path.join(binDir, 'k6'), 0o755);
+  }
+
+  async function submitUiInputWhenReady(
+    uiUrl: string,
+    runId: string,
+    name: string,
+    value: string,
+  ): Promise<void> {
+    const deadline = Date.now() + 1000;
+
+    while (Date.now() <= deadline) {
+      const response = await fetch(`${uiUrl}/api/runs/${runId}/input`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name, value }),
+      });
+
+      if (response.status === 200) {
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    }
+
+    throw new Error(`Timed out waiting for UI input ${name}`);
   }
 
   async function writeConfig(lines: string[]): Promise<void> {

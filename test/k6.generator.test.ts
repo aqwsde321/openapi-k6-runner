@@ -183,6 +183,44 @@ describe('k6 generator', () => {
     await expectValidJavaScript(workspace, script);
   });
 
+  it('generates input steps from scenario vars', async () => {
+    const script = generateK6Script({
+      name: 'signup-with-sms',
+      vars: {
+        signupPhoneCode: '123456',
+      },
+      steps: [
+        {
+          id: 'enter-phone-code',
+          input: {
+            name: 'signupPhoneCode',
+            required: true,
+          },
+        },
+        {
+          id: 'verify-phone-code',
+          method: 'POST',
+          path: '/phone-verification/verify',
+          pathParameters: [],
+          request: {
+            body: {
+              code: '{{signupPhoneCode}}',
+            },
+          },
+        },
+      ],
+    }, {
+      baseUrl: 'https://api.test.local',
+    });
+
+    expect(script).toContain('const VARS = {"signupPhoneCode":"123456"};');
+    expect(script).toContain('group("enter-phone-code INPUT signupPhoneCode", () => {');
+    expect(script).toContain('const input0 = VARS.signupPhoneCode;');
+    expect(script).toContain('context.signupPhoneCode = input0;');
+    expect(script).toContain('const body1 = JSON.stringify({ "code": context.signupPhoneCode });');
+    await expectValidJavaScript(workspace, script);
+  });
+
   it('configures k6 to fail when a generated check fails', async () => {
     const script = generateK6Script(
       {

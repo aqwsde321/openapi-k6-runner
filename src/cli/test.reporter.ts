@@ -79,7 +79,8 @@ function writeScenarioStart(stream: WritableLike, event: ScenarioStartEvent, col
 
 function writeStepStart(stream: WritableLike, event: StepStartEvent, colors: AnsiColors): void {
   stream.write(`     [${event.index + 1}/${event.totalSteps}] ${event.id}\n`);
-  stream.write(formatField('request', `${colors.cyan(event.method)} ${event.path}`, 6, colors));
+  const label = event.method === 'INPUT' ? 'input' : 'request';
+  stream.write(formatField(label, `${colors.cyan(event.method)} ${event.path}`, 6, colors));
 }
 
 function writeStepRequest(
@@ -117,7 +118,12 @@ function writeStepEnd(
   const { result } = event;
   const hasAssertions = result.condition !== undefined || result.extracts.length > 0;
 
-  if (result.response !== undefined) {
+  if (result.input !== undefined) {
+    const state = result.passed
+      ? `${formatCheckMark(true, colors)} ${result.input.name}  ${colors.cyan(formatDuration(result.durationMs))}`
+      : `${colors.red('✗ ERROR')}  ${colors.cyan(formatDuration(result.durationMs))}`;
+    stream.write(formatField('result', state, 6, colors));
+  } else if (result.response !== undefined) {
     stream.write(formatField(
       'status',
       `${formatStatusMark(result, colors)} ${colorStepStatus(result, formatStatus(result.response), colors)}  ${colors.cyan(formatDuration(result.durationMs))}`,

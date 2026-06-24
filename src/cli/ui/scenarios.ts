@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import type { LoadTestConfig } from '../../config/load-test.config.js';
+import { isInputStep } from '../../core/types.js';
 import { formatDisplayPath } from './paths.js';
 import type { UiScenarioStepSource } from './run-state.js';
 import { analyzeUiScenario } from './scenario-analysis.js';
@@ -133,12 +134,23 @@ export async function readUiScenarioDetail(
     steps: scenario.steps.map((step, index) => ({
       id: step.id,
       source: stepSources[index] ?? { kind: 'direct' },
-      ...(step.api.module === undefined ? {} : { module: step.api.module }),
-      ...(step.api.operationId === undefined ? {} : { operationId: step.api.operationId }),
-      ...(step.api.method === undefined ? {} : { method: step.api.method }),
-      ...(step.api.path === undefined ? {} : { path: step.api.path }),
-      ...(step.condition === undefined ? {} : { condition: step.condition }),
-      ...(step.extract === undefined ? {} : { extract: Object.keys(step.extract) }),
+      ...(isInputStep(step)
+        ? {
+            input: {
+              name: step.input.name,
+              ...(step.input.label === undefined ? {} : { label: step.input.label }),
+              required: step.input.required,
+              ...(step.input.sensitive === undefined ? {} : { sensitive: step.input.sensitive }),
+            },
+          }
+        : {
+            ...(step.api.module === undefined ? {} : { module: step.api.module }),
+            ...(step.api.operationId === undefined ? {} : { operationId: step.api.operationId }),
+            ...(step.api.method === undefined ? {} : { method: step.api.method }),
+            ...(step.api.path === undefined ? {} : { path: step.api.path }),
+            ...(step.condition === undefined ? {} : { condition: step.condition }),
+            ...(step.extract === undefined ? {} : { extract: Object.keys(step.extract) }),
+          }),
       ...(stepDefinitions[index] === undefined ? {} : { definition: stepDefinitions[index] }),
     })),
   };

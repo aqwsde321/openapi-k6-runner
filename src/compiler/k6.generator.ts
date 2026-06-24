@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import type { ASTScenario, ASTStep, StepRequest } from '../core/types.js';
+import { isASTApiStep, isASTInputStep, type ASTApiStep, type ASTInputStep, type ASTScenario, type ASTStep, type StepRequest } from '../core/types.js';
 import {
   createModuleBaseUrlEnvName,
   findModuleBaseUrlEnvNameCollisions,
@@ -133,6 +133,10 @@ function buildBaseUrlPlan(ast: ASTScenario, options: K6GeneratorOptions): BaseUr
   return {
     declarations,
     stepReferences: ast.steps.map((step) => {
+      if (isASTInputStep(step)) {
+        return 'BASE_URL';
+      }
+
       const moduleName = step.moduleName;
 
       if (moduleName === undefined) {
@@ -173,6 +177,10 @@ function collectStepModuleNames(ast: ASTScenario): string[] {
   const seen = new Set<string>();
 
   for (const step of ast.steps) {
+    if (isASTInputStep(step)) {
+      continue;
+    }
+
     if (step.moduleName !== undefined && !seen.has(step.moduleName)) {
       names.push(step.moduleName);
       seen.add(step.moduleName);
@@ -318,6 +326,10 @@ function collectEnvReferenceNames(ast: ASTScenario): string[] {
   const names = new Set<string>();
 
   for (const step of ast.steps) {
+    if (isASTInputStep(step)) {
+      continue;
+    }
+
     collectEnvReferenceNamesFromValue(step.request, names);
   }
 
@@ -328,14 +340,18 @@ function collectVarsReferenceNames(ast: ASTScenario): string[] {
   const names = new Set<string>();
 
   for (const step of ast.steps) {
-    collectVarsReferenceNamesFromValue(step.request, names);
+    if (isASTInputStep(step)) {
+      names.add(step.input.name);
+    } else {
+      collectVarsReferenceNamesFromValue(step.request, names);
+    }
   }
 
   return [...names].sort();
 }
 
 function hasK6RunIdReferences(ast: ASTScenario): boolean {
-  return ast.steps.some((step) => hasK6RunIdReferencesInValue(step.request));
+  return ast.steps.some((step) => isASTApiStep(step) && hasK6RunIdReferencesInValue(step.request));
 }
 
 function hasK6RunIdReferencesInValue(value: unknown): boolean {
@@ -356,7 +372,7 @@ function hasK6RunIdReferencesInValue(value: unknown): boolean {
 }
 
 function hasK6ExecutionReferences(ast: ASTScenario): boolean {
-  return ast.steps.some((step) => hasK6ExecutionReferencesInValue(step.request));
+  return ast.steps.some((step) => isASTApiStep(step) && hasK6ExecutionReferencesInValue(step.request));
 }
 
 function hasK6ExecutionReferencesInValue(value: unknown): boolean {
@@ -426,6 +442,10 @@ function renderStep(
   index: number,
   baseUrlReference: string,
 ): string[] {
+  if (isASTInputStep(step)) {
+    return renderInputStep(step, index);
+  }
+
   const innerLines: string[] = [];
   const urlVariable = `url${index}`;
   const responseVariable = `res${index}`;
@@ -490,7 +510,36 @@ function renderStep(
   ];
 }
 
-function compilePathExpression(step: ASTStep): string {
+function renderInputStep(
+  step: ASTInputStep,
+  index: number,
+): string[] {
+  const valueVariable = `input${index}`;
+  const inputReference = compileVarsReference(step.input.name);
+  const lines = [`const ${valueVariable} = ${inputReference};`];
+
+  if (step.input.required) {
+    lines.push(
+      `if (${valueVariable} === undefined || ${valueVariable} === null || String(${valueVariable}).trim() === '') {`,
+      `  throw new Error(${JSON.stringify(`step "${step.id}": input ${step.input.name} is required. Pass --var ${step.input.name}=<value> before running k6.`)});`,
+      '}',
+    );
+  }
+
+  lines.push(
+    `if (${valueVariable} !== undefined && ${valueVariable} !== null && String(${valueVariable}).trim() !== '') {`,
+    `  ${compileContextReference(step.input.name)} = ${valueVariable};`,
+    '}',
+  );
+
+  return [
+    `  group(${JSON.stringify(`${step.id} INPUT ${step.input.name}`)}, () => {`,
+    ...lines.map((line) => `    ${line}`),
+    '  });',
+  ];
+}
+
+function compilePathExpression(step: ASTApiStep): string {
   const pathParams = step.request.pathParams ?? {};
   const pathParamPattern = /{([^}]+)}/g;
   let cursor = 0;
@@ -538,7 +587,7 @@ function renderHttpCall(
 }
 
 function renderExtract(
-  step: ASTStep,
+  step: ASTApiStep,
   index: number,
   responseVariable: string,
   urlVariable: string,
@@ -574,6 +623,10 @@ function renderMultipartFileDeclarations(ast: ASTScenario, options: K6GeneratorO
   const declarations: string[] = [];
 
   ast.steps.forEach((step, stepIndex) => {
+    if (isASTInputStep(step)) {
+      return;
+    }
+
     Object.values(step.request.multipart?.files ?? {}).forEach((file, fileIndex) => {
       declarations.push(
         `const ${renderMultipartFileVariable(stepIndex, fileIndex)} = open(${JSON.stringify(resolveMultipartOpenPath(ast, file.path, options))}, 'b');`,
@@ -584,7 +637,7 @@ function renderMultipartFileDeclarations(ast: ASTScenario, options: K6GeneratorO
   return declarations;
 }
 
-function renderMultipartBody(step: ASTStep, stepIndex: number): string {
+function renderMultipartBody(step: ASTApiStep, stepIndex: number): string {
   const multipart = step.request.multipart;
 
   if (multipart === undefined) {
@@ -651,7 +704,7 @@ function validateMultipartFilePath(filePath: string): void {
 }
 
 function renderCondition(
-  step: ASTStep,
+  step: ASTApiStep,
   index: number,
   responseVariable: string,
   urlVariable: string,
@@ -717,7 +770,7 @@ function renderRequestParams(
   return `{ headers: ${compileValueExpression(headers)}, tags: ${tagsVariable} }`;
 }
 
-function renderLogMetadata(scenarioName: string, step: ASTStep, method: string): string {
+function renderLogMetadata(scenarioName: string, step: ASTApiStep, method: string): string {
   return renderStringRecord({
     scenario: scenarioName,
     step: step.id,
@@ -726,7 +779,7 @@ function renderLogMetadata(scenarioName: string, step: ASTStep, method: string):
   });
 }
 
-function renderRequestTags(scenarioName: string, step: ASTStep, method: string): string {
+function renderRequestTags(scenarioName: string, step: ASTApiStep, method: string): string {
   return renderStringRecord({
     openapi_scenario: scenarioName,
     openapi_step: step.id,
@@ -757,15 +810,15 @@ function hasRequestEntries(value: Record<string, unknown> | undefined): boolean 
 }
 
 function hasQuery(ast: ASTScenario): boolean {
-  return ast.steps.some((step) => hasRequestEntries(step.request.query));
+  return ast.steps.some((step) => isASTApiStep(step) && hasRequestEntries(step.request.query));
 }
 
 function hasExtract(ast: ASTScenario): boolean {
-  return ast.steps.some((step) => step.extract && Object.keys(step.extract).length > 0);
+  return ast.steps.some((step) => isASTApiStep(step) && step.extract && Object.keys(step.extract).length > 0);
 }
 
 function hasChecks(ast: ASTScenario): boolean {
-  return hasSteps(ast) || hasExtract(ast);
+  return ast.steps.some(isASTApiStep) || hasExtract(ast);
 }
 
 function hasSteps(ast: ASTScenario): boolean {
@@ -789,6 +842,12 @@ function compileContextReference(variableName: string): string {
   return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(variableName)
     ? `context.${variableName}`
     : `context[${JSON.stringify(variableName)}]`;
+}
+
+function compileVarsReference(variableName: string): string {
+  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(variableName)
+    ? `VARS.${variableName}`
+    : `VARS[${JSON.stringify(variableName)}]`;
 }
 
 function escapeTemplateLiteral(value: string): string {

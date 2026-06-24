@@ -1,6 +1,7 @@
 import type {
   ScenarioExecutionReporter,
   ScenarioExecutionResult,
+  ScenarioInputProvider,
 } from '../executor/scenario.executor.js';
 import type { WritableLike } from './display.js';
 
@@ -20,6 +21,7 @@ export interface CliContext {
   fetch?: typeof fetch;
   interactive?: boolean;
   captureRequestResponseValues?: boolean;
+  inputProvider?: ScenarioInputProvider;
   testReporter?: ScenarioExecutionReporter;
 }
 

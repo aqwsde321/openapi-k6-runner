@@ -88,14 +88,14 @@ K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_OPEN=true k6 run __GENERATED_OUTPUT_ARG__
 ## Scenario 작성 규칙
 
 - `operationId`가 유일하면 `api.operationId`를 우선 사용합니다.
-- `operationId`가 없거나 애매하면 `api.method`와 `api.path`를 사용합니다.
+- `operationId`가 없거나 애매하면 `api.method`와 `api.path`를 사용합니다. SMS/메일 인증번호처럼 실행 중에 사람이 넣어야 하는 값은 `input` step으로 받습니다.
 - scenario 설명이 필요하면 루트 `description:`에 작성합니다. UI의 시나리오 요약에 표시됩니다.
 - 폴더는 UI 카테고리로 사용합니다. 예: `__DIRECTORY__/scenarios/auth/login.yaml`은 `-s auth/login`으로 실행합니다.
 - UI에서 폴더는 접고 펼칠 수 있으며, 재사용된 step은 요청 단계와 최근 실행 결과에서 `시나리오 사용: auth/login`처럼 출처가 표시됩니다.
 - `catalog --ai` 초안의 `<...>` placeholder가 남아 있으면 `validate`가 실패합니다.
 - `request.body`와 `request.multipart`는 같은 step에 함께 쓰지 않습니다.
 - `condition`은 검증식이지 분기 조건이 아닙니다.
-- 응답 값은 `extract`로 저장하고 뒤 step에서 `{{variableName}}`으로 참조합니다.
+- 응답 값은 `extract`, 실행 중 입력값은 `input`으로 저장하고 뒤 step에서 `{{variableName}}`으로 참조합니다. CI나 비대화형 실행은 `--var inputName=<value>`로 미리 넘깁니다.
 
 ## 재사용 규칙
 

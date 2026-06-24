@@ -3,6 +3,7 @@ import type { ServerResponse } from 'node:http';
 import { createAnsiHtmlState, renderAnsiChunkToHtml, type AnsiHtmlState } from '../ansi-html.js';
 import { createScenarioConsoleReporter } from '../test.reporter.js';
 import type {
+  ScenarioInputRequest,
   ScenarioExecutionReporter,
   ScenarioExecutionResult,
 } from '../../executor/scenario.executor.js';
@@ -22,6 +23,7 @@ export interface UiRunRecord {
   exitCode?: number;
   chunks: UiRunChunk[];
   testResult?: UiRunTestResult;
+  pendingInput?: UiRunPendingInput;
   clients: Set<ServerResponse>;
   ansiHtmlState: AnsiHtmlState;
 }
@@ -39,6 +41,22 @@ export interface UiRunTestResult {
   steps: UiRunStepResult[];
 }
 
+export interface UiRunPendingInput {
+  request: UiRunInputRequest;
+  resolve(value: unknown): void;
+}
+
+export interface UiRunInputRequest {
+  runId: string;
+  index: number;
+  totalSteps: number;
+  id: string;
+  name: string;
+  label?: string;
+  required: boolean;
+  sensitive?: boolean;
+}
+
 export interface UiRunStepResult {
   index: number;
   id: string;
@@ -50,7 +68,16 @@ export interface UiRunStepResult {
   url?: string;
   request?: UiRunRequestValue;
   response?: UiRunResponseValue;
+  input?: UiRunStepInputValue;
   responseStatus?: number;
+}
+
+export interface UiRunStepInputValue {
+  name: string;
+  label?: string;
+  source: 'vars' | 'prompt' | 'none';
+  provided: boolean;
+  sensitive?: boolean;
 }
 
 export interface UiRunRequestValue {
@@ -111,6 +138,54 @@ export function appendUiRunTestResult(run: UiRunRecord, result: UiRunTestResult)
   writeUiRunEvent(run, 'test-result', result);
 }
 
+export function requestUiRunInput(run: UiRunRecord, request: ScenarioInputRequest): Promise<unknown> {
+  return new Promise((resolve) => {
+    const event: UiRunInputRequest = {
+      runId: run.id,
+      index: request.index,
+      totalSteps: request.totalSteps,
+      id: request.id,
+      name: request.name,
+      ...(request.label === undefined ? {} : { label: request.label }),
+      required: request.required,
+      ...(request.sensitive === undefined ? {} : { sensitive: request.sensitive }),
+    };
+
+    run.pendingInput = {
+      request: event,
+      resolve,
+    };
+    writeUiRunEvent(run, 'input-request', event);
+  });
+}
+
+export function submitUiRunInput(run: UiRunRecord, body: unknown): { accepted: true } {
+  if (run.pendingInput === undefined) {
+    throw new Error(`run ${JSON.stringify(run.id)} is not waiting for input`);
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new Error('request body must be an object');
+  }
+
+  const record = body as Record<string, unknown>;
+  const name = record.name;
+
+  if (typeof name !== 'string' || name !== run.pendingInput.request.name) {
+    throw new Error(`input name must be ${JSON.stringify(run.pendingInput.request.name)}`);
+  }
+
+  const pending = run.pendingInput;
+  run.pendingInput = undefined;
+  writeUiRunEvent(run, 'input-submitted', {
+    runId: run.id,
+    id: pending.request.id,
+    name: pending.request.name,
+  });
+  pending.resolve(record.value);
+  return { accepted: true };
+}
+
 export function createUiRunTestResult(
   result: ScenarioExecutionResult,
   stepSources: UiScenarioStepSource[],
@@ -142,6 +217,17 @@ export function createUiRunTestResult(
             },
           }
         : {}),
+      ...(step.input === undefined
+        ? {}
+        : {
+            input: {
+              name: step.input.name,
+              ...(step.input.label === undefined ? {} : { label: step.input.label }),
+              source: step.input.source,
+              provided: step.input.provided,
+              ...(step.input.sensitive === undefined ? {} : { sensitive: step.input.sensitive }),
+            },
+          }),
       ...(step.response === undefined ? {} : { responseStatus: step.response.status }),
     })),
   };
@@ -194,6 +280,10 @@ export function streamUiRunEvents(run: UiRunRecord, response: ServerResponse): v
 
   if (run.testResult !== undefined) {
     writeSseEvent(response, 'test-result', run.testResult);
+  }
+
+  if (run.pendingInput !== undefined) {
+    writeSseEvent(response, 'input-request', run.pendingInput.request);
   }
 
   if (run.status !== 'running') {

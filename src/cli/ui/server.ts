@@ -2,9 +2,9 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import path from 'node:path';
 
 import { loadTestConfig, resolveConfigModule, type LoadTestConfig } from '../../config/load-test.config.js';
-import type { ScenarioExecutionReporter } from '../../executor/scenario.executor.js';
+import type { ScenarioExecutionReporter, ScenarioInputProvider } from '../../executor/scenario.executor.js';
 import { DEFAULT_WORKSPACE_DIR } from '../../scaffold/load-test.init.js';
-import { streamUiRunEvents, type UiRunRecord } from './run-state.js';
+import { streamUiRunEvents, submitUiRunInput, type UiRunRecord } from './run-state.js';
 import { startUiRun } from './run-command.js';
 import { checkUiServers } from './server-checks.js';
 import {
@@ -39,6 +39,7 @@ export interface CliContext {
   env?: Record<string, string | undefined>;
   fetch?: typeof fetch;
   interactive?: boolean;
+  inputProvider?: ScenarioInputProvider;
   testReporter?: ScenarioExecutionReporter;
 }
 
@@ -197,6 +198,20 @@ async function handleUiRequest(
     }
 
     streamUiRunEvents(run, response);
+    return;
+  }
+
+  if (request.method === 'POST' && requestUrl.pathname.startsWith('/api/runs/') && requestUrl.pathname.endsWith('/input')) {
+    const runId = requestUrl.pathname.slice('/api/runs/'.length, -'/input'.length);
+    const run = state.runs.get(runId);
+
+    if (run === undefined) {
+      writeUiJson(response, 404, { error: `run ${JSON.stringify(runId)} was not found` });
+      return;
+    }
+
+    const body = await readUiJsonBody(request);
+    writeUiJson(response, 200, submitUiRunInput(run, body));
     return;
   }
 

@@ -58,6 +58,57 @@ describe('AST builder', () => {
     ]);
   });
 
+  it('preserves input steps without resolving an OpenAPI operation', () => {
+    const registry = buildApiRegistry({
+      openapi: '3.0.3',
+      info: { title: 'Fixture API', version: '1.0.0' },
+      paths: {
+        '/phone-verification/verify': {
+          post: {
+            responses: { 200: { description: 'OK' } },
+          },
+        },
+      },
+    });
+    const scenario: Scenario = {
+      name: 'signup-with-sms',
+      steps: [
+        {
+          id: 'enter-phone-code',
+          input: {
+            name: 'signupPhoneCode',
+            label: 'SMS 인증번호',
+            required: true,
+          },
+        },
+        {
+          id: 'verify-phone-code',
+          api: { method: 'POST', path: '/phone-verification/verify' },
+        },
+      ],
+    };
+
+    const ast = buildAst(scenario, registry);
+
+    expect(ast.steps).toEqual([
+      {
+        id: 'enter-phone-code',
+        input: {
+          name: 'signupPhoneCode',
+          label: 'SMS 인증번호',
+          required: true,
+        },
+      },
+      {
+        id: 'verify-phone-code',
+        method: 'POST',
+        path: '/phone-verification/verify',
+        pathParameters: [],
+        request: {},
+      },
+    ]);
+  });
+
   it('resolves step api.module against isolated module registries', () => {
     const registries = new Map([
       ['auth', buildApiRegistry({
@@ -101,11 +152,7 @@ describe('AST builder', () => {
 
     const ast = buildAst(scenario, registries);
 
-    expect(ast.steps.map((step) => ({
-      id: step.id,
-      moduleName: step.moduleName,
-      path: step.path,
-    }))).toEqual([
+    expect(ast.steps).toMatchObject([
       { id: 'auth-health', moduleName: 'auth', path: '/auth/health' },
       { id: 'bos-health', moduleName: 'bos', path: '/bos/health' },
     ]);
@@ -190,15 +237,19 @@ describe('AST builder', () => {
 
     const ast = buildAst(scenario, registry);
 
-    expect(ast.steps[0]?.pathParameters).toEqual([
-      {
-        name: 'orderId',
-        in: 'path',
-        required: true,
-        schema: { type: 'string' },
+    expect(ast.steps[0]).toMatchObject({
+      pathParameters: [
+        {
+          name: 'orderId',
+          in: 'path',
+          required: true,
+          schema: { type: 'string' },
+        },
+      ],
+      request: {
+        pathParams: { orderId: '{{orderId}}' },
       },
-    ]);
-    expect(ast.steps[0]?.request.pathParams).toEqual({ orderId: '{{orderId}}' });
+    });
   });
 
   it('preserves headers, query, pathParams, and body request fields', () => {

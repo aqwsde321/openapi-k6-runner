@@ -13,6 +13,7 @@ import {
   writeDefaultModuleConfig,
   writeModuleConfigEntry,
 } from '../config/load-test.config.writer.js';
+import { isInputStep } from '../core/types.js';
 import { syncOpenApiSnapshot } from '../openapi/openapi.catalog.js';
 import { parseScenarioFile } from '../parser/scenario.parser.js';
 import type {
@@ -333,6 +334,10 @@ async function findScenarioModuleReferences(
     });
 
     for (const step of scenario.steps) {
+      if (isInputStep(step)) {
+        continue;
+      }
+
       if (
         step.api.module === moduleName ||
         (step.api.module === undefined && config.defaultModule === moduleName)

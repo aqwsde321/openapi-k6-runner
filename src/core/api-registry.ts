@@ -1,4 +1,4 @@
-import type { ApiRegistry, Step } from './types.js';
+import type { ApiRegistry, ApiStep } from './types.js';
 
 export type ApiRegistrySource = ApiRegistry | Map<string, ApiRegistry>;
 
@@ -7,7 +7,7 @@ export interface StepRegistryResolveOptions {
 }
 
 export function resolveStepRegistry(
-  step: Step,
+  step: ApiStep,
   registrySource: ApiRegistrySource,
   options: StepRegistryResolveOptions = {},
 ): { registry: ApiRegistry; moduleName?: string } {

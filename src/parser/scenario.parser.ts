@@ -3,7 +3,7 @@ import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 
 import { formatScenarioVarNameIssue } from '../core/scenario-vars.js';
-import type { ApiReference, ExtractRule, MultipartFile, MultipartRequest, Scenario, Step, StepRequest } from '../core/types.js';
+import type { ApiReference, ExtractRule, MultipartFile, MultipartRequest, Scenario, Step, StepInput, StepRequest } from '../core/types.js';
 
 interface ParsedStepEntry {
   step: Step;
@@ -537,6 +537,23 @@ function parseStep(value: unknown, stepPath: string): Step {
     throw new ScenarioParseError(`${stepPath}: id must not be empty`);
   }
 
+  if (rawStep.input !== undefined) {
+    if (rawStep.api !== undefined) {
+      throw new ScenarioParseError(`${stepPath}: step can contain only one of api or input`);
+    }
+
+    for (const key of ['request', 'extract', 'condition']) {
+      if (rawStep[key] !== undefined) {
+        throw new ScenarioParseError(`${stepPath}: input step cannot contain ${key}`);
+      }
+    }
+
+    return {
+      id,
+      input: parseStepInput(rawStep.input, `${stepPath}.input`),
+    };
+  }
+
   const api = parseApiReference(rawStep.api, `${stepPath}.api`);
   const request = rawStep.request === undefined
     ? undefined
@@ -554,6 +571,36 @@ function parseStep(value: unknown, stepPath: string): Step {
     ...(request === undefined ? {} : { request }),
     ...(extract === undefined ? {} : { extract }),
     ...(condition === undefined ? {} : { condition }),
+  };
+}
+
+function parseStepInput(value: unknown, pathLabel: string): StepInput {
+  const input = expectRecord(value, `${pathLabel}: input must be an object`);
+  const name = expectString(input.name, `${pathLabel}.name must be a string`).trim();
+  const nameIssue = formatScenarioVarNameIssue(name, `${pathLabel}.name`);
+  const label = input.label === undefined
+    ? undefined
+    : expectString(input.label, `${pathLabel}.label must be a string`).trim();
+  const required = input.required === undefined
+    ? true
+    : expectBoolean(input.required, `${pathLabel}.required must be a boolean`);
+  const sensitive = input.sensitive === undefined
+    ? false
+    : expectBoolean(input.sensitive, `${pathLabel}.sensitive must be a boolean`);
+
+  if (nameIssue !== undefined) {
+    throw new ScenarioParseError(nameIssue.replace(' for {{vars.NAME}} references', ' for {{NAME}} references'));
+  }
+
+  if (label !== undefined && !label) {
+    throw new ScenarioParseError(`${pathLabel}.label must not be empty`);
+  }
+
+  return {
+    name,
+    ...(label === undefined ? {} : { label }),
+    required,
+    ...(sensitive ? { sensitive } : {}),
   };
 }
 
@@ -744,6 +791,14 @@ function expectRecord(value: unknown, message: string): Record<string, unknown> 
 
 function expectString(value: unknown, message: string): string {
   if (typeof value !== 'string') {
+    throw new ScenarioParseError(message);
+  }
+
+  return value;
+}
+
+function expectBoolean(value: unknown, message: string): boolean {
+  if (typeof value !== 'boolean') {
     throw new ScenarioParseError(message);
   }
 

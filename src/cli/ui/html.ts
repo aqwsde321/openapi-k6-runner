@@ -665,6 +665,49 @@ export const UI_HTML = String.raw`<!doctype html>
     }
     .run-summary-message .error { color: var(--bad); }
     .run-summary-message .next { color: var(--warn); }
+    .run-input-prompt {
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+      padding-top: 8px;
+    }
+    .run-input-title {
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 750;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .run-input-meta {
+      color: var(--muted);
+      font-size: 11px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .run-input-form {
+      display: grid;
+      gap: 6px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      min-width: 0;
+    }
+    .run-input-form input {
+      background: #fff;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      color: var(--text);
+      font: 12px/1.2 inherit;
+      height: 30px;
+      min-width: 0;
+      padding: 0 9px;
+    }
+    .run-input-form button {
+      border-radius: 6px;
+      font-size: 12px;
+      height: 30px;
+      padding: 0 10px;
+      white-space: nowrap;
+    }
     .run-step-results {
       border-top: 1px solid var(--line);
       display: grid;
@@ -1493,6 +1536,7 @@ export const UI_HTML = String.raw`<!doctype html>
       const parts = [];
       const api = ((step.method || '') + ' ' + (step.path || '')).trim();
       if (api) parts.push(api);
+      if (step.input && step.input.name) parts.push('입력 ' + step.input.name);
       if (typeof step.responseStatus === 'number') parts.push('HTTP ' + step.responseStatus);
       if (typeof step.durationMs === 'number') parts.push(Math.round(step.durationMs) + 'ms');
       return parts.join(' · ');
@@ -1567,6 +1611,25 @@ export const UI_HTML = String.raw`<!doctype html>
       }).join('') + '</div>';
     }
 
+    function renderRunInputPrompt(item) {
+      const pending = item && item.pendingInput;
+      if (!pending) return '';
+      const label = pending.label || pending.name;
+      const type = pending.sensitive ? 'password' : 'text';
+      const index = typeof pending.index === 'number' ? pending.index + 1 : '';
+      const position = index ? index + '/' + pending.totalSteps + ' · ' : '';
+      return '<div class="run-input-prompt">' +
+        '<div>' +
+          '<div class="run-input-title">' + escapeHtml(label) + '</div>' +
+          '<div class="run-input-meta">' + escapeHtml(position + pending.id + ' · ' + pending.name) + '</div>' +
+        '</div>' +
+        '<form class="run-input-form" data-run-id="' + escapeHtml(item.id) + '" data-input-name="' + escapeHtml(pending.name) + '">' +
+          '<input name="value" type="' + type + '" autocomplete="off" autofocus placeholder="' + escapeHtml(label) + '">' +
+          '<button class="blue" type="submit">계속</button>' +
+        '</form>' +
+      '</div>';
+    }
+
     function renderRunMessage(item, summary) {
       const failedSteps = (item.stepResults || []).filter((step) => step.status === 'failed');
       if (failedSteps.length > 0) {
@@ -1623,6 +1686,7 @@ export const UI_HTML = String.raw`<!doctype html>
           '<div class="run-summary-cell"><div class="run-summary-label">시각</div><div class="run-summary-value">' + escapeHtml(formatRunHistoryTime(item.finishedAt || item.startedAt)) + '</div></div>' +
         '</div>' +
         message +
+        renderRunInputPrompt(item) +
         renderRunStepResults(item) +
       '</div>';
     }
@@ -1696,7 +1760,8 @@ export const UI_HTML = String.raw`<!doctype html>
         exitCode: null,
         html: '',
         text: '',
-        stepResults: []
+        stepResults: [],
+        pendingInput: null
       };
       saveScenarioRun(runItem);
       state.activeOutputRunId = result.runId;
@@ -1727,11 +1792,27 @@ export const UI_HTML = String.raw`<!doctype html>
           renderRunSummary();
         }
       });
+      events.addEventListener('input-request', (event) => {
+        runItem.pendingInput = JSON.parse(event.data);
+        if (state.selected === runScenario) {
+          renderRunSummary();
+          focusRunInput(result.runId);
+          setHint('입력값 대기 중입니다.', 'warn');
+        }
+      });
+      events.addEventListener('input-submitted', () => {
+        runItem.pendingInput = null;
+        if (state.selected === runScenario) {
+          renderRunSummary();
+          updateRunHint();
+        }
+      });
       events.addEventListener('done', (event) => {
         const data = JSON.parse(event.data);
         runItem.status = data.status;
         runItem.finishedAt = new Date().toISOString();
         runItem.exitCode = data.exitCode;
+        runItem.pendingInput = null;
         state.lastRun.set(runScenario, data.status);
         if (state.activeOutputRunId === result.runId) {
           setStatus(els.runStatus, data.status);
@@ -1768,6 +1849,44 @@ export const UI_HTML = String.raw`<!doctype html>
       };
     }
 
+    function focusRunInput(runId) {
+      const forms = Array.from(els.runSummary.querySelectorAll('.run-input-form'));
+      const form = forms.find((candidate) => candidate.getAttribute('data-run-id') === String(runId));
+      const input = form ? form.querySelector('input[name="value"]') : null;
+      if (input) input.focus();
+    }
+
+    async function submitRunInput(event) {
+      const form = event.target && event.target.closest ? event.target.closest('.run-input-form') : null;
+      if (!form) return;
+      event.preventDefault();
+      const runId = form.getAttribute('data-run-id') || '';
+      const name = form.getAttribute('data-input-name') || '';
+      const input = form.querySelector('input[name="value"]');
+      const button = form.querySelector('button');
+      const value = input ? input.value : '';
+      if (input) input.disabled = true;
+      if (button) button.disabled = true;
+
+      try {
+        await fetchJson('/api/runs/' + encodeURIComponent(runId) + '/input', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: name, value: value })
+        });
+        const item = findRunById(runId);
+        if (item) item.pendingInput = null;
+        renderRunSummary();
+        updateRunHint();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (input) input.disabled = false;
+        if (button) button.disabled = false;
+        setHint(message, 'bad');
+        focusRunInput(runId);
+      }
+    }
+
     els.searchInput.addEventListener('input', renderScenarioList);
     els.checkServersBtn.addEventListener('click', checkServers);
     els.reconnectBtn.addEventListener('click', reconnectUi);
@@ -1775,6 +1894,7 @@ export const UI_HTML = String.raw`<!doctype html>
       state.showRunValues = !state.showRunValues;
       renderRunSummary();
     });
+    els.runSummary.addEventListener('submit', submitRunInput);
     els.validateBtn.addEventListener('click', () => runCommand('validate'));
     els.testBtn.addEventListener('click', () => runCommand('test'));
     els.clearBtn.addEventListener('click', clearRunOutput);

@@ -87,13 +87,17 @@ describe('README usage guide', () => {
 
     expect(readme).toContain('## 3. Scenario 작성');
     expect(readme).toContain('폴더는 UI의 카테고리로 쓰입니다. 예를 들어 `openapi-k6/scenarios/auth/login.yaml`은 UI에서 `auth` 그룹에 표시되고, CLI에서는 `-s auth/login`으로 실행합니다.');
-    expect(readme).toContain('각 step에는 `id`와 `api`가 필요합니다.');
+    expect(readme).toContain('API 호출 step에는 `id`와 `api`가 필요합니다.');
+    expect(readme).toContain('SMS/메일 인증번호처럼 실행 중에 사람이 넣어야 하는 값은 `input` step을 사용합니다.');
     expect(readme).toContain('`request`, `extract`, `condition`은 필요한 경우만 둡니다.');
     expect(readme).toContain('`condition`을 생략하면 `test`와 `run`은 HTTP status `< 400`을 성공으로 봅니다.');
     expect(readme).toContain('name: smoke');
     expect(readme).toContain('Authorization: "Bearer {{token}}"');
     expect(readme).toContain('비밀값은 scenario YAML에 직접 쓰지 않습니다.');
     expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 scenario에 남아 있으면 `validate`가 실패합니다.');
+    expect(readme).toContain('서버 응답에서 자동 추출할 수 없고 실행 중에만 알 수 있는 값은 `input` step으로 받습니다.');
+    expect(readme).toContain('name: signup-with-sms');
+    expect(readme).toContain('name: signupPhoneCode');
 
     expect(readme).toContain('## 4. 검증과 실행');
     expect(readme).toContain('| `validate` | 없음 | 없음 | YAML과 OpenAPI 정합성 확인 |');

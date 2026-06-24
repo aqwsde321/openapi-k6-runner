@@ -1,5 +1,5 @@
 import { collectTemplateReferences } from '../../core/template.js';
-import type { Scenario } from '../../core/types.js';
+import { isInputStep, type Scenario } from '../../core/types.js';
 
 export function analyzeUiScenario(scenario: Scenario): {
   modules: string[];
@@ -11,6 +11,10 @@ export function analyzeUiScenario(scenario: Scenario): {
   const vars = new Set<string>();
 
   for (const step of scenario.steps) {
+    if (isInputStep(step)) {
+      continue;
+    }
+
     if (step.api.module !== undefined) {
       modules.add(step.api.module);
     }

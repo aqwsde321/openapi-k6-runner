@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-06-24
+
+### Added
+
+- Scenario YAML에 `input` step을 추가해 SMS/메일 인증번호처럼 실행 중에만 알 수 있는 값을 CLI TTY나 UI에서 입력받아 뒤 step의 `{{inputName}}`으로 재사용할 수 있게 했습니다.
+- UI `test` 실행 중 input step을 만나면 최근 실행 결과 영역에서 입력 폼을 표시하고, 제출 후 같은 실행을 이어가도록 했습니다.
+- CLI `test` 실행은 TTY에서 input step 프롬프트를 표시하고, 비대화형 실행에서는 `--var inputName=<value>` 안내와 함께 해당 step에서 실패하도록 했습니다.
+
+### Changed
+
+- generated k6 스크립트는 input step 값을 `--var`/scenario vars 기반 `VARS.inputName`에서 읽어 context에 등록하고, 필수 값이 없으면 명확히 실패하도록 했습니다.
+- README, scaffold README, Codex 스킬 안내에 input step 사용 기준과 SMS 인증번호 예시를 추가했습니다.
+
 ## [0.13.0] - 2026-06-24
 
 ### Changed
@@ -262,7 +275,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.10.0...v0.11.0
