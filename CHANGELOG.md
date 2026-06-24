@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-06-24
+
+### Added
+
+- UI 최근 실행 결과의 각 step에 `복사` 버튼을 추가해 실패 지점의 요청, 응답, 검사식, 추출 결과를 쉽게 복사할 수 있게 했습니다.
+- UI 실행 로그 영역 안에 로그 전체 복사 아이콘 버튼을 추가했습니다.
+- UI 시나리오 검색이 Scenario YAML의 `description` 내용도 함께 검색하도록 했습니다.
+
+### Changed
+
+- UI 최근 실행 결과의 `요청/응답 숨김/보기` 토글을 가운데 패널 고정 서브헤더로 옮겨 긴 요청/응답 내용을 스크롤해도 항상 같은 위치에서 전환할 수 있게 했습니다.
+- UI test 결과 이벤트에 condition, extract, error 요약을 포함해 실패 step 복사 내용이 원인 정보를 담도록 했습니다.
+
 ## [0.14.0] - 2026-06-24
 
 ### Added
@@ -275,7 +288,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.11.0...v0.12.0
