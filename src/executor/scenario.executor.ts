@@ -41,6 +41,7 @@ export interface ScenarioExecutorOptions {
   k6?: Partial<K6ExecutionValues>;
   fetch?: FetchLike;
   responseBodyLimit?: number;
+  captureRequestResponseValues?: boolean;
   reporter?: ScenarioExecutionReporter;
 }
 
@@ -108,15 +109,22 @@ export interface StepExecutionResult {
   url?: string;
   durationMs: number;
   passed: boolean;
+  request?: StepRequestResult;
   response?: StepResponseResult;
   condition?: ConditionExecutionResult;
   extracts: ExtractExecutionResult[];
   error?: string;
 }
 
+export interface StepRequestResult {
+  headers?: Record<string, string>;
+  body?: string;
+}
+
 export interface StepResponseResult {
   status: number;
   statusText: string;
+  headers?: Record<string, string>;
   body: string;
 }
 
@@ -144,6 +152,7 @@ interface RuntimeState {
 interface RuntimeRequest {
   url: string;
   init: RequestInit;
+  details?: StepRequestResult;
 }
 
 export class ScenarioExecutionError extends Error {
@@ -194,6 +203,7 @@ export async function executeAstScenario(
       fetchImpl,
       fileRootDir,
       state,
+      captureRequestResponseValues: options.captureRequestResponseValues === true,
       reporter,
       scenario: ast.name,
       totalSteps: ast.steps.length,
@@ -280,6 +290,7 @@ async function executeStep(
     fetchImpl: FetchLike;
     fileRootDir: string;
     state: RuntimeState;
+    captureRequestResponseValues: boolean;
     reporter?: ScenarioExecutionReporter;
     scenario: string;
     totalSteps: number;
@@ -312,6 +323,7 @@ async function executeStep(
       resolveStepBaseUrl(step, options.baseUrl, options.moduleBaseUrls),
       options.fileRootDir,
       options.state,
+      options.captureRequestResponseValues,
     );
     url = request.url;
     await options.reporter?.onStepRequest?.({
@@ -324,6 +336,7 @@ async function executeStep(
     const responseResult = {
       status: response.status,
       statusText: response.statusText,
+      ...(options.captureRequestResponseValues ? { headers: Object.fromEntries(response.headers.entries()) } : {}),
       body,
     };
     const condition = step.condition === undefined || parsedCondition === undefined
@@ -344,6 +357,7 @@ async function executeStep(
       url,
       durationMs: performance.now() - startedAt,
       passed,
+      ...(request.details === undefined ? {} : { request: request.details }),
       response: responseResult,
       ...(condition === undefined ? {} : { condition }),
       extracts,
@@ -405,6 +419,7 @@ async function buildRuntimeRequest(
   baseUrl: string,
   fileRootDir: string,
   state: RuntimeState,
+  captureRequestResponseValues: boolean,
 ): Promise<RuntimeRequest> {
   const hasBody = step.request.body !== undefined;
   const hasMultipart = step.request.multipart !== undefined;
@@ -428,12 +443,66 @@ async function buildRuntimeRequest(
   };
 
   if (hasJsonBody) {
-    init.body = JSON.stringify(evaluateTemplateValue(step.request.body, state));
+    const bodyValue = evaluateTemplateValue(step.request.body, state);
+    init.body = JSON.stringify(bodyValue);
   } else if (hasMultipart) {
     init.body = await buildMultipartBody(step, fileRootDir, state);
   }
 
-  return { url, init };
+  return {
+    url,
+    init,
+    ...(captureRequestResponseValues ? { details: buildRequestDetails(step, headers, init.body, state) } : {}),
+  };
+}
+
+function buildRequestDetails(
+  step: ASTStep,
+  headers: Record<string, string>,
+  body: RequestInit['body'],
+  state: RuntimeState,
+): StepRequestResult {
+  return {
+    ...(Object.keys(headers).length === 0 ? {} : { headers }),
+    ...(body === undefined || body === null ? {} : { body: formatRequestBodyDetails(step, body, state) }),
+  };
+}
+
+function formatRequestBodyDetails(
+  step: ASTStep,
+  body: NonNullable<RequestInit['body']>,
+  state: RuntimeState,
+): string {
+  if (typeof body === 'string') {
+    return formatJsonString(body);
+  }
+
+  if (step.request.multipart !== undefined) {
+    return JSON.stringify(formatMultipartDetails(step.request.multipart, state), null, 2);
+  }
+
+  return String(body);
+}
+
+function formatJsonString(value: string): string {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    return value;
+  }
+}
+
+function formatMultipartDetails(multipart: NonNullable<StepRequest['multipart']>, state: RuntimeState): unknown {
+  return {
+    ...(multipart.fields === undefined ? {} : { fields: evaluateRecord(multipart.fields, state) ?? {} }),
+    files: Object.fromEntries(
+      Object.entries(multipart.files).map(([fieldName, file]) => [fieldName, {
+        path: file.path,
+        ...(file.filename === undefined ? {} : { filename: file.filename }),
+        ...(file.contentType === undefined ? {} : { contentType: file.contentType }),
+      }]),
+    ),
+  };
 }
 
 function compilePath(step: ASTStep, state: RuntimeState): string {

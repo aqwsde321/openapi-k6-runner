@@ -47,7 +47,22 @@ export interface UiRunStepResult {
   source: UiScenarioStepSource;
   method: string;
   path: string;
+  url?: string;
+  request?: UiRunRequestValue;
+  response?: UiRunResponseValue;
   responseStatus?: number;
+}
+
+export interface UiRunRequestValue {
+  headers?: Record<string, string>;
+  body?: string;
+}
+
+export interface UiRunResponseValue {
+  status: number;
+  statusText: string;
+  headers?: Record<string, string>;
+  body: string;
 }
 
 export interface UiScenarioStepSource {
@@ -99,7 +114,10 @@ export function appendUiRunTestResult(run: UiRunRecord, result: UiRunTestResult)
 export function createUiRunTestResult(
   result: ScenarioExecutionResult,
   stepSources: UiScenarioStepSource[],
+  options: { includeValues?: boolean } = {},
 ): UiRunTestResult {
+  const includeValues = options.includeValues === true;
+
   return {
     scenario: result.scenario,
     status: result.passed ? 'passed' : 'failed',
@@ -112,6 +130,18 @@ export function createUiRunTestResult(
       source: stepSources[step.index] ?? { kind: 'direct' },
       method: step.method,
       path: step.path,
+      ...(includeValues && step.url !== undefined ? { url: step.url } : {}),
+      ...(includeValues && step.request !== undefined ? { request: step.request } : {}),
+      ...(includeValues && step.response !== undefined
+        ? {
+            response: {
+              status: step.response.status,
+              statusText: step.response.statusText,
+              ...(step.response.headers === undefined ? {} : { headers: step.response.headers }),
+              body: step.response.body,
+            },
+          }
+        : {}),
       ...(step.response === undefined ? {} : { responseStatus: step.response.status }),
     })),
   };

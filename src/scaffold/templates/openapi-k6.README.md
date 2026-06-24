@@ -59,6 +59,7 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 
 UI는 `scenarios/` 아래 폴더를 그룹으로 보여주고, 요청 단계에서 각 step의 출처를 `직접 정의`, `시나리오 사용: auth/login`처럼 표시합니다.
 `test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다.
+`요청/응답 값`을 켜고 `test`를 실행하면 최근 실행 결과에서 step별 실제 요청 URL, headers/body, 응답 status, headers/body를 확인할 수 있습니다.
 상단 서버 상태는 module별 baseUrl 연결 여부와 snapshot 상태를 요약합니다.
 
 자주 쓰는 runner:

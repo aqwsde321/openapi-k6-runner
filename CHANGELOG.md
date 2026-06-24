@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-06-24
+
+### Added
+
+- UI `test` 실행에서 `요청/응답 값`을 켜면 최근 실행 결과의 각 step에 실제 요청 URL, headers/body, 응답 status, headers/body를 확인할 수 있게 했습니다.
+
 ## [0.11.0] - 2026-06-23
 
 ### Added
@@ -249,7 +255,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.9.0...v0.9.1

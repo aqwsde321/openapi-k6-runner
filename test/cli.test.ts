@@ -1820,6 +1820,12 @@ describe('openapi-k6 CLI', () => {
         body: JSON.stringify({ command: 'test', scenario: 'smoke' }),
       })).json() as { runId: string };
       const testEvents = await (await fetch(`${ui.url}/api/runs/${testRun.runId}/events`)).text();
+      const detailedTestRun = await (await fetch(`${ui.url}/api/run`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ command: 'test', scenario: 'smoke', showValues: true }),
+      })).json() as { runId: string };
+      const detailedTestEvents = await (await fetch(`${ui.url}/api/runs/${detailedTestRun.runId}/events`)).text();
       const useTestRun = await (await fetch(`${ui.url}/api/run`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -1840,6 +1846,8 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('<button id="validateBtn" class="blue" disabled>validate</button>');
       expect(html).toContain('<button id="testBtn" class="primary" disabled>test</button>');
       expect(html).toContain('<button id="clearBtn">clear</button>');
+      expect(html).toContain('id="showValuesToggle"');
+      expect(html).toContain('요청/응답 값');
       expect(html).not.toContain('id="configPath"');
       expect(html).not.toContain('id="refreshBtn"');
       expect(html).not.toContain('>새로고침</button>');
@@ -1912,6 +1920,8 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain("events.addEventListener('test-result'");
       expect(html).toContain('runItem.stepResults = Array.isArray(data.steps) ? data.steps : [];');
       expect(html).toContain('run-step-results');
+      expect(html).toContain('run-step-values');
+      expect(html).toContain("showValues: command === 'test' && els.showValuesToggle.checked");
       expect(html).toContain('formatStepSource');
       expect(html).toContain('step-source');
       expect(html).toContain('step-caret');
@@ -2000,6 +2010,11 @@ describe('openapi-k6 CLI', () => {
       expect(testEvents).toContain('event: test-result');
       expect(testEvents).toContain('"id":"health"');
       expect(testEvents).toContain('"source":{"kind":"direct"}');
+      expect(testEvents).not.toContain('"response":{"status":200');
+      expect(detailedTestEvents).toContain('event: test-result');
+      expect(detailedTestEvents).toContain('"url":"https://app-api.test.local/app-health"');
+      expect(detailedTestEvents).toContain('"response":{"status":200');
+      expect(detailedTestEvents).toContain('"body":"{\\"ok\\":true}"');
       expect(useTestEvents).toContain('$ npx --yes openapi-k6 test -s order/use-login --config openapi-k6/config.yaml');
       expect(useTestEvents).not.toContain('--scenario openapi-k6/scenarios/order/use-login.yaml');
       expect(useTestEvents).toContain('event: test-result');
@@ -2007,7 +2022,7 @@ describe('openapi-k6 CLI', () => {
       expect(useTestEvents).toContain('"id":"health"');
       expect(useTestEvents).toContain('"source":{"kind":"use","reference":"auth/login"}');
       expect(useTestEvents).toContain('"responseStatus":200');
-      expect(reportedScenarios).toEqual(['smoke', 'use-login']);
+      expect(reportedScenarios).toEqual(['smoke', 'smoke', 'use-login']);
     } finally {
       await ui.close();
     }

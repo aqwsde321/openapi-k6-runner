@@ -334,6 +334,64 @@ describe('scenario executor', () => {
     expect(result.steps[0].error).toBe('Missing context.orderId for template "{{orderId}}"');
   });
 
+  it('captures request and response values only when enabled', async () => {
+    const ast: ASTScenario = {
+      name: 'request-response-values',
+      steps: [
+        {
+          id: 'create-order',
+          method: 'POST',
+          path: '/orders',
+          pathParameters: [],
+          request: {
+            headers: {
+              Authorization: 'Bearer {{env.ACCESS_TOKEN}}',
+            },
+            body: {
+              sku: 'SKU-001',
+              quantity: 2,
+            },
+          },
+        },
+      ],
+    };
+    const fetchOrder = async () => jsonResponse({ id: 'order-1', ok: true }, 201, 'Created');
+    const defaultResult = await executeAstScenario(ast, {
+      baseUrl: 'https://api.test.local',
+      env: {
+        ACCESS_TOKEN: 'actual-token',
+      },
+      fetch: fetchOrder,
+    });
+    const detailedResult = await executeAstScenario(ast, {
+      baseUrl: 'https://api.test.local',
+      env: {
+        ACCESS_TOKEN: 'actual-token',
+      },
+      captureRequestResponseValues: true,
+      fetch: fetchOrder,
+    });
+
+    expect(defaultResult.steps[0].request).toBeUndefined();
+    expect(defaultResult.steps[0].response?.headers).toBeUndefined();
+    expect(detailedResult.steps[0].request).toEqual({
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer actual-token',
+      },
+      body: [
+        '{',
+        '  "sku": "SKU-001",',
+        '  "quantity": 2',
+        '}',
+      ].join('\n'),
+    });
+    expect(detailedResult.steps[0].response?.headers).toMatchObject({
+      'content-type': 'application/json',
+    });
+    expect(detailedResult.steps[0].response?.body).toBe('{"id":"order-1","ok":true}');
+  });
+
   it('executes multipart upload requests with load-tests-relative fixture files', async () => {
     const workspace = await mkdtemp(path.join(tmpdir(), 'openapi-k6-executor-'));
     cleanupTasks.push(() => rm(workspace, { recursive: true, force: true }));

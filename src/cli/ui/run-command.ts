@@ -45,6 +45,7 @@ export interface UiRunCliContext {
   env?: Record<string, string | undefined>;
   fetch?: typeof fetch;
   interactive?: boolean;
+  captureRequestResponseValues?: boolean;
   testReporter?: ScenarioExecutionReporter;
 }
 
@@ -81,6 +82,7 @@ export async function startUiRun(
 function parseUiRunPayload(value: unknown): {
   command: 'validate' | 'test';
   scenario: string;
+  showValues: boolean;
   varFile: string[];
   vars: string[];
 } {
@@ -103,6 +105,7 @@ function parseUiRunPayload(value: unknown): {
   return {
     command,
     scenario,
+    showValues: record.showValues === true,
     varFile: parseUiStringArray(record.varFile, 'varFile'),
     vars: parseUiStringArray(record.vars, 'vars'),
   };
@@ -111,7 +114,7 @@ function parseUiRunPayload(value: unknown): {
 async function runUiCliCommand(
   state: UiRunCommandState,
   run: UiRunRecord,
-  payload: { command: 'validate' | 'test'; scenario: string; varFile: string[]; vars: string[] },
+  payload: { command: 'validate' | 'test'; scenario: string; showValues: boolean; varFile: string[]; vars: string[] },
 ): Promise<void> {
   const scenarioPath = resolveUiScenarioPath(state, payload.scenario);
   const stepSources = payload.command === 'test'
@@ -135,7 +138,9 @@ async function runUiCliCommand(
   const testReporter = payload.command === 'test'
     ? createUiScenarioReporter(stdout, state.context.testReporter, {
         onScenarioEnd(result) {
-          appendUiRunTestResult(run, createUiRunTestResult(result, stepSources));
+          appendUiRunTestResult(run, createUiRunTestResult(result, stepSources, {
+            includeValues: payload.showValues,
+          }));
         },
       })
     : state.context.testReporter;
@@ -148,6 +153,7 @@ async function runUiCliCommand(
       stderr,
       env: state.context.env,
       fetch: state.context.fetch,
+      captureRequestResponseValues: payload.showValues,
       testReporter,
     });
     finishUiRun(run, 'passed', 0);

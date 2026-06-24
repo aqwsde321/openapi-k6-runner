@@ -205,6 +205,12 @@ export const UI_HTML = String.raw`<!doctype html>
       background: #fff;
       color: var(--text);
     }
+    input[type="checkbox"] {
+      height: 14px;
+      margin: 0;
+      padding: 0;
+      width: 14px;
+    }
     button {
       border: 1px solid var(--line);
       background: #fff;
@@ -544,6 +550,23 @@ export const UI_HTML = String.raw`<!doctype html>
       grid-template-columns: repeat(3, max-content);
       gap: 8px;
     }
+    .run-options {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-width: 0;
+    }
+    .value-toggle {
+      align-items: center;
+      color: var(--muted);
+      display: inline-flex;
+      font-size: 12px;
+      font-weight: 700;
+      gap: 6px;
+      line-height: 1.35;
+      min-width: 0;
+    }
     .run-summary {
       background: transparent;
       border: 0;
@@ -651,14 +674,19 @@ export const UI_HTML = String.raw`<!doctype html>
       padding-top: 2px;
     }
     .run-step-result {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+      padding: 6px 0;
+    }
+    .run-step-result + .run-step-result { border-top: 1px solid var(--line); }
+    .run-step-result-row {
       align-items: start;
       display: grid;
       gap: 8px;
       grid-template-columns: minmax(0, 1fr) max-content;
       min-width: 0;
-      padding: 6px 0;
     }
-    .run-step-result + .run-step-result { border-top: 1px solid var(--line); }
     .run-step-result-main {
       display: grid;
       gap: 2px;
@@ -681,6 +709,37 @@ export const UI_HTML = String.raw`<!doctype html>
     .run-step-result-source {
       font-size: 11px;
       justify-self: end;
+    }
+    .run-step-values {
+      border-left: 2px solid var(--line);
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+      padding-left: 9px;
+    }
+    .run-step-value {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .run-step-value-title {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .run-step-value-code {
+      background: var(--terminal);
+      border-radius: 6px;
+      color: #f3f7ff;
+      font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      margin: 0;
+      max-height: 220px;
+      min-width: 0;
+      overflow: auto;
+      padding: 8px;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     .terminal {
       margin: 0;
@@ -828,6 +887,9 @@ export const UI_HTML = String.raw`<!doctype html>
           <button id="testBtn" class="primary" disabled>test</button>
           <button id="clearBtn">clear</button>
         </div>
+        <div class="run-options">
+          <label class="value-toggle"><input id="showValuesToggle" type="checkbox">요청/응답 값</label>
+        </div>
         <span id="runHint" class="hint">시나리오를 선택하세요.</span>
       </div>
       <pre id="output" class="terminal">시나리오를 선택한 뒤 검증/실행하세요.</pre>
@@ -876,6 +938,7 @@ export const UI_HTML = String.raw`<!doctype html>
       validateBtn: document.getElementById('validateBtn'),
       testBtn: document.getElementById('testBtn'),
       clearBtn: document.getElementById('clearBtn'),
+      showValuesToggle: document.getElementById('showValuesToggle'),
       output: document.getElementById('output'),
       runStatus: document.getElementById('runStatus'),
       runHint: document.getElementById('runHint'),
@@ -1437,6 +1500,51 @@ export const UI_HTML = String.raw`<!doctype html>
       return parts.join(' · ');
     }
 
+    function formatBodyValue(value) {
+      const text = String(value);
+      try {
+        return JSON.stringify(JSON.parse(text), null, 2);
+      } catch (_error) {
+        return text;
+      }
+    }
+
+    function formatJsonValue(value) {
+      return JSON.stringify(value, null, 2);
+    }
+
+    function renderStepValueBlock(title, value) {
+      if (!value) return '';
+      return '<div class="run-step-value">' +
+        '<div class="run-step-value-title">' + escapeHtml(title) + '</div>' +
+        '<pre class="run-step-value-code">' + escapeHtml(value) + '</pre>' +
+      '</div>';
+    }
+
+    function renderRunStepValues(step) {
+      const request = step.request || {};
+      const response = step.response;
+      const requestParts = [];
+      if (step.url) requestParts.push('url: ' + step.url);
+      if (request.headers) requestParts.push('headers:\n' + formatJsonValue(request.headers));
+      if (request.body !== undefined) requestParts.push('body:\n' + formatBodyValue(request.body));
+
+      const responseParts = [];
+      if (response) {
+        const statusText = response.statusText ? ' ' + response.statusText : '';
+        responseParts.push('status: ' + response.status + statusText);
+        if (response.headers) responseParts.push('headers:\n' + formatJsonValue(response.headers));
+        responseParts.push('body:\n' + formatBodyValue(response.body || ''));
+      }
+
+      const body = [
+        renderStepValueBlock('요청', requestParts.join('\n\n')),
+        renderStepValueBlock('응답', responseParts.join('\n\n'))
+      ].filter(Boolean).join('');
+
+      return body ? '<div class="run-step-values">' + body + '</div>' : '';
+    }
+
     function renderRunStepResults(item) {
       if (!item.stepResults || item.stepResults.length === 0) return '';
 
@@ -1445,11 +1553,14 @@ export const UI_HTML = String.raw`<!doctype html>
         const title = (index ? index + '. ' : '') + step.id;
         const status = step.status || 'unknown';
         return '<div class="run-step-result">' +
-          '<span class="run-step-result-main">' +
-            '<span class="run-step-result-title">' + escapeHtml(title) + ' <span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span></span>' +
-            '<span class="run-step-result-meta">' + escapeHtml(formatStepResultMeta(step)) + '</span>' +
-          '</span>' +
-          '<span class="pill run-step-result-source">' + escapeHtml(formatStepSource(step.source)) + '</span>' +
+          '<div class="run-step-result-row">' +
+            '<span class="run-step-result-main">' +
+              '<span class="run-step-result-title">' + escapeHtml(title) + ' <span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span></span>' +
+              '<span class="run-step-result-meta">' + escapeHtml(formatStepResultMeta(step)) + '</span>' +
+            '</span>' +
+            '<span class="pill run-step-result-source">' + escapeHtml(formatStepSource(step.source)) + '</span>' +
+          '</div>' +
+          renderRunStepValues(step) +
         '</div>';
       }).join('') + '</div>';
     }
@@ -1547,7 +1658,7 @@ export const UI_HTML = String.raw`<!doctype html>
         result = await fetchJson('/api/run', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ command: command, scenario: runScenario })
+          body: JSON.stringify({ command: command, scenario: runScenario, showValues: command === 'test' && els.showValuesToggle.checked })
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

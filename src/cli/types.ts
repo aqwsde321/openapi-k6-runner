@@ -19,6 +19,7 @@ export interface CliContext {
   env?: Record<string, string | undefined>;
   fetch?: typeof fetch;
   interactive?: boolean;
+  captureRequestResponseValues?: boolean;
   testReporter?: ScenarioExecutionReporter;
 }
 

@@ -260,6 +260,7 @@ export async function runTestCommand(
       env: runtimeEnv,
       k6: createTestK6ExecutionValues(runId, iteration),
       fetch: context.fetch,
+      captureRequestResponseValues: context.captureRequestResponseValues === true,
       reporter: context.testReporter,
     });
     durationMs += result.durationMs;
