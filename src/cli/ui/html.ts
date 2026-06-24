@@ -205,12 +205,6 @@ export const UI_HTML = String.raw`<!doctype html>
       background: #fff;
       color: var(--text);
     }
-    input[type="checkbox"] {
-      height: 14px;
-      margin: 0;
-      padding: 0;
-      width: 14px;
-    }
     button {
       border: 1px solid var(--line);
       background: #fff;
@@ -396,6 +390,28 @@ export const UI_HTML = String.raw`<!doctype html>
     .section-heading h3 {
       margin: 0;
     }
+    .run-values-toggle {
+      align-items: center;
+      background: transparent;
+      border-color: transparent;
+      color: var(--muted);
+      display: inline-flex;
+      font-size: 11px;
+      font-weight: 750;
+      min-height: 22px;
+      padding: 2px 6px;
+    }
+    .run-values-toggle:hover:not(:disabled) {
+      background: var(--panel-2);
+      border-color: var(--line);
+      color: var(--text);
+    }
+    .run-values-toggle:disabled {
+      background: transparent;
+      border-color: transparent;
+      color: #98a2b3;
+      opacity: 1;
+    }
     .section-content {
       padding: 0;
     }
@@ -549,23 +565,6 @@ export const UI_HTML = String.raw`<!doctype html>
       display: grid;
       grid-template-columns: repeat(3, max-content);
       gap: 8px;
-    }
-    .run-options {
-      align-items: center;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      min-width: 0;
-    }
-    .value-toggle {
-      align-items: center;
-      color: var(--muted);
-      display: inline-flex;
-      font-size: 12px;
-      font-weight: 700;
-      gap: 6px;
-      line-height: 1.35;
-      min-width: 0;
     }
     .run-summary {
       background: transparent;
@@ -868,6 +867,7 @@ export const UI_HTML = String.raw`<!doctype html>
         <div class="section">
           <div class="section-heading">
             <h3>최근 실행 결과</h3>
+            <button id="runValuesToggle" class="run-values-toggle" type="button" disabled>요청/응답 숨김</button>
           </div>
           <div id="runSummary" class="run-summary"><div class="muted">실행 기록 없음</div></div>
         </div>
@@ -886,9 +886,6 @@ export const UI_HTML = String.raw`<!doctype html>
           <button id="validateBtn" class="blue" disabled>validate</button>
           <button id="testBtn" class="primary" disabled>test</button>
           <button id="clearBtn">clear</button>
-        </div>
-        <div class="run-options">
-          <label class="value-toggle"><input id="showValuesToggle" type="checkbox">요청/응답 값</label>
         </div>
         <span id="runHint" class="hint">시나리오를 선택하세요.</span>
       </div>
@@ -914,6 +911,7 @@ export const UI_HTML = String.raw`<!doctype html>
       openStepIndexes: new Set(),
       detail: null,
       collapsedGroups: readCollapsedScenarioGroups(),
+      showRunValues: true,
       lastRun: new Map(),
       runsByScenario: new Map(),
       activeOutputRunId: null,
@@ -938,7 +936,7 @@ export const UI_HTML = String.raw`<!doctype html>
       validateBtn: document.getElementById('validateBtn'),
       testBtn: document.getElementById('testBtn'),
       clearBtn: document.getElementById('clearBtn'),
-      showValuesToggle: document.getElementById('showValuesToggle'),
+      runValuesToggle: document.getElementById('runValuesToggle'),
       output: document.getElementById('output'),
       runStatus: document.getElementById('runStatus'),
       runHint: document.getElementById('runHint'),
@@ -1521,6 +1519,10 @@ export const UI_HTML = String.raw`<!doctype html>
       '</div>';
     }
 
+    function hasRunStepValues(step) {
+      return Boolean(step && (step.url || step.request || step.response));
+    }
+
     function renderRunStepValues(step) {
       const request = step.request || {};
       const response = step.response;
@@ -1560,7 +1562,7 @@ export const UI_HTML = String.raw`<!doctype html>
             '</span>' +
             '<span class="pill run-step-result-source">' + escapeHtml(formatStepSource(step.source)) + '</span>' +
           '</div>' +
-          renderRunStepValues(step) +
+          (state.showRunValues ? renderRunStepValues(step) : '') +
         '</div>';
       }).join('') + '</div>';
     }
@@ -1625,14 +1627,29 @@ export const UI_HTML = String.raw`<!doctype html>
       '</div>';
     }
 
+    function runHasValues(item) {
+      return Boolean(item && item.command === 'test' && (item.stepResults || []).some(hasRunStepValues));
+    }
+
+    function updateRunValuesToggle(items) {
+      const hasValues = items.some(runHasValues);
+      els.runValuesToggle.disabled = !hasValues;
+      els.runValuesToggle.textContent = state.showRunValues ? '요청/응답 숨김' : '요청/응답 보기';
+      els.runValuesToggle.title = hasValues
+        ? '최근 실행 결과의 요청/응답 값 표시를 전환합니다.'
+        : '요청/응답 값이 있는 test 실행 결과가 없습니다.';
+    }
+
     function renderRunSummary() {
       if (!state.selected) {
+        updateRunValuesToggle([]);
         els.runSummary.innerHTML = '<div class="muted">이 시나리오 실행 기록 없음</div>';
         return;
       }
 
       const runs = getScenarioRuns(state.selected);
       const items = [runs.validate, runs.test].filter(Boolean);
+      updateRunValuesToggle(items);
       if (items.length === 0) {
         els.runSummary.innerHTML = '<div class="muted">이 시나리오 실행 기록 없음</div>';
         return;
@@ -1658,7 +1675,7 @@ export const UI_HTML = String.raw`<!doctype html>
         result = await fetchJson('/api/run', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ command: command, scenario: runScenario, showValues: command === 'test' && els.showValuesToggle.checked })
+          body: JSON.stringify({ command: command, scenario: runScenario, showValues: command === 'test' })
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1754,6 +1771,10 @@ export const UI_HTML = String.raw`<!doctype html>
     els.searchInput.addEventListener('input', renderScenarioList);
     els.checkServersBtn.addEventListener('click', checkServers);
     els.reconnectBtn.addEventListener('click', reconnectUi);
+    els.runValuesToggle.addEventListener('click', () => {
+      state.showRunValues = !state.showRunValues;
+      renderRunSummary();
+    });
     els.validateBtn.addEventListener('click', () => runCommand('validate'));
     els.testBtn.addEventListener('click', () => runCommand('test'));
     els.clearBtn.addEventListener('click', clearRunOutput);

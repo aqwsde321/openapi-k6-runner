@@ -1820,12 +1820,6 @@ describe('openapi-k6 CLI', () => {
         body: JSON.stringify({ command: 'test', scenario: 'smoke' }),
       })).json() as { runId: string };
       const testEvents = await (await fetch(`${ui.url}/api/runs/${testRun.runId}/events`)).text();
-      const detailedTestRun = await (await fetch(`${ui.url}/api/run`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ command: 'test', scenario: 'smoke', showValues: true }),
-      })).json() as { runId: string };
-      const detailedTestEvents = await (await fetch(`${ui.url}/api/runs/${detailedTestRun.runId}/events`)).text();
       const useTestRun = await (await fetch(`${ui.url}/api/run`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -1846,8 +1840,11 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('<button id="validateBtn" class="blue" disabled>validate</button>');
       expect(html).toContain('<button id="testBtn" class="primary" disabled>test</button>');
       expect(html).toContain('<button id="clearBtn">clear</button>');
-      expect(html).toContain('id="showValuesToggle"');
-      expect(html).toContain('요청/응답 값');
+      expect(html).toContain('id="runValuesToggle"');
+      expect(html).toContain('class="run-values-toggle"');
+      expect(html).toContain('요청/응답 숨김');
+      expect(html).toContain('요청/응답 보기');
+      expect(html).not.toContain('id="showValuesToggle"');
       expect(html).not.toContain('id="configPath"');
       expect(html).not.toContain('id="refreshBtn"');
       expect(html).not.toContain('>새로고침</button>');
@@ -1921,7 +1918,8 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('runItem.stepResults = Array.isArray(data.steps) ? data.steps : [];');
       expect(html).toContain('run-step-results');
       expect(html).toContain('run-step-values');
-      expect(html).toContain("showValues: command === 'test' && els.showValuesToggle.checked");
+      expect(html).toContain("showValues: command === 'test'");
+      expect(html).toContain('state.showRunValues = !state.showRunValues;');
       expect(html).toContain('formatStepSource');
       expect(html).toContain('step-source');
       expect(html).toContain('step-caret');
@@ -2010,11 +2008,9 @@ describe('openapi-k6 CLI', () => {
       expect(testEvents).toContain('event: test-result');
       expect(testEvents).toContain('"id":"health"');
       expect(testEvents).toContain('"source":{"kind":"direct"}');
-      expect(testEvents).not.toContain('"response":{"status":200');
-      expect(detailedTestEvents).toContain('event: test-result');
-      expect(detailedTestEvents).toContain('"url":"https://app-api.test.local/app-health"');
-      expect(detailedTestEvents).toContain('"response":{"status":200');
-      expect(detailedTestEvents).toContain('"body":"{\\"ok\\":true}"');
+      expect(testEvents).toContain('"url":"https://app-api.test.local/app-health"');
+      expect(testEvents).toContain('"response":{"status":200');
+      expect(testEvents).toContain('"body":"{\\"ok\\":true}"');
       expect(useTestEvents).toContain('$ npx --yes openapi-k6 test -s order/use-login --config openapi-k6/config.yaml');
       expect(useTestEvents).not.toContain('--scenario openapi-k6/scenarios/order/use-login.yaml');
       expect(useTestEvents).toContain('event: test-result');
@@ -2022,7 +2018,8 @@ describe('openapi-k6 CLI', () => {
       expect(useTestEvents).toContain('"id":"health"');
       expect(useTestEvents).toContain('"source":{"kind":"use","reference":"auth/login"}');
       expect(useTestEvents).toContain('"responseStatus":200');
-      expect(reportedScenarios).toEqual(['smoke', 'smoke', 'use-login']);
+      expect(useTestEvents).not.toContain('"id":"second-health"');
+      expect(reportedScenarios).toEqual(['smoke', 'use-login']);
     } finally {
       await ui.close();
     }
@@ -5251,7 +5248,7 @@ describe('openapi-k6 CLI', () => {
     expect(stdout.output()).toContain('summary: ✗ FAIL');
   });
 
-  it('masks env secrets in CLI reporter URLs, errors, and truncated response bodies', async () => {
+  it('masks env secrets in CLI reporter URLs and truncated response bodies', async () => {
     await mkdir(path.join(workspace, 'openapi-k6/openapi'), { recursive: true });
     await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
     await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
@@ -5267,6 +5264,59 @@ describe('openapi-k6 CLI', () => {
         '      query:',
         '        token: "{{env.API_TOKEN}}"',
         '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const secret = 'SENSITIVE_BOUNDARY_TOKEN';
+    const stdout = createCapture();
+
+    await expect(
+      runCli(
+        ['test', '-s', 'smoke'],
+        {
+          cwd: workspace,
+          stdout: stdout.stream,
+          stderr: createSink(),
+          env: { API_TOKEN: secret },
+          fetch: async () => new Response(`${'x'.repeat(1995)}${secret} response tail`, {
+            status: 500,
+            statusText: 'Internal Server Error',
+          }),
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: 'openapi-k6.test.failed',
+    });
+
+    const output = stdout.output();
+
+    expect(output).toContain('url: https://config-base.test.local/app-health?token=***');
+    expect(output).toContain('body:');
+    expect(output).toContain('***');
+    expect(output).not.toContain(secret);
+    expect(output).not.toContain(secret.slice(0, 8));
+  });
+
+  it('masks env secrets in CLI reporter network errors', async () => {
+    await mkdir(path.join(workspace, 'openapi-k6/openapi'), { recursive: true });
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
+    await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://openapi-fallback.test.local');
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'),
+      [
+        'name: smoke',
+        'steps:',
         '  - id: network-failure',
         '    api:',
         '      operationId: getHealth',
@@ -5288,7 +5338,6 @@ describe('openapi-k6 CLI', () => {
     ]);
 
     const secret = 'SENSITIVE_BOUNDARY_TOKEN';
-    let requestCount = 0;
     const stdout = createCapture();
 
     await expect(
@@ -5300,15 +5349,6 @@ describe('openapi-k6 CLI', () => {
           stderr: createSink(),
           env: { API_TOKEN: secret },
           fetch: async (input) => {
-            requestCount += 1;
-
-            if (requestCount === 1) {
-              return new Response(`${'x'.repeat(1995)}${secret} response tail`, {
-                status: 500,
-                statusText: 'Internal Server Error',
-              });
-            }
-
             throw new Error(`network failed for ${String(input)}`);
           },
         },
@@ -5320,11 +5360,8 @@ describe('openapi-k6 CLI', () => {
     const output = stdout.output();
 
     expect(output).toContain('url: https://config-base.test.local/app-health?token=***');
-    expect(output).toContain('body:');
     expect(output).toContain('error: ✗ network failed for https://config-base.test.local/app-health?token=***');
-    expect(output).toContain('***');
     expect(output).not.toContain(secret);
-    expect(output).not.toContain(secret.slice(0, 8));
   });
 
   it('selects an isolated module registry with --module', async () => {

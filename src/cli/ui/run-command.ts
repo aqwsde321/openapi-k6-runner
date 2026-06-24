@@ -105,7 +105,7 @@ function parseUiRunPayload(value: unknown): {
   return {
     command,
     scenario,
-    showValues: record.showValues === true,
+    showValues: command === 'test' && record.showValues !== false,
     varFile: parseUiStringArray(record.varFile, 'varFile'),
     vars: parseUiStringArray(record.vars, 'vars'),
   };

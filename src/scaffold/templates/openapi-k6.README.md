@@ -58,8 +58,8 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 | scaffold 안전 갱신 | `__UPDATE_COMMAND__` |
 
 UI는 `scenarios/` 아래 폴더를 그룹으로 보여주고, 요청 단계에서 각 step의 출처를 `직접 정의`, `시나리오 사용: auth/login`처럼 표시합니다.
-`test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다.
-`요청/응답 값`을 켜고 `test`를 실행하면 최근 실행 결과에서 step별 실제 요청 URL, headers/body, 응답 status, headers/body를 확인할 수 있습니다.
+`test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다. 실패한 step이 나오면 이후 step 요청은 실행하지 않습니다.
+최근 실행 결과의 `요청/응답 숨김`/`요청/응답 보기` 버튼으로 step별 실제 요청 URL, headers/body, 응답 status, headers/body 표시를 전환할 수 있습니다.
 상단 서버 상태는 module별 baseUrl 연결 여부와 snapshot 상태를 요약합니다.
 
 자주 쓰는 runner:

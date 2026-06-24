@@ -197,7 +197,7 @@ export async function executeAstScenario(
   });
 
   for (const [index, step] of ast.steps.entries()) {
-    steps.push(await executeStep(step, index, {
+    const result = await executeStep(step, index, {
       baseUrl,
       moduleBaseUrls,
       fetchImpl,
@@ -207,7 +207,12 @@ export async function executeAstScenario(
       reporter,
       scenario: ast.name,
       totalSteps: ast.steps.length,
-    }));
+    });
+    steps.push(result);
+
+    if (!result.passed) {
+      break;
+    }
   }
 
   const result = {

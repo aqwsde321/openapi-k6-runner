@@ -247,6 +247,45 @@ describe('scenario executor', () => {
     expect(report).toContain('Result: FAIL');
   });
 
+  it('stops executing steps after the first failed step', async () => {
+    const requests: string[] = [];
+    const result = await executeAstScenario({
+      name: 'fail-fast',
+      steps: [
+        {
+          id: 'login',
+          method: 'POST',
+          path: '/login',
+          pathParameters: [],
+          request: {},
+          condition: 'status == 201',
+        },
+        {
+          id: 'create-order',
+          method: 'POST',
+          path: '/orders',
+          pathParameters: [],
+          request: {
+            body: {
+              sku: 'SKU-001',
+            },
+          },
+        },
+      ],
+    }, {
+      baseUrl: 'https://api.test.local',
+      env: {},
+      fetch: async (input) => {
+        requests.push(String(input));
+        return jsonResponse({ token: 'server-token' }, 200, 'OK');
+      },
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.steps.map((step) => step.id)).toEqual(['login']);
+    expect(requests).toEqual(['https://api.test.local/login']);
+  });
+
   it('allows explicit conditions to define expected HTTP error statuses', async () => {
     const result = await executeAstScenario({
       name: 'expected-error',
