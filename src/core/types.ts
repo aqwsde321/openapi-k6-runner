@@ -5,6 +5,12 @@ export interface Scenario {
   steps: Step[];
 }
 
+export interface Suite {
+  name: string;
+  description?: string;
+  scenarios: string[];
+}
+
 export type Step = ApiStep | InputStep;
 
 export interface ApiStep {

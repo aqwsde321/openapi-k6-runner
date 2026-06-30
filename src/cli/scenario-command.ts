@@ -11,12 +11,18 @@ import type {
   GenerateResult,
   RunOptions,
   RunResult,
+  SuiteScenarioTestResult,
+  SuiteTestOptions,
+  SuiteTestResult,
   TestOptions,
   TestResult,
   ValidateOptions,
   ValidateResult,
 } from './types.js';
-import { writeLine } from './display.js';
+import {
+  formatDisplayPath,
+  writeLine,
+} from './display.js';
 import { runK6Script } from './k6-runner.js';
 import { loadLoadTestEnv } from './load-test-env.js';
 import { loadOptionalConfig } from './optional-config.js';
@@ -37,10 +43,12 @@ import {
 } from './scaffold-status.js';
 import {
   parseWorkspaceScenarioFile,
+  parseWorkspaceSuiteFile,
   resolveLoadTestDir,
   resolveOutputPath,
   resolveScenarioOutputStem,
   resolveScenarioPath,
+  resolveSuitePath,
 } from './workspace-paths.js';
 
 export async function runGenerateCommand(
@@ -293,6 +301,56 @@ export async function runTestCommand(
   };
 }
 
+export async function runSuiteTestCommand(
+  options: SuiteTestOptions,
+  context: CliContext = {},
+): Promise<SuiteTestResult> {
+  const cwd = resolveCwd(context);
+  const config = await loadOptionalConfig(cwd, options.config, true);
+  assertModuleOptionHasConfig(config, options.module);
+  const suitePath = resolveSuitePath(cwd, config, options.suite);
+  const suite = await parseWorkspaceSuiteFile(cwd, config, suitePath);
+  const scenarios: SuiteScenarioTestResult[] = [];
+  let durationMs = 0;
+
+  for (const scenarioKey of suite.scenarios) {
+    const result = await runTestCommand({
+      scenario: scenarioKey,
+      ...(options.config === undefined ? {} : { config: options.config }),
+      ...(options.module === undefined ? {} : { module: options.module }),
+      ...(options.color === undefined ? {} : { color: options.color }),
+      ...(options.iterations === undefined ? {} : { iterations: options.iterations }),
+      ...(options.varFile === undefined ? {} : { varFile: options.varFile }),
+      ...(options.var === undefined ? {} : { var: options.var }),
+    }, context);
+    scenarios.push({
+      ...result,
+      scenarioKey,
+    });
+    durationMs += result.durationMs;
+  }
+
+  const scaffoldWarnings = uniqueStrings(scenarios.flatMap((scenario) => scenario.scaffoldWarnings ?? []));
+  const scaffoldUpdateCommand = scenarios
+    .map((scenario) => scenario.scaffoldUpdateCommand)
+    .find((command): command is string => command !== undefined);
+  const result: SuiteTestResult = {
+    suitePath,
+    suiteName: suite.name,
+    scenarios,
+    passed: scenarios.every((scenario) => scenario.passed),
+    durationMs,
+    ...(scaffoldWarnings.length === 0 ? {} : { scaffoldWarnings }),
+    ...(scaffoldUpdateCommand === undefined ? {} : { scaffoldUpdateCommand }),
+  };
+  const reportPath = await writeSuiteTestReport(cwd, config, options.suite, result);
+
+  return {
+    ...result,
+    reportPath,
+  };
+}
+
 function createCliInputProvider(context: CliContext): ScenarioInputProvider | undefined {
   const stdin = context.stdin ?? process.stdin;
   const stdout = context.stdout ?? process.stdout;
@@ -327,6 +385,107 @@ function createTestK6ExecutionValues(runId: string, iteration: number): K6Execut
     'vu.iterationInInstance': iteration,
     'vu.iterationInScenario': iteration,
   };
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+async function writeSuiteTestReport(
+  cwd: string,
+  config: LoadTestConfig | undefined,
+  suiteOption: string,
+  result: SuiteTestResult,
+): Promise<string> {
+  const loadTestDir = resolveLoadTestDir(cwd, config);
+  const reportDir = path.join(loadTestDir, 'reports');
+  const reportPath = path.join(reportDir, `${formatReportTimestamp(new Date())}_${formatReportStem(suiteOption)}.json`);
+  const report = createSuiteTestReport(cwd, suiteOption, result);
+
+  await fs.mkdir(reportDir, { recursive: true });
+  await fs.writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+  return reportPath;
+}
+
+function createSuiteTestReport(cwd: string, suiteOption: string, result: SuiteTestResult): unknown {
+  const totalSteps = result.scenarios.reduce((sum, scenario) => sum + scenario.steps.length, 0);
+  const passedSteps = result.scenarios.reduce(
+    (sum, scenario) => sum + scenario.steps.filter((step) => step.passed).length,
+    0,
+  );
+
+  return {
+    tool: 'openapi-k6',
+    kind: 'suite-test',
+    generatedAt: new Date().toISOString(),
+    suite: {
+      key: suiteOption,
+      name: result.suiteName,
+      path: formatDisplayPath(cwd, result.suitePath),
+    },
+    result: result.passed ? 'PASS' : 'FAIL',
+    summary: {
+      scenarios: {
+        passed: result.scenarios.filter((scenario) => scenario.passed).length,
+        total: result.scenarios.length,
+      },
+      steps: {
+        passed: passedSteps,
+        total: totalSteps,
+      },
+      durationMs: Math.round(result.durationMs),
+    },
+    scenarios: result.scenarios.map((scenario) => ({
+      key: scenario.scenarioKey,
+      name: scenario.scenario,
+      path: formatDisplayPath(cwd, scenario.scenarioPath),
+      result: scenario.passed ? 'PASS' : 'FAIL',
+      durationMs: Math.round(scenario.durationMs),
+      steps: scenario.steps.map((step) => ({
+        index: step.index,
+        id: step.id,
+        result: step.passed ? 'PASS' : 'FAIL',
+        method: step.method,
+        path: step.path,
+        durationMs: Math.round(step.durationMs),
+        ...(step.response === undefined
+          ? {}
+          : {
+              response: {
+                status: step.response.status,
+                statusText: step.response.statusText,
+              },
+            }),
+        ...(step.condition === undefined
+          ? {}
+          : {
+              condition: {
+                expression: step.condition.expression,
+                passed: step.condition.passed,
+              },
+            }),
+        extracts: step.extracts.map((extract) => ({
+          name: extract.name,
+          path: extract.path,
+          passed: extract.passed,
+          ...(extract.error === undefined ? {} : { error: extract.error }),
+        })),
+        ...(step.error === undefined ? {} : { error: step.error }),
+      })),
+    })),
+  };
+}
+
+function formatReportTimestamp(date: Date): string {
+  return date.toISOString().replace(/[:.]/g, '-');
+}
+
+function formatReportStem(value: string): string {
+  const parsed = path.parse(value);
+  const stem = parsed.ext ? path.join(parsed.dir, parsed.name) : value;
+  const normalized = stem.trim().replace(/^[./\\]+/, '').replace(/[\\/]+/g, '-');
+  const safe = normalized.replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+  return safe || 'suite';
 }
 
 function assertModuleOptionHasConfig(

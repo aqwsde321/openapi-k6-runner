@@ -62,6 +62,27 @@ export interface TestOptions {
   var?: string[];
 }
 
+export interface SuiteTestOptions {
+  suite: string;
+  config?: string;
+  module?: string;
+  color?: boolean;
+  iterations?: number;
+  varFile?: string[];
+  var?: string[];
+}
+
+export interface TestCommandOptions {
+  scenario?: string;
+  suite?: string;
+  config?: string;
+  module?: string;
+  color?: boolean;
+  iterations?: number;
+  varFile?: string[];
+  var?: string[];
+}
+
 export interface RunOptions {
   scenario: string;
   write?: string;
@@ -194,6 +215,21 @@ export interface TestResult extends ScenarioExecutionResult {
   openapiPaths?: Record<string, string>;
   moduleName?: string;
   moduleNames?: string[];
+  scaffoldWarnings?: string[];
+  scaffoldUpdateCommand?: string;
+}
+
+export interface SuiteScenarioTestResult extends TestResult {
+  scenarioKey: string;
+}
+
+export interface SuiteTestResult {
+  suitePath: string;
+  suiteName: string;
+  scenarios: SuiteScenarioTestResult[];
+  passed: boolean;
+  durationMs: number;
+  reportPath?: string;
   scaffoldWarnings?: string[];
   scaffoldUpdateCommand?: string;
 }

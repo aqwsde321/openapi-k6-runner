@@ -31,11 +31,13 @@ import {
 import {
   runGenerateCommand,
   runRunCommand,
+  runSuiteTestCommand,
   runTestCommand,
   runValidateCommand,
 } from './scenario-command.js';
 import {
   writeScaffoldUpdateNotice,
+  writeSuiteTestSummary,
   writeValidateSummary,
   writeValidationWarnings,
 } from './scenario-output.js';
@@ -62,8 +64,11 @@ import type {
   ModuleSetDefaultResult,
   RunOptions,
   RunResult,
+  SuiteTestOptions,
+  SuiteTestResult,
   SyncOptions,
   SyncResult,
+  TestCommandOptions,
   TestOptions,
   TestResult,
   UiOptions,
@@ -132,6 +137,8 @@ export interface CliProgramDeps {
   shouldUseLiveOutput(stream: WritableLike, env: Record<string, string | undefined>): boolean;
   collectRepeatedOption(value: string, previous: string[] | undefined): string[];
   runTestCommand(options: TestOptions, context: CliContext): Promise<TestResult>;
+  runSuiteTestCommand(options: SuiteTestOptions, context: CliContext): Promise<SuiteTestResult>;
+  writeSuiteTestSummary(stdout: WritableLike, result: SuiteTestResult, cwd: string): void;
 }
 
 const DEFAULT_CONFIG_PATH = `${DEFAULT_LOAD_TEST_DIR}/config.yaml`;
@@ -229,6 +236,8 @@ export function createProgram(context: CliContext = {}): Command {
     shouldUseLiveOutput,
     collectRepeatedOption,
     runTestCommand,
+    runSuiteTestCommand,
+    writeSuiteTestSummary,
   });
 }
 
@@ -279,6 +288,8 @@ export function createCliProgram(context: CliContext = {}, deps: CliProgramDeps)
     shouldUseLiveOutput,
     collectRepeatedOption,
     runTestCommand,
+    runSuiteTestCommand,
+    writeSuiteTestSummary,
   } = deps;
   const stdout = context.stdout ?? process.stdout;
   const stderr = context.stderr ?? process.stderr;
@@ -501,20 +512,65 @@ export function createCliProgram(context: CliContext = {}, deps: CliProgramDeps)
   program
     .command('test')
     .description('Run a scenario once with Node.js to validate API flow before generating k6.')
-    .requiredOption('-s, --scenario <path-or-key>', 'Scenario DSL file path or openapi-k6 scenario key')
+    .option('-s, --scenario <path-or-key>', 'Scenario DSL file path or openapi-k6 scenario key')
+    .option('--suite <path-or-key>', 'Suite YAML file path or openapi-k6 suite key')
     .option('--config <path>', 'Load test config file path')
     .option('-m, --module <name>', 'Module name from config')
     .option('--var-file <path>', 'Load scenario vars from a YAML object file; repeatable', collectRepeatedOption)
     .option('--var <name=value>', 'Override one scenario var; repeatable and parsed as a YAML value', collectRepeatedOption)
     .option('--iterations <count>', 'Run the Node.js API-flow test this many times', parsePositiveIntegerOption)
     .option('--no-color', 'Disable ANSI color output')
-    .action(async (options: TestOptions) => {
+    .action(async (options: TestCommandOptions) => {
+      const hasScenario = options.scenario !== undefined;
+      const hasSuite = options.suite !== undefined;
+
+      if (hasScenario === hasSuite) {
+        throw new CommanderError(1, 'openapi-k6.invalid-option', 'Specify exactly one of --scenario or --suite');
+      }
+
       const colorEnv = context.env ?? process.env;
       const testReporter = context.testReporter ?? createScenarioConsoleReporter(stdout, {
         color: shouldUseColor(stdout, colorEnv, options.color),
         live: shouldUseLiveOutput(stdout, colorEnv),
       });
-      const result = await runTestCommand(options, {
+
+      if (options.suite !== undefined) {
+        const result = await runSuiteTestCommand({
+          suite: options.suite,
+          ...(options.config === undefined ? {} : { config: options.config }),
+          ...(options.module === undefined ? {} : { module: options.module }),
+          ...(options.color === undefined ? {} : { color: options.color }),
+          ...(options.iterations === undefined ? {} : { iterations: options.iterations }),
+          ...(options.varFile === undefined ? {} : { varFile: options.varFile }),
+          ...(options.var === undefined ? {} : { var: options.var }),
+        }, {
+          ...context,
+          testReporter,
+        });
+
+        writeSuiteTestSummary(stdout, result, resolveCwd(context));
+        writeScaffoldUpdateNotice(stdout, result.scaffoldWarnings ?? [], result.scaffoldUpdateCommand);
+
+        if (!result.passed) {
+          throw new CommanderError(1, 'openapi-k6.suite-test.failed', 'Suite test failed');
+        }
+
+        return;
+      }
+
+      if (options.scenario === undefined) {
+        throw new CommanderError(1, 'openapi-k6.invalid-option', 'Specify exactly one of --scenario or --suite');
+      }
+
+      const result = await runTestCommand({
+        scenario: options.scenario,
+        ...(options.config === undefined ? {} : { config: options.config }),
+        ...(options.module === undefined ? {} : { module: options.module }),
+        ...(options.color === undefined ? {} : { color: options.color }),
+        ...(options.iterations === undefined ? {} : { iterations: options.iterations }),
+        ...(options.varFile === undefined ? {} : { varFile: options.varFile }),
+        ...(options.var === undefined ? {} : { var: options.var }),
+      }, {
         ...context,
         testReporter,
       });

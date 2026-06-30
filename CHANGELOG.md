@@ -6,6 +6,20 @@
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-06-30
+
+### Added
+
+- `openapi-k6 test --suite <suite-key>`를 추가해 여러 최종 scenario를 순서대로 실행하고 suite 단위 통과/실패 요약을 남길 수 있게 했습니다.
+- `openapi-k6/suites/**/*.yaml` suite 파일을 추가해 재사용용 scenario와 최종 실행 묶음을 구분할 수 있게 했습니다.
+- suite 실행 결과 JSON/HTML 리포트를 `openapi-k6/reports/`에 저장하고, UI 상단 `리포트` 모달에서 새 탭 HTML 보기와 HTML/JSON 다운로드를 제공하도록 했습니다.
+- UI에 scenario/suite 트리 탐색, 검색 고정, 전체 접기/펼치기, suite 실행 결과 요약을 추가했습니다.
+
+### Changed
+
+- UI scenario 목록과 리포트에서 긴 파일 경로 반복을 줄이고, 리포트의 scenario 항목은 `GET/POST path`, step 통과 수, 소요시간 중심으로 표시하도록 정리했습니다.
+- README와 scaffold README에 suite와 종합 리포트 사용법을 추가했습니다.
+
 ## [0.15.0] - 2026-06-24
 
 ### Added
@@ -288,7 +302,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.12.0...v0.13.0

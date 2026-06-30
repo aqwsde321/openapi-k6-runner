@@ -5,7 +5,7 @@ import { loadTestConfig, resolveConfigModule, type LoadTestConfig } from '../../
 import type { ScenarioExecutionReporter, ScenarioInputProvider } from '../../executor/scenario.executor.js';
 import { DEFAULT_WORKSPACE_DIR } from '../../scaffold/load-test.init.js';
 import { streamUiRunEvents, submitUiRunInput, type UiRunRecord } from './run-state.js';
-import { startUiRun } from './run-command.js';
+import { startUiRun, startUiSuiteRun } from './run-command.js';
 import { checkUiServers } from './server-checks.js';
 import {
   closeUiServer,
@@ -20,6 +20,17 @@ import {
   listUiScenarios,
   readUiScenarioDetail,
 } from './scenarios.js';
+import {
+  listUiSuites,
+  readUiSuiteDetail,
+} from './suites.js';
+import {
+  listUiReports,
+  readUiReport,
+  readUiReportHtml,
+  readUiReportJsonText,
+  resolveUiReportDownloadFileName,
+} from './reports.js';
 
 type WritableLike = {
   write(chunk: string): unknown;
@@ -182,9 +193,72 @@ async function handleUiRequest(
     return;
   }
 
+  if (request.method === 'GET' && requestUrl.pathname === '/api/suites') {
+    writeUiJson(response, 200, await listUiSuites(state));
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname === '/api/suite') {
+    const suite = requestUrl.searchParams.get('suite') ?? '';
+    writeUiJson(response, 200, await readUiSuiteDetail(state, suite));
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname === '/api/reports') {
+    writeUiJson(response, 200, await listUiReports(state));
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname === '/api/report') {
+    const report = requestUrl.searchParams.get('report') ?? '';
+    writeUiJson(response, 200, await readUiReport(state, report));
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname === '/api/report/html') {
+    const report = requestUrl.searchParams.get('report') ?? '';
+    writeHtmlResponse(response, 200, await readUiReportHtml(state, report), undefined);
+    return;
+  }
+
+  if (request.method === 'GET' && requestUrl.pathname === '/api/report/download') {
+    const report = requestUrl.searchParams.get('report') ?? '';
+    const format = requestUrl.searchParams.get('format') ?? 'json';
+
+    if (format === 'html') {
+      writeHtmlResponse(
+        response,
+        200,
+        await readUiReportHtml(state, report),
+        resolveUiReportDownloadFileName(report, 'html'),
+      );
+      return;
+    }
+
+    if (format === 'json') {
+      writeDownloadResponse(
+        response,
+        200,
+        'application/json; charset=utf-8',
+        await readUiReportJsonText(state, report),
+        resolveUiReportDownloadFileName(report, 'json'),
+      );
+      return;
+    }
+
+    writeUiJson(response, 400, { error: 'format must be "json" or "html"' });
+    return;
+  }
+
   if (request.method === 'POST' && requestUrl.pathname === '/api/run') {
     const body = await readUiJsonBody(request);
     writeUiJson(response, 200, await startUiRun(state, body));
+    return;
+  }
+
+  if (request.method === 'POST' && requestUrl.pathname === '/api/run-suite') {
+    const body = await readUiJsonBody(request);
+    writeUiJson(response, 200, await startUiSuiteRun(state, body));
     return;
   }
 
@@ -226,4 +300,34 @@ async function handleUiRequest(
   }
 
   writeUiJson(response, 404, { error: 'Not found' });
+}
+
+function writeHtmlResponse(
+  response: ServerResponse,
+  statusCode: number,
+  html: string,
+  downloadFileName: string | undefined,
+): void {
+  writeDownloadResponse(response, statusCode, 'text/html; charset=utf-8', html, downloadFileName);
+}
+
+function writeDownloadResponse(
+  response: ServerResponse,
+  statusCode: number,
+  contentType: string,
+  body: string,
+  downloadFileName: string | undefined,
+): void {
+  response.writeHead(statusCode, {
+    'content-type': contentType,
+    'cache-control': 'no-cache',
+    ...(downloadFileName === undefined
+      ? {}
+      : { 'content-disposition': `attachment; filename="${escapeHeaderFileName(downloadFileName)}"` }),
+  });
+  response.end(body);
+}
+
+function escapeHeaderFileName(value: string): string {
+  return value.replace(/["\\\r\n]/g, '_');
 }

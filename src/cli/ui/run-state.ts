@@ -17,12 +17,13 @@ type WritableLike = {
 
 export interface UiRunRecord {
   id: string;
-  command: 'validate' | 'test';
+  command: 'validate' | 'test' | 'suite';
   scenario: string;
   status: UiRunStatus;
   exitCode?: number;
   chunks: UiRunChunk[];
   testResult?: UiRunTestResult;
+  suiteResult?: UiSuiteRunResult;
   pendingInput?: UiRunPendingInput;
   clients: Set<ServerResponse>;
   ansiHtmlState: AnsiHtmlState;
@@ -39,6 +40,34 @@ export interface UiRunTestResult {
   status: 'passed' | 'failed';
   durationMs: number;
   steps: UiRunStepResult[];
+}
+
+export interface UiSuiteRunResult {
+  suite: string;
+  status: 'passed' | 'failed';
+  durationMs: number;
+  reportPath?: string;
+  scenarios: UiSuiteScenarioRunResult[];
+}
+
+export interface UiSuiteScenarioRunResult {
+  scenarioKey: string;
+  scenarioName?: string;
+  status: 'passed' | 'failed';
+  durationMs: number;
+  passedSteps: number;
+  totalSteps: number;
+  method?: string;
+  path?: string;
+  error?: string;
+  failedStep?: {
+    id: string;
+    method?: string;
+    path?: string;
+    responseStatus?: number;
+    condition?: string;
+    error?: string;
+  };
 }
 
 export interface UiRunPendingInput {
@@ -114,7 +143,7 @@ export interface UiScenarioStepSource {
 
 export function createUiRunRecord(options: {
   id: string;
-  command: 'validate' | 'test';
+  command: 'validate' | 'test' | 'suite';
   scenario: string;
 }): UiRunRecord {
   return {
@@ -151,6 +180,11 @@ export function appendUiRunChunk(run: UiRunRecord, stream: 'stdout' | 'stderr', 
 export function appendUiRunTestResult(run: UiRunRecord, result: UiRunTestResult): void {
   run.testResult = result;
   writeUiRunEvent(run, 'test-result', result);
+}
+
+export function appendUiRunSuiteResult(run: UiRunRecord, result: UiSuiteRunResult): void {
+  run.suiteResult = result;
+  writeUiRunEvent(run, 'suite-result', result);
 }
 
 export function requestUiRunInput(run: UiRunRecord, request: ScenarioInputRequest): Promise<unknown> {
@@ -310,6 +344,10 @@ export function streamUiRunEvents(run: UiRunRecord, response: ServerResponse): v
 
   if (run.testResult !== undefined) {
     writeSseEvent(response, 'test-result', run.testResult);
+  }
+
+  if (run.suiteResult !== undefined) {
+    writeSseEvent(response, 'suite-result', run.suiteResult);
   }
 
   if (run.pendingInput !== undefined) {

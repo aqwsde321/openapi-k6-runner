@@ -2,8 +2,9 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 import type { LoadTestConfig } from '../config/load-test.config.js';
-import type { Scenario } from '../core/types.js';
+import type { Scenario, Suite } from '../core/types.js';
 import { parseScenarioFile } from '../parser/scenario.parser.js';
+import { parseSuiteFile } from '../parser/suite.parser.js';
 import { DEFAULT_WORKSPACE_DIR } from '../scaffold/load-test.init.js';
 
 export const DEFAULT_LOAD_TEST_DIR = DEFAULT_WORKSPACE_DIR;
@@ -17,6 +18,20 @@ export function resolveScenarioPath(cwd: string, config: LoadTestConfig | undefi
     }
 
     return path.join(resolveLoadTestDir(cwd, config), 'scenarios', `${normalizeScenarioKey(value)}.yaml`);
+  }
+
+  return path.resolve(cwd, value);
+}
+
+export function resolveSuitePath(cwd: string, config: LoadTestConfig | undefined, value: string): string {
+  if (isScenarioKey(value)) {
+    const explicitPath = path.resolve(cwd, value);
+
+    if (hasScenarioKeySeparator(value) && existsSync(explicitPath)) {
+      return explicitPath;
+    }
+
+    return path.join(resolveLoadTestDir(cwd, config), 'suites', `${normalizeScenarioKey(value)}.yaml`);
   }
 
   return path.resolve(cwd, value);
@@ -88,6 +103,14 @@ export function parseWorkspaceScenarioFile(
   return parseScenarioFile(scenarioPath, {
     scenarioRootDir: resolveScenarioRootDir(cwd, config),
   });
+}
+
+export function parseWorkspaceSuiteFile(
+  _cwd: string,
+  _config: LoadTestConfig | undefined,
+  suitePath: string,
+): Promise<Suite> {
+  return parseSuiteFile(suitePath);
 }
 
 function isScenarioKey(value: string): boolean {

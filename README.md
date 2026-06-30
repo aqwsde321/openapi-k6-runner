@@ -69,6 +69,7 @@ npx --yes openapi-k6 catalog --query <검색어>
 npx --yes openapi-k6 validate -s <scenario-key>
 npx --yes openapi-k6 test -s <scenario-key>
 npx --yes openapi-k6 test -s <scenario-key> --iterations 3
+npx --yes openapi-k6 test --suite <suite-key>
 npx --yes openapi-k6 generate -s <scenario-key>
 k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1 --iterations 1
 ```
@@ -256,12 +257,15 @@ npx --yes openapi-k6 run -s <scenario-key>
 | 브라우저에서 scenario 선택/검증 | `npx --yes openapi-k6 ui` |
 | 반복 값 관리 | scenario `vars:`, `--var-file`, `--var`, `{{k6.*}}` |
 | 다른 scenario 재사용 | `steps` 안에서 `- use: auth/login` |
+| 여러 scenario 묶음 실행 | `openapi-k6/suites/*.yaml` + `test --suite <suite-key>` |
+| 종합 리포트 확인 | UI 상단 `리포트` 또는 `openapi-k6/reports/*.json` |
 | 여러 서버 연결 | `npx --yes openapi-k6 module add auth --base-url <url> --sync` |
 | 작업 공간 점검 | `npx --yes openapi-k6 doctor` |
 | 기존 scaffold 안전 갱신 | CLI가 `Scaffold update available`을 표시하면 `npx --yes openapi-k6 update` |
 
 use 경로는 `openapi-k6/scenarios` 기준 scenario key이며, 다른 폴더의 steps를 같은 실행 context에 펼칩니다.
 `use`에는 확장자를 쓰지 않습니다. 점이 들어간 파일명은 scenario key가 아니므로 재사용 대상은 `auth/login.yaml`처럼 key-safe한 이름으로 둡니다.
+suite는 재사용이 아니라 실행 계획입니다. 여러 최종 scenario를 순서대로 검증하고 요약 결과를 볼 때 사용합니다.
 여러 OpenAPI module을 한 scenario에서 섞을 때는 step의 `api.module`을 지정합니다.
 
 <details>
@@ -377,6 +381,30 @@ load-1761123456789-2@example.test
 `test --iterations 3`처럼 실행하면 k6 없이도 `{{k6.scenario.iterationInTest}}`와 VU iteration 값이 `0`, `1`, `2`로 증가하는지 확인할 수 있습니다.
 실제 `k6 run`에서는 generated script가 `k6/execution` 값을 사용해 반복마다 달라집니다.
 
+### Suite 실행
+
+최종 scenario 몇 개를 묶어 smoke, regression, 도메인별 검증 단위로 실행하려면 `openapi-k6/suites/<suite-key>.yaml`을 둡니다.
+`use`는 한 scenario 안에서 step을 재사용하는 기능이고, suite는 어떤 scenario들을 실행할지 정하는 목록입니다.
+
+```yaml
+# openapi-k6/suites/smoke.yaml
+name: smoke
+scenarios:
+  - auth/login
+  - post/create
+  - order/create
+```
+
+```bash
+npx --yes openapi-k6 test --suite smoke
+```
+
+suite의 `scenarios:` 값은 `openapi-k6/scenarios` 기준 확장자 없는 scenario key입니다.
+`test --suite`는 각 scenario를 순서대로 실행하고 마지막에 scenario/step 통과 수와 실패한 첫 step을 요약합니다.
+실행 결과 요약 JSON은 `openapi-k6/reports/<timestamp>_<suite-key>.json`에 저장됩니다.
+UI 상단 `리포트` 버튼에서 suite 실행 결과를 바로 보고, 새 탭 HTML 보기와 HTML/JSON 다운로드를 사용할 수 있습니다.
+공통 로그인이나 seed step은 suite에 중복해서 넣기보다 각 최종 scenario 안에서 `use: auth/login`처럼 재사용합니다.
+
 ### 기존 호환 기능
 
 기존 프로젝트의 `fixtures:`와 `include:`는 계속 동작합니다. 새 scenario는 `vars:`/`--var-file`과 `use`를 우선 사용합니다.
@@ -446,9 +474,11 @@ npx --yes openapi-k6 update
 - `ui`: 브라우저에서 scenario를 고르고 `validate`/`test`를 실행합니다.
   폴더별 scenario는 접어서 볼 수 있고, 요청 단계는 각 step이 `직접 정의`, `시나리오 사용: auth/login`처럼 어디서 온 것인지 표시합니다.
   `test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다. 실패한 step이 나오면 이후 step 요청은 실행하지 않습니다.
+  suite `test` 실행 후 상단 `리포트`에서 종합 결과를 열고, 시나리오별 성공 여부와 첫 실패 원인을 확인할 수 있습니다.
+  리포트 모달은 새 탭 HTML 보기, HTML 다운로드, JSON 다운로드를 제공합니다.
   최근 실행 결과의 `요청/응답 숨김`/`요청/응답 보기` 버튼으로 step별 실제 요청 URL, headers/body, 응답 status, headers/body 표시를 전환할 수 있습니다.
 - `doctor`: config, module별 baseUrl 출처, snapshot/catalog, scaffold metadata, module env 충돌, k6 설치 여부를 점검합니다.
-- `update`: 기존 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog, `generated/`, `logs/`를 보존하고 scaffold 파일만 갱신합니다.
+- `update`: 기존 `config.yaml`, `.env`, `scenarios/`, `suites/`, snapshot/catalog, `generated/`, `logs/`를 보존하고 scaffold 파일만 갱신합니다.
 
 CLI가 `Scaffold update available`을 표시하면 안내된 `update` 명령을 실행합니다.
 초기 scaffold를 의도적으로 다시 만들 때만 `init --force`를 사용합니다.
@@ -499,11 +529,12 @@ k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s --sum
 
 ## 파일 규칙
 
-보통 직접 수정하는 파일은 아래 세 가지입니다.
+보통 직접 수정하는 파일은 아래 네 가지입니다.
 
 - `openapi-k6/config.yaml`
 - `openapi-k6/.env`
 - `openapi-k6/scenarios/**/*.yaml`
+- `openapi-k6/suites/**/*.yaml`
 
 아래 파일은 직접 고치기보다 명령으로 다시 만듭니다.
 
@@ -514,7 +545,7 @@ k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s --sum
 `openapi-k6/.env`는 생성되지 않습니다.
 비밀값이 필요하면 `openapi-k6/.env.example`을 참고해 직접 만들고 commit하지 않습니다.
 
-기본 `openapi-k6/.gitignore`는 `scenarios/**`만 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.
+기본 `openapi-k6/.gitignore`는 `scenarios/**`와 `suites/**`만 추적 대상에 남기고 scaffold/config/생성물은 제외합니다.
 전체 작업 공간을 git에 포함하려면 ignore 규칙을 조정합니다.
 
 ## openapi-k6 명령 모음
@@ -529,6 +560,7 @@ k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s --sum
 | 최신 sync 후 AI용 scenario 초안 | `npx --yes openapi-k6 catalog --sync --query <검색어> --ai` |
 | 정적 검증 | `npx --yes openapi-k6 validate -s <scenario-key>` |
 | 실행 검증 | `npx --yes openapi-k6 test -s <scenario-key>` |
+| 묶음 실행 검증 | `npx --yes openapi-k6 test --suite <suite-key>` |
 | 정적 검증 후 k6 스크립트 생성 | `npx --yes openapi-k6 generate -s <scenario-key>` |
 | 검증+생성+실행 편의 명령 | `npx --yes openapi-k6 run -s <scenario-key>` |
 | 로컬 UI | `npx --yes openapi-k6 ui` |

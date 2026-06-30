@@ -31,8 +31,12 @@ export type {
   ModuleSetDefaultResult,
   RunOptions,
   RunResult,
+  SuiteScenarioTestResult,
+  SuiteTestOptions,
+  SuiteTestResult,
   SyncOptions,
   SyncResult,
+  TestCommandOptions,
   TestOptions,
   TestResult,
   UiOptions,
@@ -62,6 +66,7 @@ export {
 export {
   runGenerateCommand,
   runRunCommand,
+  runSuiteTestCommand,
   runTestCommand,
   runValidateCommand,
 } from './scenario-command.js';

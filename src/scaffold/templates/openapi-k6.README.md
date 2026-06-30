@@ -22,7 +22,7 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
    - response extract 값과 다음 step 재사용 위치
    - 기존 scenario 재사용 여부
    - 모호한 endpoint 선택지와 필요한 테스트 데이터
-6. 사용자가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 `__DIRECTORY__/scenarios/**/*.yaml`을 작성하거나 수정합니다.
+6. 사용자가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 `__DIRECTORY__/scenarios/**/*.yaml` 또는 `__DIRECTORY__/suites/**/*.yaml`을 작성하거나 수정합니다.
 7. 처음에는 `id`, `api`와 필요한 `request`, `extract`, `condition`만 채웁니다. 공개 테스트 데이터는 `vars` 또는 CLI `--var-file`, `--var`로 관리하고, 반복마다 달라질 값은 `{{k6.*}}`를 사용합니다.
 8. 비밀 값은 scenario YAML에 직접 쓰지 말고 `{{env.NAME}}`으로 참조합니다. 실제 값은 `__ENV_PATH__`에만 둡니다. `.env`에는 비밀/접속 값만 둡니다.
 9. `__VALIDATE_NAME_COMMAND__`를 먼저 통과시킨 뒤, 가능한 경우 `__TEST_NAME_COMMAND__`로 실제 API 흐름을 1회 검증합니다.
@@ -51,6 +51,8 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 | 정적 검증 | `__VALIDATE_NAME_COMMAND__` |
 | 실행 검증 | `__TEST_NAME_COMMAND__` |
 | 반복 실행 검증 | `__TEST_NAME_COMMAND__ --iterations 3` |
+| 묶음 실행 검증 | `__SUITE_TEST_COMMAND__` |
+| 종합 리포트 확인 | UI 상단 `리포트` 또는 `__DIRECTORY__/reports/*.json` |
 | 정적 검증 후 k6 스크립트 생성 | `__GENERATE_NAME_COMMAND__` |
 | 검증+생성+실행 편의 명령 | `__RUN_NAME_COMMAND__` |
 | 로컬 UI | `__UI_COMMAND__` |
@@ -60,6 +62,7 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 UI는 `scenarios/` 아래 폴더를 그룹으로 보여주고, 요청 단계에서 각 step의 출처를 `직접 정의`, `시나리오 사용: auth/login`처럼 표시합니다.
 `test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다. 실패한 step이 나오면 이후 step 요청은 실행하지 않습니다.
 최근 실행 결과의 `요청/응답 숨김`/`요청/응답 보기` 버튼으로 step별 실제 요청 URL, headers/body, 응답 status, headers/body 표시를 전환할 수 있습니다.
+suite `test` 실행 후 상단 `리포트`에서 종합 결과, 시나리오별 성공 여부, 첫 실패 원인을 확인하고 새 탭 HTML 보기와 HTML/JSON 다운로드를 사용할 수 있습니다.
 상단 서버 상태는 module별 baseUrl 연결 여부와 snapshot 상태를 요약합니다.
 
 자주 쓰는 runner:
@@ -110,6 +113,8 @@ K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_OPEN=true k6 run __GENERATED_OUTPUT_ARG__
 - `use` 값은 `auth/login`처럼 확장자 없는 scenario key여야 하며, `auth/login.yaml`이나 `auth/login.v2`는 사용할 수 없습니다.
 - `use` 대상 파일에는 `vars:`를 두지 않고 entry scenario에서 관리합니다.
 - `use`로 펼친 step의 `extract` 값은 뒤 step에서 `{{variableName}}`으로 참조할 수 있습니다.
+- 여러 최종 scenario를 묶어 실행할 때는 `__DIRECTORY__/suites/<suite-key>.yaml`에 `scenarios:` 목록을 둡니다.
+- suite 실행 결과 요약 JSON은 `__DIRECTORY__/reports/<timestamp>_<suite-key>.json`에 저장되고, UI 상단 `리포트`에서 HTML 보기/다운로드를 사용할 수 있습니다.
 - 여러 OpenAPI 서버를 한 scenario에서 섞을 때만 `api.module`을 사용합니다.
 - module baseUrl은 `BASE_URL_<MODULE>`, `BASE_URL`, `modules.<name>.baseUrl`, root `baseUrl`, snapshot `servers[0].url` 순서로 해석됩니다.
 
@@ -120,6 +125,7 @@ K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_OPEN=true k6 run __GENERATED_OUTPUT_ARG__
 - `__CONFIG_PATH__`
 - `__ENV_PATH__`
 - `__DIRECTORY__/scenarios/**/*.yaml`
+- `__DIRECTORY__/suites/**/*.yaml`
 
 직접 수정 금지:
 
@@ -136,13 +142,7 @@ K6_WEB_DASHBOARD=true K6_WEB_DASHBOARD_OPEN=true k6 run __GENERATED_OUTPUT_ARG__
 
 ## 필요할 때만
 
-```bash
-__ENV_COPY_COMMAND__
-__CLI_COMMAND__ module add auth --base-url <url> --sync
-__DOCTOR_COMMAND__
-__GENERATE_NAME_COMMAND__
-__UPDATE_COMMAND__
-```
+필요할 때만 실행합니다: `__ENV_COPY_COMMAND__`, `__CLI_COMMAND__ module add auth --base-url <url> --sync`, `__DOCTOR_COMMAND__`, `__GENERATE_NAME_COMMAND__`, `__UPDATE_COMMAND__`.
 
-`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.
+`update`는 `config.yaml`, `.env`, `scenarios/`, `suites/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.
 오래된 scaffold에서 `validate`, `test`, `generate`, `run`을 실행하면 최신 README/runner를 받을 수 있도록 `Scaffold update available` notice와 `__UPDATE_COMMAND__` 명령이 표시됩니다.

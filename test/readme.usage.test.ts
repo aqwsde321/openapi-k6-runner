@@ -41,6 +41,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('# openapi-k6/scenarios/<scenario-key>.yaml 작성');
     expect(readme).toContain('npx --yes openapi-k6 validate -s <scenario-key>');
     expect(readme).toContain('npx --yes openapi-k6 test -s <scenario-key>');
+    expect(readme).toContain('npx --yes openapi-k6 test --suite <suite-key>');
     expect(readme).toContain('npx --yes openapi-k6 generate -s <scenario-key>');
     expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 1 --iterations 1");
     expect(readme).toContain("k6 run 'openapi-k6/generated/<scenario-key>.k6.js' --vus 10 --duration 30s");
@@ -111,6 +112,12 @@ describe('README usage guide', () => {
     expect(readme).toContain('## 필요할 때만');
     expect(readme).toContain('`npx --yes openapi-k6 ui`');
     expect(readme).toContain('| 다른 scenario 재사용 | `steps` 안에서 `- use: auth/login` |');
+    expect(readme).toContain('| 여러 scenario 묶음 실행 | `openapi-k6/suites/*.yaml` + `test --suite <suite-key>` |');
+    expect(readme).toContain('| 종합 리포트 확인 | UI 상단 `리포트` 또는 `openapi-k6/reports/*.json` |');
+    expect(readme).toContain('### Suite 실행');
+    expect(readme).toContain('npx --yes openapi-k6 test --suite smoke');
+    expect(readme).toContain('openapi-k6/reports/<timestamp>_<suite-key>.json');
+    expect(readme).toContain('새 탭 HTML 보기와 HTML/JSON 다운로드');
     expect(readme).toContain('`npx --yes openapi-k6 module add auth --base-url <url> --sync`');
     expect(readme).toContain('CLI가 `Scaffold update available`을 표시하면 `npx --yes openapi-k6 update`');
     expect(readme).toContain('use 경로는 `openapi-k6/scenarios` 기준 scenario key이며');
@@ -141,6 +148,7 @@ describe('README usage guide', () => {
     expect(readme).toContain('`openapi-k6/config.yaml`');
     expect(readme).toContain('`openapi-k6/.env`');
     expect(readme).toContain('`openapi-k6/scenarios/**/*.yaml`');
+    expect(readme).toContain('`openapi-k6/suites/**/*.yaml`');
     expect(readme).toContain('`openapi-k6/openapi/*.openapi.json`: `sync` 생성물');
     expect(readme).toContain('`openapi-k6/generated/**/*.k6.js`: `generate` 생성물');
     expect(readme).toContain('비밀값이 필요하면 `openapi-k6/.env.example`을 참고해 직접 만들고 commit하지 않습니다.');

@@ -53,7 +53,7 @@ const README_TEMPLATE = readFileSync(
   new URL('./templates/openapi-k6.README.md', import.meta.url),
   'utf8',
 );
-export const CURRENT_SCAFFOLD_VERSION = '0.15.0';
+export const CURRENT_SCAFFOLD_VERSION = '0.16.0';
 export const DEFAULT_WORKSPACE_DIR = 'openapi-k6';
 export const SCAFFOLD_METADATA_FILENAME = '.openapi-k6.json';
 
@@ -341,6 +341,8 @@ function renderGitignore(): string {
     `!${SCAFFOLD_METADATA_FILENAME}`,
     '!scenarios/',
     '!scenarios/**',
+    '!suites/',
+    '!suites/**',
     '',
   ].join('\n');
 }
@@ -522,6 +524,7 @@ function renderReadme(
   );
   const runScriptPath = directory + '/run.sh';
   const scenarioTemplatePath = directory + '/scenarios/<scenario-key>.yaml';
+  const suiteTemplatePath = directory + '/suites/<suite-key>.yaml';
   const outputTemplatePath = directory + '/generated/<scenario-key>.k6.js';
   const workflowScenarioPath = directory + '/scenarios/login-flow.yaml';
   const workflowOutputPath = directory + '/generated/login-flow.k6.js';
@@ -550,6 +553,9 @@ function renderReadme(
   const testNameCommand = usesDefaultDirectory
     ? cliCommand + ' test' + moduleOption + ' -s <scenario-key>'
     : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath);
+  const suiteTestCommand = usesDefaultDirectory
+    ? cliCommand + ' test' + moduleOption + ' --suite <suite-key>'
+    : cliCommand + ' test --config ' + configArg + ' --module ' + moduleName + ' --suite ' + shellQuote(suiteTemplatePath);
   const runNameCommand = usesDefaultDirectory
     ? cliCommand + ' run' + moduleOption + ' -s <scenario-key>'
     : cliCommand + ' run --config ' + configArg + ' --module ' + moduleName + ' --scenario ' + shellQuote(scenarioTemplatePath) + ' --write ' + shellQuote(outputTemplatePath);
@@ -587,9 +593,11 @@ function renderReadme(
     RUN_SCRIPT_PATH: runScriptPath,
     SCENARIO_PATH: scenarioPath,
     SCENARIO_TEMPLATE_PATH: scenarioTemplatePath,
+    SUITE_TEMPLATE_PATH: suiteTemplatePath,
     CATALOG_CONFIG_VALUE: catalogConfigValue,
     SNAPSHOT_CONFIG_VALUE: snapshotConfigValue,
     SNAPSHOT_PATH: snapshotPath,
+    SUITE_TEST_COMMAND: suiteTestCommand,
     SYNC_COMMAND: syncCommand,
     TEST_NAME_COMMAND: testNameCommand,
     TEST_WORKFLOW_COMMAND: testWorkflowCommand,

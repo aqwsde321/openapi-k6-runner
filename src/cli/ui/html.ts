@@ -57,6 +57,13 @@ export const UI_HTML = String.raw`<!doctype html>
       max-width: 820px;
       min-width: 0;
     }
+    .header-action-button {
+      align-items: center;
+      display: inline-flex;
+      gap: 6px;
+      height: 30px;
+      padding: 0 10px;
+    }
     .server-status {
       display: inline-flex;
       margin-bottom: -8px;
@@ -173,6 +180,123 @@ export const UI_HTML = String.raw`<!doctype html>
       display: flex;
       justify-content: flex-end;
     }
+    .report-modal {
+      align-items: center;
+      background: rgba(16, 24, 40, 0.48);
+      display: grid;
+      inset: 0;
+      justify-content: center;
+      padding: 18px;
+      position: fixed;
+      z-index: 45;
+    }
+    .report-modal[hidden] {
+      display: none;
+    }
+    .report-modal-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      box-shadow: 0 24px 60px rgba(16, 24, 40, 0.22);
+      display: grid;
+      grid-template-rows: max-content minmax(0, 1fr);
+      max-height: min(86vh, 900px);
+      max-width: 980px;
+      min-width: 0;
+      overflow: hidden;
+      width: min(100%, 980px);
+    }
+    .report-modal-head {
+      align-items: start;
+      background: #fbfcfe;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      padding: 14px 16px;
+    }
+    .report-modal-controls {
+      align-items: start;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+      min-width: 0;
+    }
+    .report-modal-title {
+      font-size: 15px;
+      font-weight: 800;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .report-modal-meta {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .report-modal-body {
+      display: grid;
+      gap: 12px;
+      min-height: 0;
+      overflow: auto;
+      padding: 14px 16px;
+    }
+    .report-modal-actions {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .report-action-group {
+      align-items: center;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      min-height: 34px;
+      padding: 3px;
+    }
+    .report-action-group + .report-action-group {
+      border-color: #c8d1df;
+    }
+    .report-modal-controls > .icon-button {
+      background: #fff;
+      border-color: #c8d1df;
+    }
+    .report-modal-select {
+      border: 0;
+      background: #fff;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 650;
+      max-width: 220px;
+      min-height: 30px;
+      padding: 5px 8px;
+      width: auto;
+    }
+    .report-picker-card {
+      align-items: center;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      padding: 9px 10px;
+    }
+    .report-picker-title {
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .report-picker-card .report-modal-select {
+      border: 1px solid var(--line);
+      max-width: min(420px, 50vw);
+    }
     .panel {
       min-height: 0;
       background: var(--panel);
@@ -204,7 +328,45 @@ export const UI_HTML = String.raw`<!doctype html>
     }
     .panel-title { margin: 0; font-size: 13px; font-weight: 750; }
     .panel-body { padding: 12px; overflow: auto; min-height: 0; }
-    input, button {
+    .nav-tabs {
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      flex-shrink: 0;
+      gap: 6px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      padding: 8px 12px;
+    }
+    .nav-tab {
+      border-radius: 6px;
+      color: var(--muted);
+      min-width: 0;
+      padding: 6px 8px;
+    }
+    .nav-tab.active {
+      background: var(--panel-2);
+      border-color: #b8c0cc;
+      color: var(--text);
+    }
+    .scenario-tools {
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      flex-shrink: 0;
+      gap: 8px;
+      padding: 10px 12px;
+    }
+    .scenario-actions {
+      display: grid;
+      gap: 6px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .scenario-action-button {
+      padding: 6px 8px;
+      min-width: 0;
+      font-size: 12px;
+    }
+    input, button, select {
       font: inherit;
       border-radius: 6px;
     }
@@ -258,24 +420,19 @@ export const UI_HTML = String.raw`<!doctype html>
       width: 1px;
     }
     .scenario-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 10px;
+      display: grid;
+      gap: 2px;
     }
     .scenario-group {
-      background: #fbfcfe;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      display: flex;
-      flex-direction: column;
+      display: grid;
       gap: 0;
-      padding: 4px 6px 7px;
+      min-width: 0;
     }
     .scenario-group-title {
       border: 0;
       background: transparent;
-      padding: 6px 2px 6px;
+      border-radius: 4px;
+      padding: 6px 4px;
       color: var(--muted);
       display: grid;
       grid-template-columns: 14px minmax(0, 1fr) max-content;
@@ -289,11 +446,8 @@ export const UI_HTML = String.raw`<!doctype html>
       text-transform: uppercase;
       width: 100%;
     }
-    .scenario-group:not(.collapsed) .scenario-group-title {
-      border-bottom: 1px solid var(--line);
-      margin-bottom: 4px;
-    }
     .scenario-group-title:hover {
+      background: var(--hover);
       color: var(--text);
       cursor: pointer;
     }
@@ -314,11 +468,13 @@ export const UI_HTML = String.raw`<!doctype html>
       font-size: 11px;
       font-weight: 750;
     }
-    .scenario-group.collapsed .scenario-group-items { display: none; }
+    .scenario-group.collapsed > .scenario-group-items { display: none; }
     .scenario-group-items {
       display: grid;
       gap: 2px;
-      padding-top: 2px;
+      margin-left: 13px;
+      padding: 2px 0 2px 9px;
+      border-left: 1px solid var(--line);
     }
     .scenario-item {
       border: 0;
@@ -338,6 +494,213 @@ export const UI_HTML = String.raw`<!doctype html>
     .scenario-item.active {
       border-color: var(--accent);
       background: #f4fbf8;
+    }
+    .suite-scenario-list,
+    .suite-result-list,
+    .report-scenario-list {
+      display: grid;
+      gap: 4px;
+    }
+    .suite-scenario,
+    .suite-result-scenario {
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 4px;
+      padding: 8px 0;
+    }
+    .suite-scenario:first-child,
+    .suite-result-scenario:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .suite-scenario-head,
+    .suite-result-scenario-head,
+    .report-scenario-head {
+      align-items: start;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+    }
+    .suite-scenario-name,
+    .suite-result-scenario-name,
+    .report-scenario-name {
+      font-weight: 760;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .report-scenario-list {
+      gap: 8px;
+    }
+    .report-scenario {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-left: 4px solid #98a2b3;
+      border-radius: 6px;
+      display: grid;
+      gap: 5px;
+      padding: 10px 12px;
+    }
+    .report-scenario.ok {
+      background: #fbfffd;
+      border-left-color: var(--ok);
+    }
+    .report-scenario.bad {
+      background: #fffafa;
+      border-left-color: var(--bad);
+    }
+    .report-scenario.warn {
+      background: #fffcf3;
+      border-left-color: var(--warn);
+    }
+    .report-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .report-actions a,
+    .report-actions button,
+    .report-modal-actions a,
+    .report-modal-actions button {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 9px;
+      text-decoration: none;
+    }
+    .report-actions a:hover,
+    .report-actions button:hover:not(:disabled),
+    .report-modal-actions a:hover,
+    .report-modal-actions button:hover:not(:disabled) {
+      background: var(--hover);
+      border-color: #b8c0cc;
+    }
+    .report-scenario-failure {
+      color: var(--bad);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .report-failure-summary {
+      background: #fffafa;
+      border: 1px solid #fecaca;
+      border-left: 4px solid var(--bad);
+      border-radius: 6px;
+      display: grid;
+      gap: 7px;
+      padding: 10px 12px;
+    }
+    .report-failure-summary.ok {
+      background: #f6fef9;
+      border-color: #abefc6;
+      border-left-color: var(--ok);
+    }
+    .report-failure-title {
+      color: var(--bad);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .report-failure-summary.ok .report-failure-title { color: var(--ok); }
+    .report-failure-list {
+      display: grid;
+      gap: 6px;
+    }
+    .report-failure-item {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .report-failure-main {
+      font-size: 12px;
+      font-weight: 760;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .report-file-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 6px;
+      display: grid;
+      gap: 8px;
+      padding: 10px 12px;
+    }
+    .report-file-label {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .report-shortcut {
+      align-items: center;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: 6px;
+      display: grid;
+      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) max-content;
+      padding: 9px 10px;
+    }
+    .report-shortcut-title {
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .report-shortcut-meta {
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 2px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .report-section-head {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: space-between;
+    }
+    .report-section-head h3 {
+      margin: 0;
+    }
+    .report-explanation-grid {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .report-explanation-card {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      padding: 9px 10px;
+    }
+    .report-explanation-label {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .report-explanation-title {
+      font-size: 12px;
+      font-weight: 800;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .report-explanation-text {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .scenario-item-head {
       display: grid;
@@ -951,9 +1314,12 @@ export const UI_HTML = String.raw`<!doctype html>
   <header>
     <div class="brand">
       <h1>openapi-k6 UI</h1>
-      <div class="subtitle">시나리오 검증/실행</div>
+      <div class="subtitle">시나리오·스위트 검증/실행</div>
     </div>
     <div class="row header-meta">
+      <button id="reportsBtn" class="header-action-button" type="button">
+        리포트 <span id="reportCount" class="pill">0</span>
+      </button>
       <div id="serverStatus" class="server-status" tabindex="0" aria-label="서버 상태">
         <div id="serverStatusSummary" class="server-status-summary">
           <span class="server-count"><span class="server-dot ok" aria-hidden="true"></span><span id="serverConnectedCount">0</span></span>
@@ -973,11 +1339,21 @@ export const UI_HTML = String.raw`<!doctype html>
   <main>
     <section class="panel">
       <div class="panel-head">
-        <h2 class="panel-title">시나리오</h2>
+        <h2 id="listTitle" class="panel-title">시나리오</h2>
         <span id="scenarioCount" class="pill">0</span>
       </div>
-      <div class="panel-body">
+      <div class="nav-tabs" role="tablist" aria-label="탐색 대상">
+        <button id="scenarioTabBtn" class="nav-tab active" type="button">시나리오</button>
+        <button id="suiteTabBtn" class="nav-tab" type="button">스위트</button>
+      </div>
+      <div class="scenario-tools">
         <input id="searchInput" placeholder="시나리오 검색">
+        <div class="scenario-actions">
+          <button id="collapseGroupsBtn" class="scenario-action-button" type="button">전체 접기</button>
+          <button id="expandGroupsBtn" class="scenario-action-button" type="button">전체 펼치기</button>
+        </div>
+      </div>
+      <div class="panel-body">
         <div id="scenarioList" class="scenario-list"></div>
       </div>
     </section>
@@ -987,7 +1363,7 @@ export const UI_HTML = String.raw`<!doctype html>
         <span id="detailStatus" class="pill">미실행</span>
       </div>
       <div class="panel-subhead run-results-heading">
-        <h3>최근 실행 결과</h3>
+        <h3 id="runSummaryTitle">최근 실행 결과</h3>
         <button id="runValuesToggle" class="run-values-toggle" type="button" disabled>요청/응답 숨김</button>
       </div>
       <div class="panel-body stack">
@@ -1024,6 +1400,23 @@ export const UI_HTML = String.raw`<!doctype html>
       </div>
     </section>
   </main>
+  <div id="reportModal" class="report-modal" role="dialog" aria-modal="true" aria-labelledby="reportModalTitle" hidden>
+    <div class="report-modal-card">
+      <div class="report-modal-head">
+        <div>
+          <div id="reportModalTitle" class="report-modal-title">종합 리포트</div>
+          <div id="reportModalMeta" class="report-modal-meta"></div>
+        </div>
+        <div class="report-modal-controls">
+          <div id="reportModalActions" class="report-modal-actions"></div>
+          <button id="reportModalCloseBtn" class="icon-button" type="button" aria-label="리포트 닫기" title="리포트 닫기">×</button>
+        </div>
+      </div>
+      <div id="reportModalBody" class="report-modal-body">
+        <div class="empty">리포트 없음</div>
+      </div>
+    </div>
+  </div>
   <div id="connectionOverlay" class="connection-overlay" role="alert" aria-live="assertive">
     <div class="connection-card">
       <div class="connection-title">UI 서버 연결 끊김</div>
@@ -1035,30 +1428,49 @@ export const UI_HTML = String.raw`<!doctype html>
   </div>
   <script>
     const COLLAPSED_GROUPS_STORAGE_KEY = 'openapi-k6.ui.collapsedScenarioGroups';
+    const COLLAPSED_SUITE_GROUPS_STORAGE_KEY = 'openapi-k6.ui.collapsedSuiteGroups';
     const UI_CONNECTION_CHECK_INTERVAL_MS = 5000;
 
     const state = {
+      mode: 'scenario',
       scenarios: [],
+      suites: [],
+      reports: [],
+      selectedKind: 'scenario',
       selected: null,
       openStepIndexes: new Set(),
       detail: null,
       collapsedGroups: readCollapsedScenarioGroups(),
+      collapsedSuiteGroups: readCollapsedGroups(COLLAPSED_SUITE_GROUPS_STORAGE_KEY),
+      reportModalReportId: null,
+      reportModalReport: null,
+      reportModalFailuresOnly: false,
       showRunValues: true,
       lastRun: new Map(),
+      lastSuiteRun: new Map(),
       runsByScenario: new Map(),
+      runsBySuite: new Map(),
       activeOutputRunId: null,
       uiDisconnected: false,
       serverSummary: { checked: false, moduleCount: 0, connectedServers: 0, failedServers: 0, missingSnapshots: 0, issueModules: 0 }
     };
 
     const els = {
+      listTitle: document.getElementById('listTitle'),
       scenarioCount: document.getElementById('scenarioCount'),
+      scenarioTabBtn: document.getElementById('scenarioTabBtn'),
+      suiteTabBtn: document.getElementById('suiteTabBtn'),
+      reportsBtn: document.getElementById('reportsBtn'),
+      reportCount: document.getElementById('reportCount'),
       scenarioList: document.getElementById('scenarioList'),
       searchInput: document.getElementById('searchInput'),
+      collapseGroupsBtn: document.getElementById('collapseGroupsBtn'),
+      expandGroupsBtn: document.getElementById('expandGroupsBtn'),
       detailTitle: document.getElementById('detailTitle'),
       detailStatus: document.getElementById('detailStatus'),
       scenarioSummary: document.getElementById('scenarioSummary'),
       detailBody: document.getElementById('detailBody'),
+      runSummaryTitle: document.getElementById('runSummaryTitle'),
       serverStatusSummary: document.getElementById('serverStatusSummary'),
       serverConnectedCount: document.getElementById('serverConnectedCount'),
       serverIssueCount: document.getElementById('serverIssueCount'),
@@ -1074,6 +1486,12 @@ export const UI_HTML = String.raw`<!doctype html>
       runStatus: document.getElementById('runStatus'),
       runHint: document.getElementById('runHint'),
       runSummary: document.getElementById('runSummary'),
+      reportModal: document.getElementById('reportModal'),
+      reportModalTitle: document.getElementById('reportModalTitle'),
+      reportModalMeta: document.getElementById('reportModalMeta'),
+      reportModalActions: document.getElementById('reportModalActions'),
+      reportModalBody: document.getElementById('reportModalBody'),
+      reportModalCloseBtn: document.getElementById('reportModalCloseBtn'),
       connectionMessage: document.getElementById('connectionMessage'),
       reconnectBtn: document.getElementById('reconnectBtn')
     };
@@ -1134,6 +1552,8 @@ export const UI_HTML = String.raw`<!doctype html>
 
     function formatStatusLabel(value) {
       const normalized = String(value).toLowerCase();
+      if (normalized === 'pass') return '성공';
+      if (normalized === 'fail') return '실패';
       if (normalized === 'passed') return '성공';
       if (normalized === 'failed') return '실패';
       if (normalized === 'running') return '실행 중';
@@ -1155,10 +1575,18 @@ export const UI_HTML = String.raw`<!doctype html>
       return value === 1 ? '1단계' : value + '단계';
     }
 
+    function formatScenarioCount(value) {
+      return value === 1 ? '1개 시나리오' : value + '개 시나리오';
+    }
+
     function readCollapsedScenarioGroups() {
+      return readCollapsedGroups(COLLAPSED_GROUPS_STORAGE_KEY);
+    }
+
+    function readCollapsedGroups(storageKey) {
       try {
         if (typeof localStorage === 'undefined') return new Set();
-        const raw = localStorage.getItem(COLLAPSED_GROUPS_STORAGE_KEY);
+        const raw = localStorage.getItem(storageKey);
         if (!raw) return new Set();
         const values = JSON.parse(raw);
         if (!Array.isArray(values)) return new Set();
@@ -1169,9 +1597,17 @@ export const UI_HTML = String.raw`<!doctype html>
     }
 
     function saveCollapsedScenarioGroups() {
+      saveCollapsedGroups(COLLAPSED_GROUPS_STORAGE_KEY, state.collapsedGroups);
+    }
+
+    function saveCollapsedSuiteGroups() {
+      saveCollapsedGroups(COLLAPSED_SUITE_GROUPS_STORAGE_KEY, state.collapsedSuiteGroups);
+    }
+
+    function saveCollapsedGroups(storageKey, groups) {
       try {
         if (typeof localStorage === 'undefined') return;
-        localStorage.setItem(COLLAPSED_GROUPS_STORAGE_KEY, JSON.stringify(Array.from(state.collapsedGroups).sort()));
+        localStorage.setItem(storageKey, JSON.stringify(Array.from(groups).sort()));
       } catch {
         // Ignore storage failures so the UI still works in restricted browsers.
       }
@@ -1196,8 +1632,8 @@ export const UI_HTML = String.raw`<!doctype html>
 
     function statusTone(value) {
       const normalized = String(value).toLowerCase();
-      if (normalized.includes('passed') || normalized.includes('reachable') || normalized.includes('ready') || normalized.includes('present')) return ' ok';
-      if (normalized.includes('failed') || normalized.includes('missing') || normalized.includes('error')) return ' bad';
+      if (normalized === 'pass' || normalized.includes('passed') || normalized.includes('reachable') || normalized.includes('ready') || normalized.includes('present')) return ' ok';
+      if (normalized === 'fail' || normalized.includes('failed') || normalized.includes('missing') || normalized.includes('error')) return ' bad';
       if (normalized.includes('running') || normalized.includes('checking') || normalized.includes('warning') || normalized.includes('unknown')) return ' warn';
       return '';
     }
@@ -1241,6 +1677,7 @@ export const UI_HTML = String.raw`<!doctype html>
     }
 
     function updateRunHint() {
+      const target = state.selectedKind === 'suite' ? '스위트' : '시나리오';
       if (state.uiDisconnected) {
         setHint('UI 서버 연결 끊김. 재연결 후 실행할 수 있습니다.', 'bad');
         els.validateBtn.disabled = true;
@@ -1249,13 +1686,13 @@ export const UI_HTML = String.raw`<!doctype html>
       }
 
       if (!state.selected) {
-        setHint('시나리오를 선택하세요.', '');
+        setHint(state.mode === 'suite' ? '스위트를 선택하세요.' : '시나리오를 선택하세요.', '');
       } else if (state.serverSummary.missingSnapshots > 0) {
         setHint('OpenAPI 스냅샷이 없습니다. 먼저 openapi-k6 sync를 실행하세요.', 'bad');
       } else if (state.serverSummary.failedServers > 0) {
         setHint('일부 서버에 연결할 수 없습니다. 검증은 가능하지만 실행은 실패할 수 있습니다.', 'warn');
       } else if (state.serverSummary.checked) {
-        setHint('검증/실행 준비됨.', '');
+        setHint(target + ' 검증/실행 준비됨.', '');
       } else {
         setHint('백엔드 상태가 불확실하면 실행 전에 서버를 확인하세요.', 'warn');
       }
@@ -1297,8 +1734,10 @@ export const UI_HTML = String.raw`<!doctype html>
     async function loadScenarios() {
       const data = await fetchJson('/api/scenarios');
       state.scenarios = data.scenarios;
-      renderScenarioList();
-      const selectedExists = state.selected && state.scenarios.some((scenario) => scenario.id === state.selected);
+      await loadSuites();
+      await loadReports();
+      renderCurrentList();
+      const selectedExists = state.selectedKind === 'scenario' && state.selected && state.scenarios.some((scenario) => scenario.id === state.selected);
       if (selectedExists) {
         await selectScenario(state.selected);
       } else if (state.scenarios.length > 0) {
@@ -1306,6 +1745,41 @@ export const UI_HTML = String.raw`<!doctype html>
         await selectScenario(state.scenarios[0].id);
       }
       updateRunHint();
+    }
+
+    async function loadSuites() {
+      const data = await fetchJson('/api/suites');
+      state.suites = data.suites;
+    }
+
+    async function loadReports() {
+      const data = await fetchJson('/api/reports');
+      state.reports = data.reports;
+      els.reportCount.textContent = String(state.reports.length);
+    }
+
+    function switchListMode(mode) {
+      state.mode = mode;
+      els.searchInput.placeholder = mode === 'suite' ? '스위트 검색' : '시나리오 검색';
+      renderCurrentList();
+      if (mode === 'suite' && state.selectedKind !== 'suite' && state.suites.length > 0) {
+        selectSuite(state.suites[0].id);
+      } else if (mode === 'scenario' && state.selectedKind !== 'scenario' && state.scenarios.length > 0) {
+        selectScenario(state.scenarios[0].id);
+      } else {
+        updateRunHint();
+      }
+    }
+
+    function renderCurrentList() {
+      if (state.mode === 'suite') {
+        renderSuiteList();
+      } else {
+        renderScenarioList();
+      }
+      els.listTitle.textContent = state.mode === 'suite' ? '스위트' : '시나리오';
+      els.scenarioTabBtn.classList.toggle('active', state.mode === 'scenario');
+      els.suiteTabBtn.classList.toggle('active', state.mode === 'suite');
     }
 
     function renderScenarioList() {
@@ -1318,26 +1792,14 @@ export const UI_HTML = String.raw`<!doctype html>
           (scenario.description || '').toLowerCase().includes(query);
       });
       els.scenarioCount.textContent = String(items.length);
-      const groups = [];
-      for (const scenario of items) {
-        let group = groups.find((candidate) => candidate.name === scenario.group);
-        if (!group) {
-          group = { name: scenario.group, scenarios: [] };
-          groups.push(group);
-        }
-        group.scenarios.push(scenario);
-      }
-      els.scenarioList.innerHTML = groups.map((group) => {
-        const collapsed = !query && state.collapsedGroups.has(group.name);
-        return '<div class="scenario-group ' + (collapsed ? 'collapsed' : '') + '" data-group="' + escapeHtml(group.name) + '">' +
-          '<button class="scenario-group-title" type="button" data-group="' + escapeHtml(group.name) + '" aria-expanded="' + String(!collapsed) + '">' +
-            '<span class="scenario-group-caret" aria-hidden="true">' + (collapsed ? '&gt;' : 'v') + '</span>' +
-            '<span class="scenario-group-label">' + escapeHtml(group.name) + '</span>' +
-            '<span class="scenario-group-count">' + group.scenarios.length + '</span>' +
-          '</button>' +
-          '<div class="scenario-group-items">' + group.scenarios.map(renderScenarioItem).join('') + '</div>' +
-        '</div>';
-      }).join('');
+      els.scenarioList.innerHTML = renderTreeNodes(
+        buildItemTree(items, (scenario) => scenario.group),
+        {
+          query,
+          collapsedGroups: state.collapsedGroups,
+          renderItem: renderScenarioItem,
+        },
+      );
 
       for (const title of els.scenarioList.querySelectorAll('.scenario-group-title')) {
         title.addEventListener('click', () => toggleScenarioGroup(title.getAttribute('data-group')));
@@ -1345,6 +1807,89 @@ export const UI_HTML = String.raw`<!doctype html>
       for (const item of els.scenarioList.querySelectorAll('.scenario-item')) {
         item.addEventListener('click', () => selectScenario(item.getAttribute('data-id')));
       }
+    }
+
+    function renderSuiteList() {
+      const query = els.searchInput.value.trim().toLowerCase();
+      const items = state.suites.filter((suite) => {
+        return !query ||
+          suite.name.toLowerCase().includes(query) ||
+          suite.path.toLowerCase().includes(query) ||
+          suite.group.toLowerCase().includes(query) ||
+          (suite.description || '').toLowerCase().includes(query) ||
+          (suite.scenarios || []).some((scenario) => scenario.toLowerCase().includes(query));
+      });
+      els.scenarioCount.textContent = String(items.length);
+      els.scenarioList.innerHTML = renderTreeNodes(
+        buildItemTree(items, (suite) => suite.group),
+        {
+          query,
+          collapsedGroups: state.collapsedSuiteGroups,
+          renderItem: renderSuiteItem,
+        },
+      );
+
+      for (const title of els.scenarioList.querySelectorAll('.scenario-group-title')) {
+        title.addEventListener('click', () => toggleSuiteGroup(title.getAttribute('data-group')));
+      }
+      for (const item of els.scenarioList.querySelectorAll('.scenario-item')) {
+        item.addEventListener('click', () => selectSuite(item.getAttribute('data-id')));
+      }
+    }
+
+    function buildItemTree(items, getGroup) {
+      const root = createTreeNode('', '', 0);
+      for (const item of items) {
+        const parts = splitTreeGroup(getGroup(item));
+        let node = root;
+        let key = '';
+        for (const part of parts) {
+          key = key ? key + '/' + part : part;
+          let child = node.children.find((candidate) => candidate.key === key);
+          if (!child) {
+            child = createTreeNode(part, key, node.depth + 1);
+            node.children.push(child);
+          }
+          child.count += 1;
+          node = child;
+        }
+        node.items.push(item);
+      }
+      return root.children;
+    }
+
+    function createTreeNode(label, key, depth) {
+      return {
+        label,
+        key,
+        depth,
+        count: 0,
+        children: [],
+        items: [],
+      };
+    }
+
+    function splitTreeGroup(group) {
+      const value = String(group || 'root').trim();
+      if (!value || value === 'root') return ['root'];
+      return value.split('/').filter(Boolean);
+    }
+
+    function renderTreeNodes(nodes, options) {
+      return nodes.map((node) => renderTreeNode(node, options)).join('');
+    }
+
+    function renderTreeNode(node, options) {
+      const collapsed = !options.query && options.collapsedGroups.has(node.key);
+      const children = renderTreeNodes(node.children, options) + node.items.map(options.renderItem).join('');
+      return '<div class="scenario-group ' + (collapsed ? 'collapsed' : '') + '" data-group="' + escapeHtml(node.key) + '">' +
+        '<button class="scenario-group-title" type="button" data-group="' + escapeHtml(node.key) + '" aria-expanded="' + String(!collapsed) + '">' +
+          '<span class="scenario-group-caret" aria-hidden="true">' + (collapsed ? '&gt;' : 'v') + '</span>' +
+          '<span class="scenario-group-label">' + escapeHtml(node.label) + '</span>' +
+          '<span class="scenario-group-count">' + node.count + '</span>' +
+        '</button>' +
+        '<div class="scenario-group-items">' + children + '</div>' +
+      '</div>';
     }
 
     function toggleScenarioGroup(groupName) {
@@ -1358,16 +1903,99 @@ export const UI_HTML = String.raw`<!doctype html>
       renderScenarioList();
     }
 
+    function toggleSuiteGroup(groupName) {
+      if (!groupName) return;
+      if (state.collapsedSuiteGroups.has(groupName)) {
+        state.collapsedSuiteGroups.delete(groupName);
+      } else {
+        state.collapsedSuiteGroups.add(groupName);
+      }
+      saveCollapsedSuiteGroups();
+      renderSuiteList();
+    }
+
+    function collapseAllScenarioGroups() {
+      if (state.mode === 'suite') {
+        collectTreeGroupKeys(state.suites, (suite) => suite.group, state.collapsedSuiteGroups);
+        saveCollapsedSuiteGroups();
+      } else {
+        collectTreeGroupKeys(state.scenarios, (scenario) => scenario.group, state.collapsedGroups);
+        saveCollapsedScenarioGroups();
+      }
+      renderCurrentList();
+    }
+
+    function collectTreeGroupKeys(items, getGroup, target) {
+      for (const item of items) {
+        let key = '';
+        for (const part of splitTreeGroup(getGroup(item))) {
+          key = key ? key + '/' + part : part;
+          target.add(key);
+        }
+      }
+    }
+
+    function expandAllScenarioGroups() {
+      if (state.mode === 'suite') {
+        state.collapsedSuiteGroups.clear();
+        saveCollapsedSuiteGroups();
+      } else {
+        state.collapsedGroups.clear();
+        saveCollapsedScenarioGroups();
+      }
+      renderCurrentList();
+    }
+
     function renderScenarioItem(scenario) {
         const status = state.lastRun.get(scenario.id) || (scenario.error ? 'failed' : 'not run');
-        return '<button class="scenario-item ' + (state.selected === scenario.id ? 'active' : '') + '" data-id="' + escapeHtml(scenario.id) + '" title="' + escapeHtml(scenario.path) + '">' +
-          '<div class="scenario-item-head"><span class="scenario-name">' + escapeHtml(scenario.name) + '</span><span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span></div>' +
+        const label = formatScenarioListLabel(scenario);
+        return '<button class="scenario-item ' + (state.selectedKind === 'scenario' && state.selected === scenario.id ? 'active' : '') + '" data-id="' + escapeHtml(scenario.id) + '" title="' + escapeHtml(formatScenarioItemTitle(scenario)) + '">' +
+          '<div class="scenario-item-head"><span class="scenario-name">' + escapeHtml(label) + '</span><span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span></div>' +
           '<div class="muted">' + (scenario.stepCount === undefined ? '파싱 오류' : formatStepCount(scenario.stepCount)) + '</div>' +
           '</button>';
     }
 
+    function renderSuiteItem(suite) {
+        const status = state.lastSuiteRun.get(suite.id) || (suite.error ? 'failed' : 'not run');
+        const count = suite.scenarioCount === undefined ? '파싱 오류' : formatScenarioCount(suite.scenarioCount);
+        return '<button class="scenario-item ' + (state.selectedKind === 'suite' && state.selected === suite.id ? 'active' : '') + '" data-id="' + escapeHtml(suite.id) + '" title="' + escapeHtml(formatScenarioItemTitle(suite)) + '">' +
+          '<div class="scenario-item-head"><span class="scenario-name">' + escapeHtml(suite.name) + '</span><span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span></div>' +
+          '<div class="muted">' + escapeHtml(count) + '</div>' +
+          '</button>';
+    }
+
+    function formatScenarioListLabel(scenario) {
+      const name = String(scenario.name || scenario.id || '');
+      const group = String(scenario.group || '');
+      if (!name || !group) return name;
+      const prefix = group + '/';
+      return name.toLowerCase().startsWith(prefix.toLowerCase())
+        ? name.slice(prefix.length) || name
+        : name;
+    }
+
+    function formatScenarioDescription(scenario) {
+      const description = String(scenario.description || '').trim();
+      if (!description) return '';
+      const normalized = description.toLowerCase();
+      const autoSamples = [
+        'sample scenario ' + String(scenario.id || '').toLowerCase(),
+        'sample scenario ' + String(scenario.name || '').toLowerCase()
+      ];
+      return autoSamples.includes(normalized) ? '' : description;
+    }
+
+    function formatScenarioItemTitle(scenario) {
+      const parts = [];
+      if (scenario.id) parts.push(scenario.id);
+      if (scenario.name && scenario.name !== scenario.id) parts.push(scenario.name);
+      if (scenario.path) parts.push(scenario.path);
+      return parts.join('\\n');
+    }
+
     async function selectScenario(id) {
       const previousSelected = state.selected;
+      state.selectedKind = 'scenario';
       state.selected = id;
       if (previousSelected !== id) state.openStepIndexes.clear();
       const activeItem = findRunById(state.activeOutputRunId);
@@ -1384,7 +2012,8 @@ export const UI_HTML = String.raw`<!doctype html>
           setStatus(els.runStatus, 'idle');
         }
       }
-      renderScenarioList();
+      if (state.mode !== 'scenario') state.mode = 'scenario';
+      renderCurrentList();
       try {
         state.detail = await fetchJson('/api/scenario?scenario=' + encodeURIComponent(id));
         renderDetail();
@@ -1406,18 +2035,200 @@ export const UI_HTML = String.raw`<!doctype html>
       updateRunHint();
     }
 
+    async function selectSuite(id) {
+      const previousSelected = state.selected;
+      state.selectedKind = 'suite';
+      state.selected = id;
+      if (previousSelected !== id) state.openStepIndexes.clear();
+      const activeItem = findRunById(state.activeOutputRunId);
+      if (!activeItem || activeItem.suite !== id) {
+        const latestItem = getLatestSuiteRun(id);
+        state.activeOutputRunId = latestItem ? latestItem.id : null;
+        if (latestItem) {
+          els.output.innerHTML = latestItem.html || '';
+          els.output.scrollTop = els.output.scrollHeight;
+          setStatus(els.runStatus, latestItem.status);
+          updateCopyLogButton();
+        } else {
+          resetOutput();
+          setStatus(els.runStatus, 'idle');
+        }
+      }
+      if (state.mode !== 'suite') state.mode = 'suite';
+      renderCurrentList();
+      try {
+        state.detail = await fetchJson('/api/suite?suite=' + encodeURIComponent(id));
+        renderSuiteDetail();
+        els.validateBtn.disabled = false;
+        els.testBtn.disabled = false;
+      } catch (error) {
+        state.detail = null;
+        state.openStepIndexes.clear();
+        const message = isUiConnectionError(error)
+          ? '상세 정보를 불러오지 못했습니다.'
+          : error.message;
+        els.detailTitle.textContent = isUiConnectionError(error) ? '상세 정보' : '스위트 오류';
+        els.scenarioSummary.innerHTML = '<div class="empty">' + escapeHtml(message) + '</div>';
+        els.detailBody.innerHTML = '<div class="empty">' + escapeHtml(message) + '</div>';
+        els.validateBtn.disabled = true;
+        els.testBtn.disabled = true;
+      }
+      renderRunSummary();
+      updateRunHint();
+    }
+
+    async function openLatestReportModal() {
+      els.reportModal.hidden = false;
+      els.reportModalTitle.textContent = '종합 리포트';
+      els.reportModalMeta.textContent = '리포트 불러오는 중';
+      els.reportModalActions.innerHTML = '';
+      els.reportModalBody.innerHTML = '<div class="empty">리포트를 불러오는 중...</div>';
+      try {
+        await loadReports();
+        const report = state.reports.find((item) => !item.error) || state.reports[0];
+        if (!report) {
+          renderEmptyReportModal();
+          return;
+        }
+        await openReportModal(report.id);
+      } catch (error) {
+        const message = isUiConnectionError(error)
+          ? '리포트를 불러오지 못했습니다.'
+          : error.message;
+        els.reportModalActions.innerHTML = '';
+        els.reportModalBody.innerHTML = '<div class="empty">' + escapeHtml(message) + '</div>';
+      }
+    }
+
+    function renderEmptyReportModal() {
+      state.reportModalReportId = null;
+      state.reportModalReport = null;
+      state.reportModalFailuresOnly = false;
+      els.reportModalTitle.textContent = '종합 리포트';
+      els.reportModalMeta.textContent = '리포트 없음';
+      els.reportModalActions.innerHTML = '';
+      els.reportModalBody.innerHTML = '<div class="empty">아직 생성된 리포트가 없습니다. 스위트를 실행하면 종합 리포트가 생성됩니다.</div>';
+    }
+
+    async function openReportModal(id) {
+      if (!id) return;
+      state.reportModalReportId = id;
+      state.reportModalReport = null;
+      state.reportModalFailuresOnly = false;
+      els.reportModal.hidden = false;
+      els.reportModalTitle.textContent = '종합 리포트';
+      els.reportModalMeta.textContent = id;
+      renderReportModalActions(id, []);
+      els.reportModalBody.innerHTML = '<div class="empty">리포트를 불러오는 중...</div>';
+      try {
+        state.reportModalReport = await fetchJson('/api/report?report=' + encodeURIComponent(id));
+        renderReportModal();
+      } catch (error) {
+        const message = isUiConnectionError(error)
+          ? '리포트를 불러오지 못했습니다.'
+          : error.message;
+        els.reportModalTitle.textContent = '리포트 오류';
+        els.reportModalActions.innerHTML = '';
+        els.reportModalBody.innerHTML = '<div class="empty">' + escapeHtml(message) + '</div>';
+      }
+    }
+
+    function closeReportModal() {
+      els.reportModal.hidden = true;
+      state.reportModalReportId = null;
+      state.reportModalReport = null;
+      state.reportModalFailuresOnly = false;
+      els.reportModalActions.innerHTML = '';
+    }
+
+    function renderReportModal() {
+      const reportId = state.reportModalReportId;
+      const report = state.reportModalReport;
+      if (!reportId || !report) return;
+      const suite = report.suite || {};
+      const summary = report.summary || {};
+      const scenarioSummary = summary.scenarios || {};
+      const stepSummary = summary.steps || {};
+      const scenarios = Array.isArray(report.scenarios) ? report.scenarios : [];
+      const failures = collectReportFailures(report);
+      const visibleScenarios = orderReportScenarios(scenarios)
+        .filter((scenario) => !state.reportModalFailuresOnly || reportScenarioHasFailure(scenario));
+      const title = suite.name || suite.key || reportId;
+      const status = report.result || 'unknown';
+      const meta = formatReportDate(report.generatedAt);
+      els.reportModalTitle.textContent = title + ' 종합 리포트';
+      els.reportModalMeta.textContent = meta ? '생성 ' + meta : reportId;
+      renderReportModalActions(reportId, failures);
+
+      const scenarioFilter = failures.length > 0
+        ? '<div class="report-actions"><button type="button" data-report-toggle-failures>' + escapeHtml(state.reportModalFailuresOnly ? '전체 시나리오' : '실패 시나리오만') + '</button></div>'
+        : '';
+      const scenarioList = visibleScenarios.length === 0
+        ? '<div class="empty">' + escapeHtml(state.reportModalFailuresOnly ? '실패 시나리오 없음' : '테스트한 시나리오 없음') + '</div>'
+        : '<div class="report-scenario-list">' + visibleScenarios.map(renderReportScenario).join('') + '</div>';
+
+      els.reportModalBody.innerHTML =
+        renderReportPicker(reportId) +
+        '<div class="report-file-card">' +
+          '<div class="report-file-label">실행 요약</div>' +
+          '<div class="row">' +
+            '<span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span>' +
+            '<span class="pill">' + escapeHtml(formatReportRatio(scenarioSummary.passed, scenarioSummary.total, 'scenarios') || 'scenarios -') + '</span>' +
+            '<span class="pill">' + escapeHtml(formatReportRatio(stepSummary.passed, stepSummary.total, 'steps') || 'steps -') + '</span>' +
+            '<span class="pill">' + escapeHtml(formatDurationMs(summary.durationMs || 0)) + '</span>' +
+          '</div>' +
+        '</div>' +
+        renderReportExplanation(report, reportId, failures) +
+        renderReportFailureSummary(failures) +
+        '<div class="report-section-head"><h3>테스트한 시나리오</h3>' + scenarioFilter + '</div>' +
+        scenarioList;
+    }
+
+    function renderReportModalActions(reportId, failures) {
+      const selectedId = reportId || '';
+      els.reportModalActions.innerHTML =
+        '<span class="report-action-group">' +
+          '<a href="/api/report/html?report=' + encodeURIComponent(selectedId) + '" target="_blank" rel="noreferrer">새 탭</a>' +
+          '<a href="/api/report/download?format=html&report=' + encodeURIComponent(selectedId) + '">HTML 다운로드</a>' +
+          '<a href="/api/report/download?format=json&report=' + encodeURIComponent(selectedId) + '">JSON 다운로드</a>' +
+          '<button type="button" data-copy-report-failures' + (failures.length === 0 ? ' disabled' : '') + '>실패 복사</button>' +
+        '</span>';
+    }
+
+    function renderReportPicker(reportId) {
+      if (state.reports.length <= 1) return '';
+      return '<div class="report-picker-card">' +
+        '<div><div class="report-picker-title">리포트 선택</div><div class="muted">다른 실행 결과 보기</div></div>' +
+        '<select class="report-modal-select" data-report-picker aria-label="리포트 선택">' + state.reports.map((report) => (
+          '<option value="' + escapeHtml(report.id) + '"' + (report.id === reportId ? ' selected' : '') + '>' + escapeHtml(formatReportPickerLabel(report)) + '</option>'
+        )).join('') + '</select>' +
+      '</div>';
+    }
+
+    function formatReportPickerLabel(report) {
+      const status = report.error ? 'failed' : report.result || 'unknown';
+      const title = report.suiteName || report.suiteKey || report.fileName;
+      return [
+        formatStatusLabel(status),
+        title,
+        formatReportDate(report.generatedAt),
+      ].filter(Boolean).join(' · ');
+    }
+
     function renderDetail() {
       const detail = state.detail;
-      els.detailTitle.textContent = detail.name;
+      els.runSummaryTitle.textContent = '최근 실행 결과';
+      els.runValuesToggle.style.display = '';
+      els.detailTitle.textContent = formatScenarioListLabel(detail);
       setStatus(els.detailStatus, state.lastRun.get(detail.id) || 'not run');
-      const description = detail.description && detail.description.trim()
-        ? '<div class="scenario-description">' + escapeHtml(detail.description.trim()) + '</div>'
+      const descriptionText = formatScenarioDescription(detail);
+      const description = descriptionText
+        ? '<div class="scenario-description">' + escapeHtml(descriptionText) + '</div>'
         : '';
       els.scenarioSummary.innerHTML =
         '<div class="stack" style="gap: 6px;">' +
-          '<div class="muted">' + escapeHtml(formatUiPath(detail.path)) + '</div>' +
           description +
-          '<div class="row"><span class="pill">' + escapeHtml(formatStepCount(detail.stepCount)) + '</span></div>' +
+          '<div class="row"><span class="pill">시나리오</span><span class="pill">' + escapeHtml(formatStepCount(detail.stepCount)) + '</span></div>' +
         '</div>';
       for (const index of Array.from(state.openStepIndexes)) {
         if (index >= detail.steps.length) state.openStepIndexes.delete(index);
@@ -1445,7 +2256,7 @@ export const UI_HTML = String.raw`<!doctype html>
         '</div>';
       }).join('');
       els.detailBody.className = 'section-content stack';
-      els.detailBody.innerHTML = '<div><h3>실행 단계</h3><div class="steps">' + steps + '</div></div>';
+      els.detailBody.innerHTML = '<div><h3>시나리오 실행 단계</h3><div class="steps">' + steps + '</div></div>';
       for (const item of els.detailBody.querySelectorAll('.step-toggle')) {
         item.addEventListener('click', () => {
           const nextIndex = Number(item.getAttribute('data-step-index'));
@@ -1457,6 +2268,208 @@ export const UI_HTML = String.raw`<!doctype html>
           renderDetail();
         });
       }
+    }
+
+    function renderSuiteDetail() {
+      const detail = state.detail;
+      els.runSummaryTitle.textContent = '최근 실행 결과';
+      els.runValuesToggle.style.display = '';
+      els.detailTitle.textContent = detail.name;
+      setStatus(els.detailStatus, state.lastSuiteRun.get(detail.id) || 'not run');
+      const description = detail.description && detail.description.trim()
+        ? '<div class="scenario-description">' + escapeHtml(detail.description.trim()) + '</div>'
+        : '';
+      els.scenarioSummary.innerHTML =
+        '<div class="stack" style="gap: 6px;">' +
+          description +
+          '<div class="row"><span class="pill">스위트</span><span class="pill">' + escapeHtml(formatScenarioCount(detail.scenarioCount)) + '</span></div>' +
+        '</div>';
+      const scenarios = detail.scenarios.map((suiteScenario, index) => {
+        const title = suiteScenario.name || suiteScenario.id;
+        const meta = [
+          suiteScenario.stepCount === undefined ? '' : formatStepCount(suiteScenario.stepCount)
+        ].filter(Boolean).join(' · ');
+        return '<div class="suite-scenario">' +
+          '<div class="suite-scenario-head">' +
+            '<div class="suite-scenario-name">' + escapeHtml((index + 1) + '. ' + title) + '</div>' +
+            '<span class="pill' + (suiteScenario.error ? ' bad' : '') + '">' + escapeHtml(suiteScenario.error ? '오류' : '준비됨') + '</span>' +
+          '</div>' +
+          '<div class="muted">' + escapeHtml(meta) + '</div>' +
+          (suiteScenario.error ? '<div class="error">' + escapeHtml(suiteScenario.error) + '</div>' : '') +
+        '</div>';
+      }).join('');
+      els.detailBody.className = 'section-content stack';
+      els.detailBody.innerHTML = '<div><h3>스위트 포함 시나리오</h3><div class="suite-scenario-list">' + scenarios + '</div></div>';
+    }
+
+    function renderReportScenario(reportScenario) {
+      const status = reportScenario.result || 'unknown';
+      const title = reportScenario.name || reportScenario.key || 'scenario';
+      const steps = Array.isArray(reportScenario.steps) ? reportScenario.steps : [];
+      const failedStep = steps.find(reportStepHasFailure);
+      const requestStep = pickReportScenarioRequestStep(steps, failedStep);
+      const request = requestStep ? [requestStep.method, requestStep.path].filter(Boolean).join(' ') : '';
+      const passedSteps = steps.filter((step) => !reportStepHasFailure(step)).length;
+      const meta = [
+        request,
+        steps.length === 0 ? '' : passedSteps + '/' + steps.length + ' steps',
+        typeof reportScenario.durationMs === 'number' ? formatDurationMs(reportScenario.durationMs) : ''
+      ].filter(Boolean).join(' · ');
+      return '<div class="report-scenario' + statusTone(status) + '">' +
+        '<div class="report-scenario-head">' +
+          '<div><div class="report-scenario-name">' + escapeHtml(title) + '</div><div class="muted">' + escapeHtml(meta) + '</div></div>' +
+          '<span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span>' +
+        '</div>' +
+        (failedStep ? '<div class="report-scenario-failure">' + escapeHtml(formatReportStepFailure(failedStep)) + '</div>' : '') +
+      '</div>';
+    }
+
+    function pickReportScenarioRequestStep(steps, failedStep) {
+      if (failedStep && (failedStep.method || failedStep.path)) return failedStep;
+      for (let index = steps.length - 1; index >= 0; index -= 1) {
+        const step = steps[index];
+        if (step && (step.method || step.path)) return step;
+      }
+      return null;
+    }
+
+    function formatReportStepFailure(step) {
+      const response = step.response || {};
+      const condition = step.condition || {};
+      const extracts = Array.isArray(step.extracts) ? step.extracts : [];
+      const failures = [
+        step.error || '',
+        condition.passed === false ? 'condition: ' + (condition.expression || '') : '',
+        ...extracts.filter((extract) => extract && extract.passed === false).map((extract) => 'extract: ' + (extract.name || '') + (extract.error ? ' - ' + extract.error : ''))
+      ].filter(Boolean);
+      return [
+        '실패 step ' + (step.id || 'step'),
+        [step.method, step.path].filter(Boolean).join(' '),
+        response.status === undefined ? '' : 'actual HTTP ' + response.status + (response.statusText ? ' ' + response.statusText : ''),
+        condition.expression ? 'expected ' + condition.expression : '',
+        failures.join(' · ')
+      ].filter(Boolean).join(' · ');
+    }
+
+    function renderReportExplanation(report, reportId, failures) {
+      const firstFailure = failures[0];
+      if (!firstFailure) return '';
+      const next = inferReportNextCheck(firstFailure);
+
+      return '<div class="report-explanation-grid">' +
+        renderReportExplanationCard('첫 실패', firstFailure.scenario + ' · ' + firstFailure.step, [firstFailure.request, 'actual ' + firstFailure.actual, 'expected ' + firstFailure.expected].filter(Boolean).join(' · ')) +
+        renderReportExplanationCard('다음 확인', next.title, next.text) +
+      '</div>';
+    }
+
+    function renderReportExplanationCard(label, title, text) {
+      return '<div class="report-explanation-card">' +
+        '<div class="report-explanation-label">' + escapeHtml(label) + '</div>' +
+        '<div class="report-explanation-title">' + escapeHtml(title || '-') + '</div>' +
+        '<div class="report-explanation-text">' + escapeHtml(text || '-') + '</div>' +
+      '</div>';
+    }
+
+    function inferReportNextCheck(failure) {
+      const expectedStatus = parseReportStatusCode(failure.expected);
+      const actualStatus = parseReportStatusCode(failure.actual);
+
+      if (expectedStatus !== undefined && actualStatus !== undefined && expectedStatus !== actualStatus) {
+        return {
+          title: 'status 기대값과 실제 응답 불일치',
+          text: '시나리오 condition, OpenAPI 스펙, 백엔드 구현 중 어느 쪽이 맞는지 확인'
+        };
+      }
+
+      if (failure.expected && failure.expected.startsWith('extract:')) {
+        return {
+          title: '응답 extract 실패',
+          text: '응답 JSON 경로와 실제 응답 필드명 확인'
+        };
+      }
+
+      if (failure.expected && failure.expected !== '-') {
+        return {
+          title: '조건식 실패',
+          text: 'condition 표현식과 실제 응답 상태를 같이 확인'
+        };
+      }
+
+      return {
+        title: '실행 오류 확인',
+        text: '대상 서버, URL, 인증, 네트워크 오류 메시지 확인'
+      };
+    }
+
+    function parseReportStatusCode(value) {
+      const match = String(value || '').match(/\\b(\\d{3})\\b/);
+      return match ? Number(match[1]) : undefined;
+    }
+
+    function formatReportStepSource(source) {
+      if (!source || typeof source !== 'object') return '';
+      if (source.kind === 'direct') return '직접 정의';
+      if (source.kind === 'use') return '시나리오 사용: ' + (source.reference || '');
+      if (source.kind === 'include') return '파일 포함: ' + (source.reference || '');
+      return source.kind || '';
+    }
+
+    function renderReportFailureSummary(failures) {
+      if (failures.length === 0) {
+        return '<div class="report-failure-summary ok"><div class="report-failure-title">모든 시나리오 통과</div><div class="muted">실패 step 없음</div></div>';
+      }
+
+      return '<div class="report-failure-summary">' +
+        '<div class="report-failure-title">실패 원인 ' + failures.length + '개</div>' +
+        '<div class="report-failure-list">' + failures.slice(0, 5).map((failure) => (
+          '<div class="report-failure-item">' +
+            '<div class="report-failure-main">' + escapeHtml(failure.scenario + ' · ' + failure.step) + '</div>' +
+            '<div class="muted">' + escapeHtml([failure.source, failure.request, 'actual ' + failure.actual, 'expected ' + failure.expected].filter(Boolean).join(' · ')) + '</div>' +
+          '</div>'
+        )).join('') + '</div>' +
+        (failures.length > 5 ? '<div class="muted">외 ' + (failures.length - 5) + '개 실패</div>' : '') +
+      '</div>';
+    }
+
+    function collectReportFailures(report) {
+      const scenarios = Array.isArray(report.scenarios) ? report.scenarios : [];
+      const failures = [];
+      for (const scenario of scenarios) {
+        const steps = Array.isArray(scenario.steps) ? scenario.steps : [];
+        for (const step of steps) {
+          if (!reportStepHasFailure(step)) continue;
+          const response = step.response || {};
+          const condition = step.condition || {};
+          failures.push({
+            scenario: scenario.name || scenario.key || 'scenario',
+            step: step.id || 'step',
+            source: formatReportStepSource(step.source),
+            request: [step.method, step.path].filter(Boolean).join(' '),
+            actual: response.status === undefined ? '-' : 'HTTP ' + response.status + (response.statusText ? ' ' + response.statusText : ''),
+            expected: condition.expression || step.error || '-'
+          });
+        }
+      }
+      return failures;
+    }
+
+    function reportScenarioHasFailure(reportScenario) {
+      if ((reportScenario.result || '').toUpperCase() === 'FAIL') return true;
+      const steps = Array.isArray(reportScenario.steps) ? reportScenario.steps : [];
+      return steps.some(reportStepHasFailure);
+    }
+
+    function reportStepHasFailure(step) {
+      if (!step) return false;
+      if ((step.result || '').toUpperCase() === 'FAIL') return true;
+      if (step.error) return true;
+      if (step.condition && step.condition.passed === false) return true;
+      const extracts = Array.isArray(step.extracts) ? step.extracts : [];
+      return extracts.some((extract) => extract && extract.passed === false);
+    }
+
+    function orderReportScenarios(scenarios) {
+      return scenarios.slice().sort((left, right) => Number(reportScenarioHasFailure(right)) - Number(reportScenarioHasFailure(left)));
     }
 
     async function checkServers() {
@@ -1551,6 +2564,11 @@ export const UI_HTML = String.raw`<!doctype html>
       return scenario ? scenario.name : id;
     }
 
+    function findSuiteName(id) {
+      const suite = state.suites.find((candidate) => candidate.id === id);
+      return suite ? suite.name : id;
+    }
+
     function formatRunHistoryTime(value) {
       const date = new Date(value);
       return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString();
@@ -1560,15 +2578,30 @@ export const UI_HTML = String.raw`<!doctype html>
       return state.runsByScenario.get(scenarioId) || {};
     }
 
+    function getSuiteRuns(suiteId) {
+      return state.runsBySuite.get(suiteId) || {};
+    }
+
     function saveScenarioRun(item) {
       const runs = Object.assign({}, getScenarioRuns(item.scenario));
       runs[item.command] = item;
       state.runsByScenario.set(item.scenario, runs);
     }
 
+    function saveSuiteRun(item) {
+      const runs = Object.assign({}, getSuiteRuns(item.suite));
+      runs[item.command] = item;
+      state.runsBySuite.set(item.suite, runs);
+    }
+
     function findRunById(runId) {
       if (!runId) return null;
       for (const runs of state.runsByScenario.values()) {
+        for (const item of [runs.validate, runs.test]) {
+          if (item && item.id === runId) return item;
+        }
+      }
+      for (const runs of state.runsBySuite.values()) {
         for (const item of [runs.validate, runs.test]) {
           if (item && item.id === runId) return item;
         }
@@ -1587,14 +2620,40 @@ export const UI_HTML = String.raw`<!doctype html>
       return items[0] || null;
     }
 
+    function getLatestSuiteRun(suiteId) {
+      const runs = getSuiteRuns(suiteId);
+      const items = [runs.validate, runs.test].filter(Boolean);
+      items.sort((left, right) => {
+        const leftTime = Date.parse(left.finishedAt || left.startedAt || '');
+        const rightTime = Date.parse(right.finishedAt || right.startedAt || '');
+        return (Number.isFinite(rightTime) ? rightTime : 0) - (Number.isFinite(leftTime) ? leftTime : 0);
+      });
+      return items[0] || null;
+    }
+
     function formatRunDuration(item) {
       const startedAt = Date.parse(item.startedAt);
       const finishedAt = item.finishedAt ? Date.parse(item.finishedAt) : Date.now();
       if (!Number.isFinite(startedAt) || !Number.isFinite(finishedAt)) return '';
       const durationMs = Math.max(0, finishedAt - startedAt);
+      return formatDurationMs(durationMs);
+    }
+
+    function formatDurationMs(durationMs) {
       if (durationMs < 1000) return durationMs + 'ms';
       if (durationMs < 10000) return (durationMs / 1000).toFixed(1) + 's';
       return Math.round(durationMs / 1000) + 's';
+    }
+
+    function formatReportDate(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+    }
+
+    function formatReportRatio(passed, total, label) {
+      if (typeof passed !== 'number' || typeof total !== 'number') return '';
+      return passed + '/' + total + ' ' + label;
     }
 
     function stripAnsi(value) {
@@ -1854,17 +2913,19 @@ export const UI_HTML = String.raw`<!doctype html>
     }
 
     function formatRunResultTitle(item) {
-      const command = item.command === 'validate' ? '검증' : item.command === 'test' ? '테스트' : formatCommandLabel(item.command);
-      if (item.status === 'passed') return command + ' 통과';
-      if (item.status === 'failed') return command + ' 실패';
-      if (item.status === 'running') return command + ' 중';
-      return command + ' ' + formatStatusLabel(item.status);
+      const target = item.suite ? '스위트' : '시나리오';
+      const command = item.command === 'validate' ? '검증' : item.command === 'test' ? '실행' : formatCommandLabel(item.command);
+      if (item.status === 'passed') return target + ' ' + command + ' 통과';
+      if (item.status === 'failed') return target + ' ' + command + ' 실패';
+      if (item.status === 'running') return target + ' ' + command + ' 중';
+      return target + ' ' + command + ' ' + formatStatusLabel(item.status);
     }
 
-    function formatRunResultKind(command) {
-      if (command === 'validate') return '정적 검증';
-      if (command === 'test') return '실행 테스트';
-      return formatCommandLabel(command);
+    function formatRunResultKind(item) {
+      const target = item.suite ? '스위트' : '시나리오';
+      if (item.command === 'validate') return target + ' 검증';
+      if (item.command === 'test') return target + ' 실행';
+      return target + ' ' + formatCommandLabel(item.command);
     }
 
     function formatRunResultClassPart(value) {
@@ -1881,7 +2942,7 @@ export const UI_HTML = String.raw`<!doctype html>
       return '<div class="' + className + '">' +
         '<div class="run-result-title-row">' +
           '<div class="run-result-heading">' +
-            '<div class="run-result-kind">' + escapeHtml(formatRunResultKind(item.command)) + '</div>' +
+            '<div class="run-result-kind">' + escapeHtml(formatRunResultKind(item)) + '</div>' +
             '<div class="run-result-title">' + escapeHtml(formatRunResultTitle(item)) + '</div>' +
           '</div>' +
           '<span class="pill' + statusTone(item.status) + '">' + escapeHtml(formatStatusLabel(item.status)) + '</span>' +
@@ -1894,7 +2955,65 @@ export const UI_HTML = String.raw`<!doctype html>
         message +
         renderRunInputPrompt(item) +
         renderRunStepResults(item) +
+        renderSuiteRunResult(item) +
       '</div>';
+    }
+
+    function renderSuiteRunResult(item) {
+      const result = item.suiteResult;
+      if (!result || !Array.isArray(result.scenarios)) return '';
+
+      return '<div class="suite-result-list">' + result.scenarios.map((scenario) => {
+        const status = scenario.status || 'unknown';
+        const title = scenario.scenarioName || scenario.scenarioKey;
+        const meta = [
+          [scenario.method, scenario.path].filter(Boolean).join(' '),
+          scenario.passedSteps + '/' + scenario.totalSteps + ' steps',
+          formatDurationMs(scenario.durationMs || 0)
+        ].filter(Boolean).join(' · ');
+        const failure = scenario.failedStep
+          ? formatSuiteFailure(scenario.failedStep)
+          : scenario.error || '';
+        return '<div class="suite-result-scenario">' +
+          '<div class="suite-result-scenario-head">' +
+            '<div class="suite-result-scenario-name">' + escapeHtml(title) + '</div>' +
+            '<span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span>' +
+          '</div>' +
+          '<div class="muted">' + escapeHtml(meta) + '</div>' +
+          (failure ? '<div class="error">' + escapeHtml(failure) + '</div>' : '') +
+        '</div>';
+      }).join('') + '</div>';
+    }
+
+    function renderSuiteReportShortcut(items) {
+      if (state.selectedKind !== 'suite') return '';
+      const reportItem = items.find((item) => item && item.suiteResult && reportIdFromPath(item.suiteResult.reportPath));
+      if (!reportItem) return '';
+      const result = reportItem.suiteResult;
+      const reportId = reportIdFromPath(result.reportPath);
+      const scenarioCount = Array.isArray(result.scenarios) ? result.scenarios.length : 0;
+      return '<div class="report-shortcut">' +
+        '<div>' +
+          '<div class="report-shortcut-title">최근 스위트 종합 리포트</div>' +
+          '<div class="report-shortcut-meta">' + escapeHtml([formatStatusLabel(result.status), scenarioCount ? scenarioCount + '개 시나리오' : '', result.reportPath].filter(Boolean).join(' · ')) + '</div>' +
+        '</div>' +
+        '<button type="button" data-open-report="' + escapeHtml(reportId) + '">종합 리포트</button>' +
+      '</div>';
+    }
+
+    function reportIdFromPath(reportPath) {
+      if (!reportPath) return '';
+      return String(reportPath).split(/[\\\\/]/).filter(Boolean).pop() || '';
+    }
+
+    function formatSuiteFailure(failedStep) {
+      const parts = ['실패 step ' + failedStep.id];
+      const request = [failedStep.method, failedStep.path].filter(Boolean).join(' ');
+      if (request) parts.push(request);
+      if (failedStep.responseStatus !== undefined) parts.push('HTTP ' + failedStep.responseStatus);
+      if (failedStep.condition) parts.push(failedStep.condition);
+      if (failedStep.error) parts.push(failedStep.error);
+      return parts.join(' · ');
     }
 
     function runHasValues(item) {
@@ -1913,19 +3032,21 @@ export const UI_HTML = String.raw`<!doctype html>
     function renderRunSummary() {
       if (!state.selected) {
         updateRunValuesToggle([]);
-        els.runSummary.innerHTML = '<div class="muted">이 시나리오 실행 기록 없음</div>';
+        els.runSummary.innerHTML = '<div class="muted">' + (state.selectedKind === 'suite' ? '이 스위트 실행 기록 없음' : '이 시나리오 실행 기록 없음') + '</div>';
         return;
       }
 
-      const runs = getScenarioRuns(state.selected);
+      const runs = state.selectedKind === 'suite'
+        ? getSuiteRuns(state.selected)
+        : getScenarioRuns(state.selected);
       const items = [runs.validate, runs.test].filter(Boolean);
       updateRunValuesToggle(items);
       if (items.length === 0) {
-        els.runSummary.innerHTML = '<div class="muted">이 시나리오 실행 기록 없음</div>';
+        els.runSummary.innerHTML = '<div class="muted">' + (state.selectedKind === 'suite' ? '이 스위트 실행 기록 없음' : '이 시나리오 실행 기록 없음') + '</div>';
         return;
       }
 
-      els.runSummary.innerHTML = items.map(renderRunResult).join('');
+      els.runSummary.innerHTML = renderSuiteReportShortcut(items) + items.map(renderRunResult).join('');
     }
 
     function clearRunOutput() {
@@ -1936,6 +3057,10 @@ export const UI_HTML = String.raw`<!doctype html>
     }
 
     async function runCommand(command) {
+      if (state.selectedKind === 'suite') {
+        await runSuiteCommand(command);
+        return;
+      }
       const runScenario = state.selected;
       if (!runScenario) return;
       setStatus(els.runStatus, 'running');
@@ -1973,10 +3098,10 @@ export const UI_HTML = String.raw`<!doctype html>
       saveScenarioRun(runItem);
       state.activeOutputRunId = result.runId;
       state.lastRun.set(runScenario, 'running');
-      if (state.selected === runScenario) {
+      if (state.selectedKind === 'scenario' && state.selected === runScenario) {
         setStatus(els.detailStatus, 'running');
       }
-      renderScenarioList();
+      renderCurrentList();
       renderRunSummary();
 
       const events = new EventSource('/api/runs/' + encodeURIComponent(result.runId) + '/events');
@@ -1988,20 +3113,20 @@ export const UI_HTML = String.raw`<!doctype html>
         if (state.activeOutputRunId === result.runId) {
           appendOutputChunk(data);
         }
-        if (state.selected === runScenario) {
+        if (state.selectedKind === 'scenario' && state.selected === runScenario) {
           renderRunSummary();
         }
       });
       events.addEventListener('test-result', (event) => {
         const data = JSON.parse(event.data);
         runItem.stepResults = Array.isArray(data.steps) ? data.steps : [];
-        if (state.selected === runScenario) {
+        if (state.selectedKind === 'scenario' && state.selected === runScenario) {
           renderRunSummary();
         }
       });
       events.addEventListener('input-request', (event) => {
         runItem.pendingInput = JSON.parse(event.data);
-        if (state.selected === runScenario) {
+        if (state.selectedKind === 'scenario' && state.selected === runScenario) {
           renderRunSummary();
           focusRunInput(result.runId);
           setHint('입력값 대기 중입니다.', 'warn');
@@ -2009,7 +3134,7 @@ export const UI_HTML = String.raw`<!doctype html>
       });
       events.addEventListener('input-submitted', () => {
         runItem.pendingInput = null;
-        if (state.selected === runScenario) {
+        if (state.selectedKind === 'scenario' && state.selected === runScenario) {
           renderRunSummary();
           updateRunHint();
         }
@@ -2024,11 +3149,11 @@ export const UI_HTML = String.raw`<!doctype html>
         if (state.activeOutputRunId === result.runId) {
           setStatus(els.runStatus, data.status);
         }
-        if (state.selected === runScenario) {
+        if (state.selectedKind === 'scenario' && state.selected === runScenario) {
           setStatus(els.detailStatus, data.status);
           renderRunSummary();
         }
-        renderScenarioList();
+        renderCurrentList();
         updateRunHint();
         events.close();
       });
@@ -2045,11 +3170,135 @@ export const UI_HTML = String.raw`<!doctype html>
             appendOutputHtml(escapeHtml('\nEvent stream disconnected.\n'));
             setStatus(els.runStatus, 'failed');
           }
-          if (state.selected === runScenario) {
+          if (state.selectedKind === 'scenario' && state.selected === runScenario) {
             setStatus(els.detailStatus, 'failed');
             renderRunSummary();
           }
-          renderScenarioList();
+          renderCurrentList();
+          updateRunHint();
+        }
+        events.close();
+      };
+    }
+
+    async function runSuiteCommand(command) {
+      const runSuite = state.selected;
+      if (!runSuite) return;
+      setStatus(els.runStatus, 'running');
+      state.activeOutputRunId = null;
+      resetOutput();
+      let result;
+      try {
+        result = await fetchJson('/api/run-suite', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ command: command, suite: runSuite, showValues: command === 'test' })
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        setStatus(els.runStatus, 'failed');
+        appendOutputHtml(escapeHtml(message + '\n'));
+        updateRunHint();
+        return;
+      }
+
+      const runItem = {
+        id: result.runId,
+        command,
+        suite: runSuite,
+        suiteName: findSuiteName(runSuite),
+        scenario: runSuite,
+        scenarioName: findSuiteName(runSuite),
+        status: 'running',
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+        exitCode: null,
+        html: '',
+        text: '',
+        stepResults: [],
+        suiteResult: null,
+        pendingInput: null
+      };
+      saveSuiteRun(runItem);
+      state.activeOutputRunId = result.runId;
+      state.lastSuiteRun.set(runSuite, 'running');
+      if (state.selectedKind === 'suite' && state.selected === runSuite) {
+        setStatus(els.detailStatus, 'running');
+      }
+      renderCurrentList();
+      renderRunSummary();
+
+      const events = new EventSource('/api/runs/' + encodeURIComponent(result.runId) + '/events');
+      events.addEventListener('chunk', (event) => {
+        const data = JSON.parse(event.data);
+        const html = data.html !== undefined ? data.html : escapeHtml(data.chunk || '');
+        runItem.html += html;
+        runItem.text += data.chunk || '';
+        if (state.activeOutputRunId === result.runId) {
+          appendOutputChunk(data);
+        }
+        if (state.selectedKind === 'suite' && state.selected === runSuite) {
+          renderRunSummary();
+        }
+      });
+      events.addEventListener('suite-result', (event) => {
+        runItem.suiteResult = JSON.parse(event.data);
+        if (state.selectedKind === 'suite' && state.selected === runSuite) {
+          renderRunSummary();
+        }
+      });
+      events.addEventListener('input-request', (event) => {
+        runItem.pendingInput = JSON.parse(event.data);
+        if (state.selectedKind === 'suite' && state.selected === runSuite) {
+          renderRunSummary();
+          focusRunInput(result.runId);
+          setHint('입력값 대기 중입니다.', 'warn');
+        }
+      });
+      events.addEventListener('input-submitted', () => {
+        runItem.pendingInput = null;
+        if (state.selectedKind === 'suite' && state.selected === runSuite) {
+          renderRunSummary();
+          updateRunHint();
+        }
+      });
+      events.addEventListener('done', (event) => {
+        const data = JSON.parse(event.data);
+        runItem.status = data.status;
+        runItem.finishedAt = new Date().toISOString();
+        runItem.exitCode = data.exitCode;
+        runItem.pendingInput = null;
+        state.lastSuiteRun.set(runSuite, data.status);
+        if (state.activeOutputRunId === result.runId) {
+          setStatus(els.runStatus, data.status);
+        }
+        if (state.selectedKind === 'suite' && state.selected === runSuite) {
+          setStatus(els.detailStatus, data.status);
+          renderRunSummary();
+        }
+        void loadReports().catch(() => {});
+        renderCurrentList();
+        updateRunHint();
+        events.close();
+      });
+      events.onerror = () => {
+        if (runItem.status === 'running') {
+          setUiDisconnected(new Error('실행 로그 연결이 끊겼습니다.'));
+          runItem.status = 'failed';
+          runItem.finishedAt = new Date().toISOString();
+          runItem.exitCode = 1;
+          runItem.html += escapeHtml('\nEvent stream disconnected.\n');
+          runItem.text += '\nEvent stream disconnected.\n';
+          state.lastSuiteRun.set(runSuite, 'failed');
+          if (state.activeOutputRunId === result.runId) {
+            appendOutputHtml(escapeHtml('\nEvent stream disconnected.\n'));
+            setStatus(els.runStatus, 'failed');
+          }
+          if (state.selectedKind === 'suite' && state.selected === runSuite) {
+            setStatus(els.detailStatus, 'failed');
+            renderRunSummary();
+          }
+          renderCurrentList();
           updateRunHint();
         }
         events.close();
@@ -2116,7 +3365,90 @@ export const UI_HTML = String.raw`<!doctype html>
       }
     }
 
-    els.searchInput.addEventListener('input', renderScenarioList);
+    async function handleReportAction(event) {
+      const openReportButton = event.target && event.target.closest ? event.target.closest('[data-open-report]') : null;
+      if (openReportButton) {
+        event.preventDefault();
+        const reportId = openReportButton.getAttribute('data-open-report');
+        if (!reportId) return;
+        try {
+          await loadReports();
+          await openReportModal(reportId);
+          setHint('리포트를 열었습니다.', '');
+        } catch (error) {
+          setHint(error instanceof Error ? error.message : String(error), 'bad');
+        }
+        return;
+      }
+
+      const toggleButton = event.target && event.target.closest ? event.target.closest('[data-report-toggle-failures]') : null;
+      if (toggleButton) {
+        event.preventDefault();
+        state.reportModalFailuresOnly = !state.reportModalFailuresOnly;
+        renderReportModal();
+        return;
+      }
+
+      const copyButton = event.target && event.target.closest ? event.target.closest('[data-copy-report-failures]') : null;
+      if (!copyButton) return;
+      event.preventDefault();
+      if (!state.reportModalReport) return;
+      const failures = collectReportFailures(state.reportModalReport);
+      if (failures.length === 0) {
+        setHint('복사할 실패 요약이 없습니다.', 'warn');
+        return;
+      }
+
+      try {
+        await copyText(formatReportFailuresText(state.reportModalReport, failures));
+        setHint('실패 요약을 복사했습니다.', '');
+      } catch (error) {
+        setHint(error instanceof Error ? error.message : String(error), 'bad');
+      }
+    }
+
+    async function handleReportSelectionChange(event) {
+      const select = event.target && event.target.closest ? event.target.closest('[data-report-picker]') : null;
+      if (!select) return;
+      const reportId = select.value || '';
+      if (!reportId || reportId === state.reportModalReportId) return;
+      try {
+        await openReportModal(reportId);
+        setHint('리포트를 열었습니다.', '');
+      } catch (error) {
+        setHint(error instanceof Error ? error.message : String(error), 'bad');
+      }
+    }
+
+    function formatReportFailuresText(report, failures) {
+      const suite = report.suite || {};
+      const summary = report.summary || {};
+      const scenarioSummary = summary.scenarios || {};
+      const stepSummary = summary.steps || {};
+      const lines = [
+        'suite: ' + (suite.key || suite.name || ''),
+        'result: ' + (report.result || ''),
+        'scenarios: ' + formatReportRatio(scenarioSummary.passed, scenarioSummary.total, 'scenarios'),
+        'steps: ' + formatReportRatio(stepSummary.passed, stepSummary.total, 'steps'),
+        '',
+        'failures:'
+      ];
+      for (const failure of failures) {
+        lines.push('- ' + failure.scenario + ' / ' + failure.step);
+        if (failure.source) lines.push('  source: ' + failure.source);
+        lines.push('  request: ' + (failure.request || '-'));
+        lines.push('  actual: ' + failure.actual);
+        lines.push('  expected: ' + failure.expected);
+      }
+      return lines.join('\n') + '\n';
+    }
+
+    els.searchInput.addEventListener('input', renderCurrentList);
+    els.scenarioTabBtn.addEventListener('click', () => switchListMode('scenario'));
+    els.suiteTabBtn.addEventListener('click', () => switchListMode('suite'));
+    els.reportsBtn.addEventListener('click', openLatestReportModal);
+    els.collapseGroupsBtn.addEventListener('click', collapseAllScenarioGroups);
+    els.expandGroupsBtn.addEventListener('click', expandAllScenarioGroups);
     els.checkServersBtn.addEventListener('click', checkServers);
     els.reconnectBtn.addEventListener('click', reconnectUi);
     els.runValuesToggle.addEventListener('click', () => {
@@ -2125,6 +3457,17 @@ export const UI_HTML = String.raw`<!doctype html>
     });
     els.runSummary.addEventListener('submit', submitRunInput);
     els.runSummary.addEventListener('click', copyRunStep);
+    els.runSummary.addEventListener('click', handleReportAction);
+    els.reportModalBody.addEventListener('click', handleReportAction);
+    els.reportModalBody.addEventListener('change', handleReportSelectionChange);
+    els.reportModalActions.addEventListener('click', handleReportAction);
+    els.reportModalCloseBtn.addEventListener('click', closeReportModal);
+    els.reportModal.addEventListener('click', (event) => {
+      if (event.target === els.reportModal) closeReportModal();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !els.reportModal.hidden) closeReportModal();
+    });
     els.validateBtn.addEventListener('click', () => runCommand('validate'));
     els.testBtn.addEventListener('click', () => runCommand('test'));
     els.copyLogBtn.addEventListener('click', copyExecutionLog);

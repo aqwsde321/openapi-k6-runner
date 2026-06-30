@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -386,7 +386,7 @@ describe('openapi-k6 CLI', () => {
       'LOGIN_PASSWORD=',
       '',
     ].join('\n'));
-    expect(gitignore).toBe('*\n!.gitignore\n!.openapi-k6.json\n!scenarios/\n!scenarios/**\n');
+    expect(gitignore).toBe('*\n!.gitignore\n!.openapi-k6.json\n!scenarios/\n!scenarios/**\n!suites/\n!suites/**\n');
     expect(metadata).toMatchObject({
       tool: 'openapi-k6',
       schemaVersion: 1,
@@ -473,7 +473,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('업무 프로세스');
     expect(readme).toContain('API 호출 순서와 method/path 또는 operationId');
     expect(readme).toContain('기존 scenario 재사용 여부');
-    expect(readme).toContain('사용자가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 `openapi-k6/scenarios/**/*.yaml`을 작성하거나 수정합니다.');
+    expect(readme).toContain('사용자가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 `openapi-k6/scenarios/**/*.yaml` 또는 `openapi-k6/suites/**/*.yaml`을 작성하거나 수정합니다.');
     expect(readme).toContain('폴더는 UI 카테고리로 사용합니다. 예: `openapi-k6/scenarios/auth/login.yaml`은 `-s auth/login`으로 실행합니다.');
     expect(readme).toContain('UI는 `scenarios/` 아래 폴더를 그룹으로 보여주고, 요청 단계에서 각 step의 출처를 `직접 정의`, `시나리오 사용: auth/login`처럼 표시합니다.');
     expect(readme).toContain('`test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다.');
@@ -495,7 +495,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('openapi-k6/.gitignore');
     expect(readme).toContain('openapi-k6/.openapi-k6.json');
     expect(readme).toContain('cp openapi-k6/.env.example openapi-k6/.env');
-    expect(readme).toContain('`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.');
+    expect(readme).toContain('`update`는 `config.yaml`, `.env`, `scenarios/`, `suites/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.');
     expect(readme).not.toContain('## AI Work Guide');
     expect(readme).not.toContain('This section is for AI agents.');
     expect(readme).not.toContain('### Scenario DSL Reference');
@@ -1534,7 +1534,7 @@ describe('openapi-k6 CLI', () => {
 
     expect(config).toContain('baseUrl: https://changed.test.local');
     expect(readme).toContain('# openapi-k6');
-    expect(readme).toContain('`update`는 `config.yaml`, `.env`, `scenarios/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.');
+    expect(readme).toContain('`update`는 `config.yaml`, `.env`, `scenarios/`, `suites/`, snapshot/catalog 파일, `generated/`, `logs/`를 보존하고 README, runner, `.env.example`, `.gitignore`, `.openapi-k6.json` 같은 scaffold 파일만 최신화합니다.');
     expect(readme).toContain('오래된 scaffold에서 `validate`, `test`, `generate`, `run`을 실행하면 최신 README/runner를 받을 수 있도록 `Scaffold update available` notice와 `npx --yes openapi-k6 update` 명령이 표시됩니다.');
     expect(runScript).toContain('exec k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH"');
     expect(scenario).toContain('path: /health');
@@ -1602,7 +1602,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('npx --yes openapi-k6 update');
     expect(runScript).toContain('exec k6 run ${K6_ARGS[@]+"${K6_ARGS[@]}"} "$SCRIPT_PATH"');
     expect(envExample).toContain('LOGIN_PASSWORD=');
-    expect(gitignore).toBe('*\n!.gitignore\n!.openapi-k6.json\n!scenarios/\n!scenarios/**\n');
+    expect(gitignore).toBe('*\n!.gitignore\n!.openapi-k6.json\n!scenarios/\n!scenarios/**\n!suites/\n!suites/**\n');
     expect(metadata.scaffoldVersion).toBe(CURRENT_SCAFFOLD_VERSION);
     expect(env).toBe('LOGIN_PASSWORD=local-secret\n');
     expect(scenario).toBe('name: kept\nsteps: []\n');
@@ -1747,6 +1747,18 @@ describe('openapi-k6 CLI', () => {
       ].join('\n'),
       'utf8',
     );
+    await mkdir(path.join(workspace, 'openapi-k6/suites'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/suites/smoke.yaml'),
+      [
+        'name: smoke suite',
+        'description: UI suite smoke run.',
+        'scenarios:',
+        '  - smoke',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
     await mkdir(path.join(workspace, 'auth'), { recursive: true });
     await writeFile(path.join(workspace, 'auth/login'), 'not a scenario file\n', 'utf8');
     const reportedScenarios: string[] = [];
@@ -1773,6 +1785,9 @@ describe('openapi-k6 CLI', () => {
         defaultModule?: string;
         moduleCount: number;
         scenarios: Array<{ id: string; name: string; description?: string; group: string; path: string; stepCount?: number }>;
+      };
+      const suites = await (await fetch(`${ui.url}/api/suites`)).json() as {
+        suites: Array<{ id: string; name: string; description?: string; group: string; path: string; scenarioCount?: number; scenarios?: string[] }>;
       };
       const detail = await (await fetch(`${ui.url}/api/scenario?scenario=smoke`)).json() as {
         id: string;
@@ -1802,6 +1817,13 @@ describe('openapi-k6 CLI', () => {
         name: string;
         steps: Array<{ id: string; operationId?: string }>;
       };
+      const suiteDetail = await (await fetch(`${ui.url}/api/suite?suite=smoke`)).json() as {
+        id: string;
+        name: string;
+        description?: string;
+        scenarioCount: number;
+        scenarios: Array<{ id: string; name?: string; stepCount?: number }>;
+      };
       const run = await (await fetch(`${ui.url}/api/run`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -1826,15 +1848,63 @@ describe('openapi-k6 CLI', () => {
         body: JSON.stringify({ command: 'test', scenario: 'order/use-login' }),
       })).json() as { runId: string };
       const useTestEvents = await (await fetch(`${ui.url}/api/runs/${useTestRun.runId}/events`)).text();
+      const suiteValidateRun = await (await fetch(`${ui.url}/api/run-suite`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ command: 'validate', suite: 'smoke' }),
+      })).json() as { runId: string };
+      const suiteValidateEvents = await (await fetch(`${ui.url}/api/runs/${suiteValidateRun.runId}/events`)).text();
+      const suiteTestRun = await (await fetch(`${ui.url}/api/run-suite`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ command: 'test', suite: 'smoke' }),
+      })).json() as { runId: string };
+      const suiteTestEvents = await (await fetch(`${ui.url}/api/runs/${suiteTestRun.runId}/events`)).text();
 
       expect(html).toContain('openapi-k6 UI');
+      expect(html).toContain('id="scenarioTabBtn"');
+      expect(html).toContain('id="suiteTabBtn"');
+      expect(html).not.toContain('id="reportTabBtn"');
+      expect(html).toContain('id="reportsBtn"');
+      expect(html).toContain('id="reportCount"');
+      expect(html).toContain('/api/suites');
+      expect(html).toContain('/api/run-suite');
+      expect(html).toContain('/api/reports');
+      expect(html).toContain('/api/report/download?format=html');
+      expect(html).toContain('/api/report/download?format=json');
+      expect(html).toContain("events.addEventListener('suite-result'");
+      expect(html).toContain('renderSuiteDetail');
+      expect(html).toContain('renderSuiteRunResult');
+      expect(html).toContain('renderSuiteReportShortcut');
+      expect(html).toContain('openLatestReportModal');
+      expect(html).toContain('openReportModal');
+      expect(html).toContain('renderReportModal');
+      expect(html).toContain('id="reportModal"');
+      expect(html).toContain('id="reportModalActions"');
+      expect(html).toContain('report-action-group');
+      expect(html).toContain('data-report-picker');
+      expect(html).toContain('data-open-report');
+      expect(html).toContain('reportIdFromPath');
+      expect(html).toContain('실행 요약');
+      expect(html).toContain('최근 스위트 종합 리포트');
+      expect(html).toContain('테스트한 시나리오');
+      expect(html).toContain('<div class="report-scenario\' + statusTone(status) + \'">');
+      expect(html).toContain('.report-scenario.bad');
+      expect(html).toContain('실패 시나리오만');
+      expect(html).toContain('실패 복사');
+      expect(html).toContain('새 탭');
+      expect(html).not.toContain('data-report-toggle-details');
+      expect(html).not.toContain('data-open-report-list');
+      expect(html).toContain('첫 실패');
+      expect(html).not.toContain('무엇을 테스트했나');
+      expect(html).toContain('다음 확인');
       expect(html).toContain('ansi-green');
       expect(html).toContain('.scenario-description');
-      expect(html).toContain('detail.description && detail.description.trim()');
+      expect(html).toContain('formatScenarioDescription(detail)');
       expect(html).toContain('.scenario-item-head');
       expect(html).toContain('.scenario-group-title');
       expect(html).toContain('.scenario-group-caret');
-      expect(html).toContain('.scenario-group:not(.collapsed) .scenario-group-title');
+      expect(html).toContain('.scenario-group.collapsed > .scenario-group-items');
       expect(html).toContain('border: 1px solid var(--line);');
       expect(html).toContain('border-left: 3px solid #d7e4f7;');
       expect(html).toContain('<button id="validateBtn" class="blue" disabled>validate</button>');
@@ -1865,7 +1935,11 @@ describe('openapi-k6 CLI', () => {
       expect(html).not.toContain('top: calc(100% + 8px);');
       expect(html).toContain('openapi-k6.ui.collapsedScenarioGroups');
       expect(html).toContain('toggleScenarioGroup');
-      expect(html).toContain('const collapsed = !query && state.collapsedGroups.has(group.name);');
+      expect(html).toContain('buildItemTree(items, (scenario) => scenario.group)');
+      expect(html).toContain('buildItemTree(items, (suite) => suite.group)');
+      expect(html).toContain('function renderTreeNode(node, options)');
+      expect(html).toContain('const collapsed = !options.query && options.collapsedGroups.has(node.key);');
+      expect(html).toContain('collectTreeGroupKeys(state.scenarios');
       expect(html).not.toContain('border-left: 2px solid #d7e4f7;');
       expect(html).toContain('aria-expanded');
       expect(html).not.toContain('groups.sort(');
@@ -1880,7 +1954,9 @@ describe('openapi-k6 CLI', () => {
       expect(html).not.toContain('state.lastRun.set(state.selected, data.status);');
       expect(html).toContain('id="runSummary"');
       expect(html).toContain('renderRunSummary');
-      expect(html).toContain('<h3>최근 실행 결과</h3>');
+      expect(html).toContain('<h3 id="runSummaryTitle">최근 실행 결과</h3>');
+      expect(html).not.toContain('시나리오 최근 실행 결과');
+      expect(html).not.toContain('스위트 최근 실행 결과');
       expect(html).not.toContain('<h3>대상 서버</h3>');
       expect(html.indexOf('id="checkServersBtn"')).toBeLessThan(html.indexOf('<main>'));
       expect(html).toContain('updateServerStatusSummary');
@@ -1899,7 +1975,7 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('checkUiConnection');
       expect(html).toContain('setInterval(checkUiConnection, UI_CONNECTION_CHECK_INTERVAL_MS)');
       expect(html).toContain('reconnectUi');
-      expect(html).toContain('const selectedExists = state.selected && state.scenarios.some');
+      expect(html).toContain("const selectedExists = state.selectedKind === 'scenario' && state.selected && state.scenarios.some");
       expect(html).toContain('els.reconnectBtn.addEventListener');
       expect(html).toContain("(scenario.description || '').toLowerCase().includes(query)");
       expect(html).toContain('상세 정보를 불러오지 못했습니다.');
@@ -1910,14 +1986,16 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('formatRunDuration');
       expect(html).toContain('formatRunResultTitle');
       expect(html).toContain('formatRunResultKind');
-      expect(html).toContain("return command + ' 통과';");
+      expect(html).toContain("return target + ' ' + command + ' 통과';");
+      expect(html).toContain("return target + ' 검증';");
       expect(html).toContain('run-result-title');
       expect(html).toContain('run-result-kind');
       expect(html).toContain('run-result-validate');
       expect(html).toContain('run-result-test');
       expect(html).not.toContain('formatUiPath(scenario.path)');
-      expect(html).toContain('formatUiPath(detail.path)');
+      expect(html).not.toContain('formatUiPath(detail.path)');
       expect(html).toContain('formatUiPath(snapshot.path)');
+      expect(html).toContain('pickReportScenarioRequestStep');
       expect(html).toContain("replace(/^scenarios\\//, '')");
       expect(html).toContain('runItem.text += data.chunk ||');
       expect(html).not.toContain('run-summary-label">작업');
@@ -1942,7 +2020,8 @@ describe('openapi-k6 CLI', () => {
       expect(html).not.toContain('background: #eef6ff;');
       expect(html).toContain("step.source.kind !== 'direct'");
       expect(html).toContain('openStepIndexes: new Set()');
-      expect(html).toContain('실행 단계');
+      expect(html).toContain('시나리오 실행 단계');
+      expect(html).toContain('스위트 포함 시나리오');
       expect(html).not.toContain('시나리오 정의');
       expect(html).toContain('step-toggle');
       expect(html).toContain('definition-code');
@@ -1972,6 +2051,16 @@ describe('openapi-k6 CLI', () => {
         }),
       ]));
       expect(scenarios.scenarios.some((scenario) => scenario.path.includes('partials/login.yaml'))).toBe(false);
+      expect(suites.suites).toEqual([
+        expect.objectContaining({
+          id: 'smoke',
+          name: 'smoke suite',
+          description: 'UI suite smoke run.',
+          group: 'root',
+          scenarioCount: 1,
+          scenarios: ['smoke'],
+        }),
+      ]);
       expect(detail).toMatchObject({
         id: 'smoke',
         name: 'smoke',
@@ -2013,6 +2102,13 @@ describe('openapi-k6 CLI', () => {
         name: 'login-v2',
         steps: [expect.objectContaining({ id: 'health', operationId: 'getHealth' })],
       });
+      expect(suiteDetail).toMatchObject({
+        id: 'smoke',
+        name: 'smoke suite',
+        description: 'UI suite smoke run.',
+        scenarioCount: 1,
+        scenarios: [expect.objectContaining({ id: 'smoke', name: 'smoke', stepCount: 1 })],
+      });
       expect(events).toContain('$ npx --yes openapi-k6 validate -s smoke --config openapi-k6/config.yaml');
       expect(events).toContain('Validated openapi-k6/scenarios/smoke.yaml');
       expect(events).toContain('"status":"passed"');
@@ -2041,7 +2137,71 @@ describe('openapi-k6 CLI', () => {
       expect(useTestEvents).toContain('"condition":{"expression":"status == 201","passed":false}');
       expect(useTestEvents).toContain('"responseStatus":200');
       expect(useTestEvents).not.toContain('"id":"second-health"');
-      expect(reportedScenarios).toEqual(['smoke', 'use-login']);
+      expect(suiteValidateEvents).toContain('$ openapi-k6 UI validate suite smoke --config openapi-k6/config.yaml');
+      expect(suiteValidateEvents).toContain('$ npx --yes openapi-k6 validate -s smoke --config openapi-k6/config.yaml');
+      expect(suiteValidateEvents).toContain('event: suite-result');
+      expect(suiteValidateEvents).toContain('"suite":"smoke suite"');
+      expect(suiteValidateEvents).toContain('"scenarioKey":"smoke"');
+      expect(suiteValidateEvents).toContain('"status":"passed"');
+      expect(suiteTestEvents).toContain('$ npx --yes openapi-k6 test --suite smoke --config openapi-k6/config.yaml');
+      expect(suiteTestEvents).toContain('Suite smoke suite');
+      expect(suiteTestEvents).toContain('event: suite-result');
+      expect(suiteTestEvents).toContain('"suite":"smoke suite"');
+      expect(suiteTestEvents).toContain('"reportPath":"openapi-k6/reports/');
+      expect(suiteTestEvents).toContain('"scenarioKey":"smoke"');
+      expect(suiteTestEvents).toContain('"passedSteps":1');
+      expect(suiteTestEvents).toContain('"totalSteps":1');
+      const reports = await (await fetch(`${ui.url}/api/reports`)).json() as {
+        reports: Array<{
+          id: string;
+          fileName: string;
+          suiteKey?: string;
+          suiteName?: string;
+          result?: string;
+          scenarioPassed?: number;
+          scenarioTotal?: number;
+          stepPassed?: number;
+          stepTotal?: number;
+        }>;
+      };
+      expect(reports.reports).toHaveLength(1);
+      expect(reports.reports[0]).toMatchObject({
+        fileName: expect.stringMatching(/_smoke\.json$/),
+        suiteKey: 'smoke',
+        suiteName: 'smoke suite',
+        result: 'PASS',
+        scenarioPassed: 1,
+        scenarioTotal: 1,
+        stepPassed: 1,
+        stepTotal: 1,
+      });
+      const reportId = reports.reports[0].id;
+      const reportDetail = await (await fetch(`${ui.url}/api/report?report=${encodeURIComponent(reportId)}`)).json() as {
+        result: string;
+        suite: { key: string; name: string };
+      };
+      expect(reportDetail).toMatchObject({
+        result: 'PASS',
+        suite: { key: 'smoke', name: 'smoke suite' },
+      });
+      const reportHtmlResponse = await fetch(`${ui.url}/api/report/html?report=${encodeURIComponent(reportId)}`);
+      const reportHtml = await reportHtmlResponse.text();
+      expect(reportHtmlResponse.headers.get('content-type')).toContain('text/html');
+      expect(reportHtml).toContain('openapi-k6 suite report');
+      expect(reportHtml).toContain('smoke suite');
+      expect(reportHtml).toContain('PASS');
+      expect(reportHtml).toContain('모든 시나리오 통과');
+      expect(reportHtml).not.toContain('무엇을 테스트했나');
+      expect(reportHtml).not.toContain('다음 확인');
+      expect(reportHtml).toContain('테스트한 시나리오');
+      expect(reportHtml).toContain('GET /app-health');
+      expect(reportHtml).not.toContain('openapi-k6/scenarios/smoke.yaml');
+      expect(reportHtml).not.toContain('시나리오별 상세 결과');
+      const reportDownload = await fetch(`${ui.url}/api/report/download?format=html&report=${encodeURIComponent(reportId)}`);
+      expect(reportDownload.headers.get('content-disposition')).toBe(`attachment; filename="${reportId.replace(/\.json$/, '.html')}"`);
+      const jsonDownload = await fetch(`${ui.url}/api/report/download?format=json&report=${encodeURIComponent(reportId)}`);
+      expect(jsonDownload.headers.get('content-disposition')).toBe(`attachment; filename="${reportId}"`);
+      expect(reportedScenarios).toEqual(['smoke', 'use-login', 'smoke']);
     } finally {
       await ui.close();
     }
@@ -4116,7 +4276,7 @@ describe('openapi-k6 CLI', () => {
     expect(stdout.output()).toContain('Scaffold update available:');
     expect(stdout.output()).toContain('openapi-k6/.openapi-k6.json was not found.');
     expect(stdout.output()).toContain('  command  npx --yes openapi-k6 update');
-    expect(stdout.output()).toContain('  keeps    config, scenarios, .env, snapshots, generated scripts, and logs unchanged');
+    expect(stdout.output()).toContain('  keeps    config, scenarios, suites, .env, snapshots, generated scripts, and logs unchanged');
   });
 
   it('validates and generates scenarios with included reusable steps', async () => {
@@ -4399,6 +4559,233 @@ describe('openapi-k6 CLI', () => {
       { externalId: 'cli-test-run-0', vuIteration: 0 },
       { externalId: 'cli-test-run-1', vuIteration: 1 },
       { externalId: 'cli-test-run-2', vuIteration: 2 },
+    ]);
+  });
+
+  it('runs a suite of scenario tests and reports a summary', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios/orders'), { recursive: true });
+    await mkdir(path.join(workspace, 'openapi-k6/suites'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/orders/create-a.yaml'),
+      [
+        'name: create-a',
+        'steps:',
+        '  - id: create-a',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        marker: a',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/orders/create-b.yaml'),
+      [
+        'name: create-b',
+        'steps:',
+        '  - id: create-b',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        marker: b',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'openapi-k6/suites/smoke.yaml'),
+      [
+        'name: smoke',
+        'scenarios:',
+        '  - orders/create-a',
+        '  - orders/create-b',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const requestBodies: unknown[] = [];
+    const stdout = createCapture();
+    await runCli(
+      ['test', '--suite', 'smoke', '--no-color'],
+      {
+        cwd: workspace,
+        stdout: stdout.stream,
+        stderr: createSink(),
+        fetch: async (_input, init) => {
+          requestBodies.push(JSON.parse(String(init?.body)));
+          return new Response(JSON.stringify({ id: 'order-1' }), {
+            status: 201,
+            statusText: 'Created',
+          });
+        },
+      },
+    );
+
+    expect(requestBodies).toEqual([{ marker: 'a' }, { marker: 'b' }]);
+    expect(stdout.output()).toContain('Suite smoke');
+    expect(stdout.output()).toContain('  suite     openapi-k6/suites/smoke.yaml');
+    expect(stdout.output()).toContain('  result    PASS');
+    expect(stdout.output()).toContain('  scenarios 2/2 passed');
+    expect(stdout.output()).toContain('  steps     2/2 passed');
+    expect(stdout.output()).toContain('  report    openapi-k6/reports/');
+    expect(stdout.output()).toContain('  PASS orders/create-a 1/1 steps');
+    expect(stdout.output()).toContain('  PASS orders/create-b 1/1 steps');
+
+    const reportFiles = await readdir(path.join(workspace, 'openapi-k6/reports'));
+    expect(reportFiles).toHaveLength(1);
+    expect(reportFiles[0]).toMatch(/_smoke\.json$/);
+    const report = JSON.parse(await readFile(path.join(workspace, 'openapi-k6/reports', reportFiles[0]), 'utf8')) as {
+      kind: string;
+      suite: { key: string; name: string; path: string };
+      result: string;
+      summary: { scenarios: { passed: number; total: number }; steps: { passed: number; total: number } };
+      scenarios: Array<{ key: string; result: string; steps: Array<{ id: string; response?: { status: number } }> }>;
+    };
+    expect(report).toMatchObject({
+      kind: 'suite-test',
+      suite: {
+        key: 'smoke',
+        name: 'smoke',
+        path: 'openapi-k6/suites/smoke.yaml',
+      },
+      result: 'PASS',
+      summary: {
+        scenarios: { passed: 2, total: 2 },
+        steps: { passed: 2, total: 2 },
+      },
+    });
+    expect(report.scenarios).toEqual([
+      expect.objectContaining({
+        key: 'orders/create-a',
+        result: 'PASS',
+        steps: [expect.objectContaining({ id: 'create-a', response: { status: 201, statusText: 'Created' } })],
+      }),
+      expect.objectContaining({
+        key: 'orders/create-b',
+        result: 'PASS',
+        steps: [expect.objectContaining({ id: 'create-b', response: { status: 201, statusText: 'Created' } })],
+      }),
+    ]);
+    expect(JSON.stringify(report)).not.toContain('"body"');
+  });
+
+  it('continues a suite after a failed scenario and fails the command', async () => {
+    await writeValidationOpenApi(workspace);
+    await mkdir(path.join(workspace, 'openapi-k6/scenarios/orders'), { recursive: true });
+    await mkdir(path.join(workspace, 'openapi-k6/suites'), { recursive: true });
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/orders/create-a.yaml'),
+      [
+        'name: create-a',
+        'steps:',
+        '  - id: create-a',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        marker: a',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/orders/create-b.yaml'),
+      [
+        'name: create-b',
+        'steps:',
+        '  - id: create-b',
+        '    api:',
+        '      operationId: createOrder',
+        '    request:',
+        '      body:',
+        '        marker: b',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      path.join(workspace, 'openapi-k6/suites/smoke.yaml'),
+      [
+        'name: smoke',
+        'scenarios:',
+        '  - orders/create-a',
+        '  - orders/create-b',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://config-base.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '',
+    ]);
+
+    const requestBodies: unknown[] = [];
+    const stdout = createCapture();
+
+    await expect(
+      runCli(
+        ['test', '--suite', 'smoke', '--no-color'],
+        {
+          cwd: workspace,
+          stdout: stdout.stream,
+          stderr: createSink(),
+          fetch: async (_input, init) => {
+            const body = JSON.parse(String(init?.body)) as { marker: string };
+            requestBodies.push(body);
+            return new Response(JSON.stringify({ id: 'order-1' }), {
+              status: body.marker === 'a' ? 400 : 201,
+              statusText: body.marker === 'a' ? 'Bad Request' : 'Created',
+            });
+          },
+        },
+      ),
+    ).rejects.toThrow('Suite test failed');
+
+    expect(requestBodies).toEqual([{ marker: 'a' }, { marker: 'b' }]);
+    expect(stdout.output()).toContain('  result    FAIL');
+    expect(stdout.output()).toContain('  scenarios 1/2 passed');
+    expect(stdout.output()).toContain('  steps     1/2 passed');
+    expect(stdout.output()).toContain('  report    openapi-k6/reports/');
+    expect(stdout.output()).toContain('  FAIL orders/create-a 0/1 steps');
+    expect(stdout.output()).toContain('    step create-a; status 400 Bad Request');
+    expect(stdout.output()).toContain('  PASS orders/create-b 1/1 steps');
+
+    const reportFiles = await readdir(path.join(workspace, 'openapi-k6/reports'));
+    expect(reportFiles).toHaveLength(1);
+    const report = JSON.parse(await readFile(path.join(workspace, 'openapi-k6/reports', reportFiles[0]), 'utf8')) as {
+      result: string;
+      scenarios: Array<{ key: string; result: string; steps: Array<{ id: string; response?: { status: number; statusText: string } }> }>;
+    };
+    expect(report.result).toBe('FAIL');
+    expect(report.scenarios).toEqual([
+      expect.objectContaining({
+        key: 'orders/create-a',
+        result: 'FAIL',
+        steps: [expect.objectContaining({ id: 'create-a', response: { status: 400, statusText: 'Bad Request' } })],
+      }),
+      expect.objectContaining({
+        key: 'orders/create-b',
+        result: 'PASS',
+      }),
     ]);
   });
 
