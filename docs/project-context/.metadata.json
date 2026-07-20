@@ -1,0 +1,73 @@
+{
+  "generator": "project-context",
+  "generator_version": "20",
+  "updated_at": "2026-07-20T15:33:52.894Z",
+  "run_mode": "update",
+  "source_commit": "fd9079f1bc4f096e2f6b7fd9196422d74c533a4c",
+  "source_commit_short": "fd9079f",
+  "reviewed_commit": "fd9079f1bc4f096e2f6b7fd9196422d74c533a4c",
+  "primary_doc": "docs/project-context.md",
+  "docs": [
+    "docs/project-context.md",
+    "docs/project-context/cli-workspace.md",
+    "docs/project-context/scenario-pipeline.md",
+    "docs/project-context/ui-suite-operations.md"
+  ],
+  "doc_sources": {
+    "docs/project-context.md": [
+      "README.md",
+      "package.json",
+      "src/cli/program.ts",
+      "AGENTS.md",
+      "src/scaffold/templates/openapi-k6.README.md",
+      "docs/03-maintainer-notes.md"
+    ],
+    "docs/project-context/cli-workspace.md": [
+      "src/cli/program.ts",
+      "src/scaffold/load-test.init.ts",
+      "src/cli/workspace-command.ts",
+      "test/cli.test.ts",
+      "scripts/backward-compat-smoke.mjs",
+      "src/config/load-test.config.ts",
+      "src/cli/workspace-paths.ts",
+      "docs/solutions/design-decisions/scenario-key-path-separation.md",
+      "src/cli/scaffold-status.ts"
+    ],
+    "docs/project-context/scenario-pipeline.md": [
+      "src/cli/scenario-command.ts",
+      "src/cli/scenario-script.ts",
+      "src/core/types.ts",
+      "src/parser/scenario.parser.ts",
+      "src/cli/scenario-var-overrides.ts",
+      "src/core/scenario-vars.ts",
+      "src/core/template.ts",
+      "src/validator/scenario.validator.ts",
+      "src/core/api-registry.ts",
+      "src/openapi/openapi.resolver.ts",
+      "src/compiler/ast.builder.ts",
+      "src/executor/scenario.executor.ts",
+      "src/cli/load-test-env.ts",
+      "src/compiler/k6.generator.ts",
+      "test/scenario.parser.test.ts",
+      "test/scenario.executor.test.ts",
+      "test/k6.generator.test.ts"
+    ],
+    "docs/project-context/ui-suite-operations.md": [
+      "src/cli/ui/server.ts",
+      "src/cli/ui/server-http.ts",
+      "src/cli/ui/run-command.ts",
+      "src/cli/ui/run-state.ts",
+      "src/parser/suite.parser.ts",
+      "test/suite.parser.test.ts",
+      "src/cli/program.ts",
+      "src/cli/scenario-command.ts",
+      "test/cli.test.ts",
+      "src/cli/ui/reports.ts",
+      ".github/workflows/ci.yml",
+      ".github/workflows/publish.yml",
+      ".github/workflows/published-smoke.yml",
+      "scripts/published-smoke.mjs"
+    ]
+  },
+  "content_hash": "9ea0a919e80baf7daaf4434de6b41208d734a9320d76fb52e40320e56641b6ad"
+}

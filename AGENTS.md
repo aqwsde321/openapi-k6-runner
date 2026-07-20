@@ -19,3 +19,16 @@
   - 기존 CLI 옵션을 쓰는 테스트
   - 기존 scaffold/README 생성 결과가 의도치 않게 바뀌지 않았는지 확인
 - 호환성을 깨는 변경이 필요하면 구현 전에 사용자에게 알리고, 대안과 migration 방안을 먼저 제시한다.
+
+<!-- project-context:start -->
+## Project Context
+
+This repository has Codex-native project context documentation at `docs/project-context.md`.
+
+Start here:
+
+- [Project context](docs/project-context.md)
+
+Project context includes repository overview, architecture notes, workflows, domain concepts, operations, integrations, testing guidance, and source maps.
+For ordinary project questions, read the project context first and follow its links only as relevant. Read the primary page first; do not preload every supporting page. In multi-page context, open only pages whose `read_when` guidance matches the task. When context is missing, stale, ambiguous, or exact implementation verification is required, inspect the relevant source; current source remains authoritative. Follow repository instructions for code discovery. Run `$project-context` to refresh documentation only when the user explicitly requests creation or refresh, or directly invokes the skill without a narrower read-only request; missing or stale context alone does not authorize writes.
+<!-- project-context:end -->
