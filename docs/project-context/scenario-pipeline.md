@@ -39,12 +39,12 @@ AST는 operation을 method/path와 module name으로 해소한 실행 계약이�
 
 `test`는 작업공간 `.env` 위에 process environment를 병합하고 process 값에 우선권을 준다. AST step을 순서대로 요청하고 response extract를 context에 넣는다. condition이 없으면 HTTP status `< 400`이 기본 성공 조건이다. condition 또는 extract가 실패하면 해당 Scenario의 뒤 step을 실행하지 않는다. input은 먼저 vars에서 찾고, 없으면 TTY/UI provider에 요청하며 sensitive 값은 출력 masking 대상에 넣는다. 근거: [Scenario executor](../../src/executor/scenario.executor.ts), [environment loader](../../src/cli/load-test-env.ts).
 
-k6 generator는 외부 runtime dependency 없는 JavaScript와 필요한 helper를 만든다. 같은 AST의 request, module base URL, template, extract와 condition을 옮기며, `{{env.*}}`는 `__ENV`, `{{k6.*}}`는 `k6/execution` 값으로 이어진다. input은 대화형 provider 없이 `VARS.<name>`만 읽고 필수 값이 없으면 실패한다. 생성 script의 masking은 env template 값만 추적하므로 Node executor의 sensitive input masking과 같지 않다. 근거: [k6 generator](../../src/compiler/k6.generator.ts).
+k6 generator는 외부 runtime dependency 없는 JavaScript와 필요한 helper를 만든다. 같은 AST의 request, module base URL, template, extract와 condition을 옮기며, `{{env.*}}`는 `__ENV`, `{{k6.*}}`는 `k6/execution` 값으로 이어진다. check 실패는 `checks: rate==1.0` threshold로 k6 실행을 실패 처리하지만 현재 iteration의 뒤 step은 계속 실행한다. 이는 첫 실패 step에서 중단하는 Node `test`와 의도적으로 다르다. input은 대화형 provider 없이 `VARS.<name>`만 읽고 필수 값이 없으면 실패한다. 생성 script의 masking은 env template 값만 추적하므로 Node executor의 sensitive input masking과 같지 않다. 근거: [k6 generator](../../src/compiler/k6.generator.ts), [generator tests](../../test/k6.generator.test.ts).
 
 ## 변경 체크리스트
 
 - 새 DSL 의미를 추가하면 types, parser, validator, AST, Node executor, k6 generator와 각 테스트를 함께 확인한다.
-- Node test와 generated k6의 default status, template, extract, 실패 중단 의미를 비교하고, input provider와 sensitive input masking의 현재 runtime 차이를 의도치 않게 넓히지 않는다.
+- Node `test`의 fail-fast와 generated k6의 check 실패 후 iteration 계속 실행을 현재 계약으로 유지한다. 실패 정책을 설정 가능하게 만들 때만 두 runtime의 통일 여부를 재검토한다.
 - operation/module 해석 변경은 단일 module, explicit `api.module`, CLI `--module`, multi-module E2E를 모두 확인한다.
 - path·multipart 파일 경계를 넓히지 않고, env/sensitive 값이 URL·error·response 출력에서 masking되는지 확인한다.
 - generate는 정적 검증이 끝난 뒤 파일을 써야 하므로 실패 시 기존 생성물을 보존한다.

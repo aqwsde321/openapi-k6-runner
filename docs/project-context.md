@@ -1,7 +1,7 @@
 ---
 generated_by: project-context
-source_commit: fd9079f
-updated_at: 2026-07-20T14:35:41Z
+source_commit: 3733352
+updated_at: 2026-07-21T02:07:19Z
 mode: multi-page
 ---
 
@@ -17,7 +17,7 @@ mode: multi-page
 
 ## 작업 전 확인 지점
 
-- 공개 명령·옵션, config, Scenario YAML, scaffold는 npm 최신 버전을 실행하는 기존 사용자와 호환되어야 한다. 기본 동작 변경보다 additive 확장을 우선하고, legacy `load-tests/` 이전 경로도 보존한다. 세부 계약: [CLI와 작업공간](./project-context/cli-workspace.md), [저장소 지침](../AGENTS.md).
+- 공개 명령·옵션, config, Scenario YAML, scaffold는 npm 최신 버전을 실행하는 기존 사용자와 호환되어야 한다. 기본 작업공간은 `openapi-k6/`로 고정하며 legacy `load-tests/`는 자동 이전하지 않는다. 기존 경로를 유지할 때는 config를 읽는 명령에 `--config load-tests/config.yaml`을 명시한다. 세부 계약: [CLI와 작업공간](./project-context/cli-workspace.md), [저장소 지침](../AGENTS.md).
 - DSL 기능은 parser만의 기능이 아니다. OpenAPI 정적 검증, AST, Node executor, k6 generator가 같은 의미를 유지해야 한다. 세부 흐름: [Scenario 파이프라인](./project-context/scenario-pipeline.md).
 - UI와 suite는 별도 실행 엔진이 아니라 기존 CLI/Scenario 실행 결과를 조합하는 계층이다. report 형식이나 UI route를 바꿀 때 CLI 실패 규칙과 테스트까지 함께 확인한다. 세부 흐름: [UI·Suite·운영](./project-context/ui-suite-operations.md).
 - 사용자 사용법은 root [README](../README.md), 생성 작업공간 계약은 [scaffold README template](../src/scaffold/templates/openapi-k6.README.md), 유지보수·배포 절차는 [maintainer notes](./03-maintainer-notes.md)가 canonical이다. 같은 내용을 한 문서에서 독립적으로 재정의하지 않는다.

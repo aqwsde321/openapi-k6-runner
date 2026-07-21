@@ -1,11 +1,11 @@
 {
   "generator": "project-context",
   "generator_version": "20",
-  "updated_at": "2026-07-20T15:33:52.894Z",
+  "updated_at": "2026-07-21T02:08:17.796Z",
   "run_mode": "update",
-  "source_commit": "fd9079f1bc4f096e2f6b7fd9196422d74c533a4c",
-  "source_commit_short": "fd9079f",
-  "reviewed_commit": "fd9079f1bc4f096e2f6b7fd9196422d74c533a4c",
+  "source_commit": "373335236d32d7a67a8acd5eaeca2c783ddeab98",
+  "source_commit_short": "3733352",
+  "reviewed_commit": "373335236d32d7a67a8acd5eaeca2c783ddeab98",
   "primary_doc": "docs/project-context.md",
   "docs": [
     "docs/project-context.md",
@@ -48,9 +48,9 @@
       "src/executor/scenario.executor.ts",
       "src/cli/load-test-env.ts",
       "src/compiler/k6.generator.ts",
+      "test/k6.generator.test.ts",
       "test/scenario.parser.test.ts",
-      "test/scenario.executor.test.ts",
-      "test/k6.generator.test.ts"
+      "test/scenario.executor.test.ts"
     ],
     "docs/project-context/ui-suite-operations.md": [
       "src/cli/ui/server.ts",
@@ -69,5 +69,5 @@
       "scripts/published-smoke.mjs"
     ]
   },
-  "content_hash": "9ea0a919e80baf7daaf4434de6b41208d734a9320d76fb52e40320e56641b6ad"
+  "content_hash": "65c8c1ef6c3531066139b512fc29e5977ce46c052d06b31fab695201e5b281fa"
 }

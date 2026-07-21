@@ -37,7 +37,7 @@ UI는 기존 JSON report를 다시 읽어 최신순으로 보여주고 raw JSON,
 | `pnpm test` | parser, validator, executor, generator, CLI, UI·suite/report 통합 |
 | `pnpm run typecheck` / `build` | strict TypeScript와 npm 배포용 `dist`·scaffold asset |
 | `pnpm run smoke:e2e` | 서로 다른 seed/auth/bos 서버의 init→module/sync→validate→test→generate→run |
-| `pnpm run test:compat` | packed tarball의 npx 흐름, legacy workspace 이전, 사용자 자산 보존 |
+| `pnpm run test:compat` | packed tarball의 npx 흐름, legacy workspace 명시적 `--config` 실행, 사용자 자산 보존 |
 | `npm pack --dry-run` | 배포 파일과 package metadata |
 | `pnpm run smoke:published` | npm registry 실제 배포본의 version/help/init/standalone validate·generate |
 

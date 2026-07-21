@@ -22,7 +22,7 @@ read_when: CLI 옵션, init/update/sync, 경로 해석, scaffold 또는 config�
 
 기본 작업공간은 `openapi-k6/`다. `init`은 `openapi/`, `scenarios/`, `generated/` 디렉터리와 `config.yaml`, `.env.example`, `.gitignore`, `run.sh`, 기본 `smoke.yaml`, 작업공간 `README.md`, `.openapi-k6.json`을 만든다. 기존 config가 있으면 `init --force`보다 `update`를 안내한다. `--force`는 config와 기본 smoke까지 다시 쓸 수 있으므로 안전한 갱신 명령이 아니다. 근거: [scaffold initializer](../../src/scaffold/load-test.init.ts), [workspace command](../../src/cli/workspace-command.ts).
 
-`update`는 config 위치를 작업공간 기준으로 삼아 `.env.example`, `.gitignore`, `run.sh`, `README.md`, `.openapi-k6.json`만 갱신한다. `config.yaml`, `.env`, scenarios, suites, snapshot/catalog, generated scripts, reports와 logs는 삭제하거나 다시 만들지 않는다. 기본 `openapi-k6/config.yaml`이 없고 `load-tests/config.yaml`만 있으면 legacy 디렉터리 전체를 `openapi-k6/`로 옮긴 뒤 갱신한다. 두 디렉터리가 함께 있으면 자동 이전하지 않는다. 보존 계약은 [CLI regression tests](../../test/cli.test.ts)와 [compatibility smoke](../../scripts/backward-compat-smoke.mjs)가 고정한다.
+`update`는 config 위치를 작업공간 기준으로 삼아 `.env.example`, `.gitignore`, `run.sh`, `README.md`, `.openapi-k6.json`만 갱신한다. `config.yaml`, `.env`, scenarios, suites, snapshot/catalog, generated scripts, reports와 logs는 삭제하거나 다시 만들지 않는다. 기본 config는 `openapi-k6/config.yaml`로 고정되어 있고 `load-tests/config.yaml`을 자동으로 옮기지 않는다. legacy 경로를 유지하려면 `--config load-tests/config.yaml`로 in-place 갱신하며, 기본 경로로 바꾸는 수동 이동은 대상 `openapi-k6/`가 없을 때만 수행한다. 대상 디렉터리가 이미 있으면 CLI는 충돌 정리를 안내한다. 보존 계약은 [CLI regression tests](../../test/cli.test.ts)와 [compatibility smoke](../../scripts/backward-compat-smoke.mjs)가 고정한다.
 
 생성 `.gitignore`는 `.openapi-k6.json`, `scenarios/**`, `suites/**`만 추적 예외로 둔다. `.env`는 init/update가 생성하거나 덮어쓰지 않으며 `run.sh`는 작업공간의 `.env`만 읽는다.
 
@@ -35,7 +35,7 @@ read_when: CLI 옵션, init/update/sync, 경로 해석, scaffold 또는 config�
 ## 변경 체크리스트
 
 - 기존 명령과 `-s/--scenario`, `-o/--openapi`, `-w/--write`, `--config`, `-m/--module`, `--no-input`, `--force` 의미를 유지한다.
-- custom `--dir`/`--config`, 공백 포함 경로, standalone `--openapi`, legacy `load-tests/`를 함께 점검한다.
+- custom `--dir`/`--config`, 공백 포함 경로, standalone `--openapi`, legacy `load-tests/`의 명시적 `--config` 흐름을 함께 점검한다.
 - scaffold 파일이나 안내 문구를 바꾸면 root README, scaffold template, scaffold version, README assertion을 함께 확인한다.
 - `.openapi-k6.json`의 구버전·누락은 `validate/test/generate/run`에서 update notice로 이어져야 한다. 근거: [scaffold status](../../src/cli/scaffold-status.ts).
 - 새 실행 기능의 호환성 검증 위치는 [UI·Suite·운영](./ui-suite-operations.md)의 CI 계층을 따른다.
@@ -48,7 +48,7 @@ pnpm run build
 pnpm run test:compat
 ```
 
-`test:compat`는 빌드된 tarball을 `npm exec --package`로 실행해 새 workspace init과 legacy `load-tests`의 `update → sync → catalog → validate → test → generate → update` 및 보존 동작을 확인한다.
+`test:compat`는 빌드된 tarball을 `npm exec --package`로 실행해 새 workspace init과 legacy `load-tests`의 명시적 `--config` 기반 `update → sync → catalog → validate → test → generate → update` 및 보존 동작을 확인한다.
 
 ## 미확정 사항
 
