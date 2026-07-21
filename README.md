@@ -44,13 +44,14 @@ Codex에 스킬이 아직 설치되어 있지 않거나 새 프로젝트에서 �
    같은 대화에서 최신 init, update, README 변경 이후 이미 읽었다면 전체를 다시 읽지 말고 필요한 섹션만 확인해.
    없으면 npx --yes openapi-k6@latest init을 실행해.
    baseUrl 또는 OpenAPI spec URL을 확실히 모르면 나에게 물어봐.
-5. 기존 `load-tests/config.yaml`이 있고 `openapi-k6/config.yaml`이 없으면 npx --yes openapi-k6@latest update로 `openapi-k6/`로 이전해.
+5. 기존 `load-tests/config.yaml`이 있고 `openapi-k6/config.yaml`이 없으면 자동으로 이동하지 마.
+   기본 경로로 바꾸려면 사용자 확인 후 `openapi-k6/` 디렉터리가 없을 때만 `mv load-tests openapi-k6`를 실행해. 이미 있으면 충돌을 먼저 정리해. 기존 경로를 유지하려면 이후 명령에 `--config load-tests/config.yaml`을 붙여.
 6. init 또는 update 후 생성된 작업공간 README.md의 `AI 작업 계약`, `프로젝트 값`, `명령` 섹션을 다시 읽어.
    이 README는 AI 작업 지침이므로, 이후 작업은 그 문서를 기준으로 진행해.
 7. 시나리오 파일을 작성하거나 수정하기 전에는 먼저 업무 프로세스와 호출할 API 순서를 요약해서 내 확인을 받아.
    요약에는 scenario key와 파일 경로, API 호출 순서, method/path 또는 operationId, 필요한 request 값, env/vars로 받을 값, response에서 extract할 값, 기존 scenario 재사용 여부를 포함해.
 8. 내가 `ㅇ`, `ok`, `ㄱ`처럼 긍정하면 그때 Scenario YAML을 작성하거나 수정해.
-9. generate는 파일 쓰기 전에 정적 검증을 수행합니다. run의 k6 check 실패는 명령 실패로 처리됩니다. validate와 test가 통과하기 전에는 run이나 장시간 k6 실행을 하지 마.
+9. generate는 파일 쓰기 전에 정적 검증을 수행합니다. test는 첫 실패 step에서 중단합니다. generated k6는 check 실패를 명령 실패로 처리하지만 같은 iteration의 후속 step은 계속 실행합니다. validate와 test가 통과하기 전에는 run이나 장시간 k6 실행을 하지 마.
 10. 장시간 부하 테스트는 내가 요청하기 전에는 실행하지 말고, 실행 명령과 확인 포인트만 알려줘.
 ```
 
@@ -59,7 +60,7 @@ Codex에 스킬이 아직 설치되어 있지 않거나 새 프로젝트에서 �
 백엔드 프로젝트 루트에서 실행합니다.
 처음 적용하는 프로젝트는 `init`부터 실행합니다.
 기본 작업공간은 `openapi-k6/`이고, 팀이나 프로젝트 이름에 맞추려면 처음 만들 때 `npx --yes openapi-k6 init --dir <path>`를 사용합니다.
-기존 기본 작업공간인 `load-tests/`가 있는 프로젝트는 `npx --yes openapi-k6 update`로 `openapi-k6/`로 이전하고 scaffold 안내를 갱신합니다.
+기존 기본 작업공간인 `load-tests/`는 자동 이전되지 않습니다. `openapi-k6/`가 없을 때만 `mv load-tests openapi-k6`로 직접 옮깁니다. 이미 있으면 디렉터리 충돌을 먼저 정리합니다. 기존 경로를 유지하려면 `npx --yes openapi-k6 update --config load-tests/config.yaml`을 실행하고 이후 명령에도 같은 `--config`를 붙입니다.
 
 ```bash
 npx --yes openapi-k6 init
@@ -104,7 +105,7 @@ npx --yes openapi-k6 init
 
 `init`은 백엔드 프로젝트 안에 `openapi-k6/`를 만들고 API 기본 주소를 묻습니다.
 작업공간 이름을 바꾸려면 처음 만들 때 `npx --yes openapi-k6 init --dir <path>`를 사용합니다.
-이미 `load-tests/`가 있으면 `init --force`로 새로 만들지 말고 먼저 `npx --yes openapi-k6 update`를 사용해 `openapi-k6/`로 이전합니다.
+이미 `load-tests/`가 있으면 `init --force`로 새로 만들지 않습니다. `openapi-k6/`가 없을 때만 `mv load-tests openapi-k6`로 직접 옮깁니다. 기존 경로를 유지하려면 `--config load-tests/config.yaml`을 명시합니다.
 
 ```text
 API base URL [http://localhost:8080]: https://api.example.com
@@ -248,7 +249,8 @@ npx --yes openapi-k6 run -s <scenario-key>
 `--write`나 다른 작업공간 경로를 쓰면 직접 실행할 k6 파일 경로도 그 값에 맞춰 달라집니다.
 
 `validate`가 통과한 scenario만 `generate`하고, `test`가 통과한 scenario만 `run`하는 흐름을 권장합니다.
-`run`으로 실행하는 k6 스크립트는 각 step의 `condition`을 k6 check로 검증하고, check 실패가 있으면 명령도 실패합니다.
+`test`는 첫 실패 step에서 후속 요청을 중단합니다.
+`run`으로 실행하는 generated k6 스크립트는 각 step의 `condition`을 k6 check로 검증하고, check 실패가 있으면 명령은 실패하지만 같은 iteration의 후속 step은 계속 실행합니다.
 
 ## 필요할 때만
 

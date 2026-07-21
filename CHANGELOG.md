@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-07-21
+
+### Changed
+
+- 기본 `update`가 기존 `load-tests/`를 자동으로 rename하지 않고 `openapi-k6/config.yaml`만 기본 경로로 사용하도록 변경했습니다. 기존 경로는 `--config load-tests/config.yaml`로 계속 사용할 수 있으며, 기본 경로 전환은 대상 `openapi-k6/`가 없을 때만 직접 수행합니다.
+- Node `test`는 첫 실패 step에서 중단하고 generated k6는 check 실패 뒤 같은 iteration의 후속 step을 계속 실행하는 현재 실패 정책을 문서와 회귀 테스트로 명시했습니다.
+
 ## [0.16.0] - 2026-06-30
 
 ### Added
@@ -302,7 +309,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.13.0...v0.14.0

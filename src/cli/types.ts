@@ -317,6 +317,7 @@ export interface UpdateResult {
   runScriptPath: string;
   readmePath: string;
   metadataPath: string;
+  /** @deprecated Automatic legacy workspace migration is no longer performed. */
   migratedFrom?: string;
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "openapi-k6",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Scenario-first OpenAPI CLI for validating API flows and generating k6 scripts",
   "repository": {
     "type": "git",

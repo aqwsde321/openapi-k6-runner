@@ -127,7 +127,7 @@ src/
 
 - 기존 공개 명령의 의미를 바꾸지 않는다: `init`, `update`, `sync`, `catalog`, `validate`, `test`, `generate`, `run`.
 - 기존 공개 옵션의 의미를 바꾸지 않는다: `-s/--scenario`, `-o/--openapi`, `-w/--write`, `--config`, `-m/--module`, `--no-input`, `--force`.
-- 기본 작업공간은 `openapi-k6/`이며, 기존 기본 `load-tests/config.yaml` workspace는 `update` 때 `openapi-k6/`로 이전한다.
+- 기본 작업공간은 `openapi-k6/`로 고정한다. 기존 `load-tests/config.yaml` workspace는 자동 이전하지 않는다. 대상 `openapi-k6/`가 없을 때만 직접 옮기고, 기존 경로를 유지하면 config를 읽는 명령에 `--config load-tests/config.yaml`을 명시한다.
 - 새 기능은 기본적으로 additive하게 추가한다.
 - compatibility가 흔들릴 수 있는 변경은 `pnpm run test:compat`와 published smoke 관점에서 검증한다.
 - `openapi-k6/.openapi-k6.json` metadata로 scaffold 버전을 기록하고, 오래된 scaffold에서 `validate`, `test`, `generate`, `run`을 실행하면 `Scaffold update available` 안내와 `update` 명령만 표시한다.

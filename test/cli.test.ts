@@ -477,6 +477,7 @@ describe('openapi-k6 CLI', () => {
     expect(readme).toContain('폴더는 UI 카테고리로 사용합니다. 예: `openapi-k6/scenarios/auth/login.yaml`은 `-s auth/login`으로 실행합니다.');
     expect(readme).toContain('UI는 `scenarios/` 아래 폴더를 그룹으로 보여주고, 요청 단계에서 각 step의 출처를 `직접 정의`, `시나리오 사용: auth/login`처럼 표시합니다.');
     expect(readme).toContain('`test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다.');
+    expect(readme).toContain('generated k6는 check 실패가 있으면 실행 결과를 실패 처리하지만 같은 iteration의 후속 step은 계속 실행합니다.');
     expect(readme).toContain('상단 서버 상태는 module별 baseUrl 연결 여부와 snapshot 상태를 요약합니다.');
     expect(readme).toContain('UI에서 폴더는 접고 펼칠 수 있으며, 재사용된 step은 요청 단계와 최근 실행 결과에서 `시나리오 사용: auth/login`처럼 출처가 표시됩니다.');
     expect(readme).toContain('`catalog --ai` 초안의 `<...>` placeholder가 남아 있으면 `validate`가 실패합니다.');
@@ -1613,7 +1614,7 @@ describe('openapi-k6 CLI', () => {
     expect(log).toBe('old log\n');
   });
 
-  it('migrates the legacy default load-tests workspace on update', async () => {
+  it('keeps the legacy load-tests workspace in place unless --config is explicit', async () => {
     await mkdir(path.join(workspace, 'load-tests/scenarios'), { recursive: true });
     await mkdir(path.join(workspace, 'load-tests/openapi'), { recursive: true });
     await writeFile(
@@ -1631,27 +1632,61 @@ describe('openapi-k6 CLI', () => {
     );
     await writeFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'name: kept\nsteps: []\n', 'utf8');
     await writeFile(path.join(workspace, 'load-tests/.env'), 'LOGIN_PASSWORD=legacy-secret\n', 'utf8');
-    const output = createCapture();
+    await expect(
+      runCli(
+        ['update'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow([
+      'load-tests/config.yaml was found, but the default workspace is fixed at openapi-k6/.',
+      'Move load-tests/ to openapi-k6/ manually.',
+      'Run openapi-k6 update --config load-tests/config.yaml to update the legacy workspace in place.',
+    ].join('\n'));
 
+    await expect(stat(path.join(workspace, 'load-tests/config.yaml'))).resolves.toBeTruthy();
+    await expect(stat(path.join(workspace, 'openapi-k6'))).rejects.toHaveProperty('code', 'ENOENT');
+
+    const output = createCapture();
     await runCli(
-      ['update'],
+      ['update', '--config', 'load-tests/config.yaml'],
       { cwd: workspace, stdout: output.stream, stderr: createSink() },
     );
 
-    expect(output.output()).toContain('Moved load-tests to openapi-k6');
-    expect(output.output()).toContain('Updated openapi-k6 workspace metadata in openapi-k6');
-    await expect(stat(path.join(workspace, 'openapi-k6/config.yaml'))).resolves.toBeTruthy();
-    await expect(stat(path.join(workspace, 'load-tests'))).rejects.toHaveProperty('code', 'ENOENT');
+    expect(output.output()).toContain('Updated openapi-k6 workspace metadata in load-tests');
+    expect(output.output()).not.toContain('Moved load-tests');
+    await expect(stat(path.join(workspace, 'openapi-k6'))).rejects.toHaveProperty('code', 'ENOENT');
 
-    const config = await readFile(path.join(workspace, 'openapi-k6/config.yaml'), 'utf8');
-    const readme = await readFile(path.join(workspace, 'openapi-k6/README.md'), 'utf8');
-    const scenario = await readFile(path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'), 'utf8');
-    const env = await readFile(path.join(workspace, 'openapi-k6/.env'), 'utf8');
+    const config = await readFile(path.join(workspace, 'load-tests/config.yaml'), 'utf8');
+    const readme = await readFile(path.join(workspace, 'load-tests/README.md'), 'utf8');
+    const scenario = await readFile(path.join(workspace, 'load-tests/scenarios/smoke.yaml'), 'utf8');
+    const env = await readFile(path.join(workspace, 'load-tests/.env'), 'utf8');
 
     expect(config).toContain('baseUrl: https://legacy.test.local');
-    expect(readme).toContain('# openapi-k6');
+    expect(readme).toContain('# load-tests');
+    expect(readme).toContain('npx --yes openapi-k6 update --config load-tests/config.yaml');
     expect(scenario).toBe('name: kept\nsteps: []\n');
     expect(env).toBe('LOGIN_PASSWORD=legacy-secret\n');
+  });
+
+  it('does not suggest moving load-tests when the default directory already exists', async () => {
+    await mkdir(path.join(workspace, 'load-tests'), { recursive: true });
+    await mkdir(path.join(workspace, 'openapi-k6'), { recursive: true });
+    await writeFile(path.join(workspace, 'load-tests/config.yaml'), 'baseUrl: https://legacy.test.local\n', 'utf8');
+
+    await expect(
+      runCli(
+        ['update'],
+        { cwd: workspace, stdout: createSink(), stderr: createSink() },
+      ),
+    ).rejects.toThrow([
+      'load-tests/config.yaml was found, but the default workspace is fixed at openapi-k6/.',
+      'openapi-k6/ already exists. Resolve that directory before moving load-tests/.',
+      'Run openapi-k6 update --config load-tests/config.yaml to update the legacy workspace in place.',
+    ].join('\n'));
+
+    await expect(stat(path.join(workspace, 'load-tests/config.yaml'))).resolves.toBeTruthy();
+    await expect(stat(path.join(workspace, 'openapi-k6'))).resolves.toBeTruthy();
+    await expect(stat(path.join(workspace, 'openapi-k6/config.yaml'))).rejects.toHaveProperty('code', 'ENOENT');
   });
 
   it('checks workspace health with doctor', async () => {

@@ -26,7 +26,7 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 7. 처음에는 `id`, `api`와 필요한 `request`, `extract`, `condition`만 채웁니다. 공개 테스트 데이터는 `vars` 또는 CLI `--var-file`, `--var`로 관리하고, 반복마다 달라질 값은 `{{k6.*}}`를 사용합니다.
 8. 비밀 값은 scenario YAML에 직접 쓰지 말고 `{{env.NAME}}`으로 참조합니다. 실제 값은 `__ENV_PATH__`에만 둡니다. `.env`에는 비밀/접속 값만 둡니다.
 9. `__VALIDATE_NAME_COMMAND__`를 먼저 통과시킨 뒤, 가능한 경우 `__TEST_NAME_COMMAND__`로 실제 API 흐름을 1회 검증합니다.
-10. `generate`는 파일 쓰기 전에 정적 검증을 수행합니다. `run`의 k6 check 실패는 명령 실패로 처리됩니다. validate/test 전에는 `run`, 장시간 k6 실행을 하지 않습니다.
+10. `generate`는 파일 쓰기 전에 정적 검증을 수행합니다. `test`는 첫 실패 step에서 중단합니다. generated k6는 check 실패를 명령 실패로 처리하지만 같은 iteration의 후속 step은 계속 실행합니다. validate/test 전에는 `run`, 장시간 k6 실행을 하지 않습니다.
 11. CLI가 `Scaffold update available`을 표시하면 `__UPDATE_COMMAND__`를 실행하고 이 README를 다시 확인합니다. 기존 workspace에는 `init --force`를 쓰지 않습니다.
 
 ## 프로젝트 값
@@ -60,7 +60,7 @@ OpenAPI sync -> catalog 확인 -> API 호출 계획 확인 -> Scenario YAML 작�
 | scaffold 안전 갱신 | `__UPDATE_COMMAND__` |
 
 UI는 `scenarios/` 아래 폴더를 그룹으로 보여주고, 요청 단계에서 각 step의 출처를 `직접 정의`, `시나리오 사용: auth/login`처럼 표시합니다.
-`test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다. 실패한 step이 나오면 이후 step 요청은 실행하지 않습니다.
+`test` 실행 결과는 최근 실행 결과에서 단계별 성공/실패, HTTP status, 소요시간, 출처를 함께 보여줍니다. 실패한 step이 나오면 이후 step 요청은 실행하지 않습니다. generated k6는 check 실패가 있으면 실행 결과를 실패 처리하지만 같은 iteration의 후속 step은 계속 실행합니다.
 최근 실행 결과의 `요청/응답 숨김`/`요청/응답 보기` 버튼으로 step별 실제 요청 URL, headers/body, 응답 status, headers/body 표시를 전환할 수 있습니다.
 suite `test` 실행 후 상단 `리포트`에서 종합 결과, 시나리오별 성공 여부, 첫 실패 원인을 확인하고 새 탭 HTML 보기와 HTML/JSON 다운로드를 사용할 수 있습니다.
 상단 서버 상태는 module별 baseUrl 연결 여부와 snapshot 상태를 요약합니다.

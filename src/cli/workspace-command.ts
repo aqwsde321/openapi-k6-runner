@@ -26,9 +26,8 @@ import { resolveInitOptionsInteractively } from './init-openapi.js';
 import { loadOptionalConfig } from './optional-config.js';
 import { DEFAULT_LOAD_TEST_DIR } from './workspace-paths.js';
 
-const LEGACY_DEFAULT_LOAD_TEST_DIR = 'load-tests';
 const DEFAULT_CONFIG_PATH = `${DEFAULT_LOAD_TEST_DIR}/config.yaml`;
-const LEGACY_DEFAULT_CONFIG_PATH = `${LEGACY_DEFAULT_LOAD_TEST_DIR}/config.yaml`;
+const LEGACY_DEFAULT_CONFIG_PATH = 'load-tests/config.yaml';
 const CODEX_SKILL_NAME = 'openapi-k6-scenario';
 
 export async function runInitCommand(
@@ -68,7 +67,25 @@ export async function runUpdateCommand(
   context: CliContext = {},
 ): Promise<UpdateResult> {
   const cwd = resolveCwd(context);
-  const migratedFrom = await migrateLegacyDefaultWorkspaceForUpdate(cwd, options);
+
+  if (
+    options.config === undefined &&
+    !(await pathExists(path.join(cwd, DEFAULT_CONFIG_PATH))) &&
+    await pathExists(path.join(cwd, LEGACY_DEFAULT_CONFIG_PATH))
+  ) {
+    const defaultDirectoryExists = await pathExists(path.join(cwd, DEFAULT_LOAD_TEST_DIR));
+
+    throw new Error(
+      [
+        `${LEGACY_DEFAULT_CONFIG_PATH} was found, but the default workspace is fixed at ${DEFAULT_LOAD_TEST_DIR}/.`,
+        ...(defaultDirectoryExists
+          ? [`${DEFAULT_LOAD_TEST_DIR}/ already exists. Resolve that directory before moving load-tests/.`]
+          : [`Move load-tests/ to ${DEFAULT_LOAD_TEST_DIR}/ manually.`]),
+        `Run openapi-k6 update --config ${LEGACY_DEFAULT_CONFIG_PATH} to update the legacy workspace in place.`,
+      ].join('\n'),
+    );
+  }
+
   const config = await loadOptionalConfig(cwd, options.config, true);
   const moduleConfig = selectConfigModule(config, options.module);
 
@@ -76,7 +93,7 @@ export async function runUpdateCommand(
     throw new Error(`${DEFAULT_CONFIG_PATH} was not found. Run openapi-k6 init or pass --config.`);
   }
 
-  const result = await updateLoadTests({
+  return updateLoadTests({
     cwd,
     directory: path.relative(cwd, config.dir) || '.',
     module: moduleConfig?.name,
@@ -84,11 +101,6 @@ export async function runUpdateCommand(
     snapshot: moduleConfig?.snapshot,
     catalog: moduleConfig?.catalog,
   });
-
-  return {
-    ...result,
-    ...(migratedFrom === undefined ? {} : { migratedFrom }),
-  };
 }
 
 export async function runInstallSkillCommand(
@@ -148,39 +160,6 @@ export async function runInstallSkillCommand(
     replaced: alreadyInstalled,
     alreadyInstalled,
   };
-}
-
-async function migrateLegacyDefaultWorkspaceForUpdate(
-  cwd: string,
-  options: UpdateOptions,
-): Promise<string | undefined> {
-  if (options.config !== undefined) {
-    return undefined;
-  }
-
-  const defaultDirectoryPath = path.join(cwd, DEFAULT_LOAD_TEST_DIR);
-  const defaultConfigPath = path.join(cwd, DEFAULT_CONFIG_PATH);
-
-  if (await pathExists(defaultConfigPath)) {
-    return undefined;
-  }
-
-  const legacyDirectoryPath = path.join(cwd, LEGACY_DEFAULT_LOAD_TEST_DIR);
-  const legacyConfigPath = path.join(cwd, LEGACY_DEFAULT_CONFIG_PATH);
-
-  if (!(await pathExists(legacyConfigPath))) {
-    return undefined;
-  }
-
-  if (await pathExists(defaultDirectoryPath)) {
-    throw new Error(
-      `${DEFAULT_LOAD_TEST_DIR} already exists. Move it aside or pass --config ${LEGACY_DEFAULT_CONFIG_PATH} to update the legacy workspace in place.`,
-    );
-  }
-
-  await fs.rename(legacyDirectoryPath, defaultDirectoryPath);
-
-  return legacyDirectoryPath;
 }
 
 function selectConfigModule(

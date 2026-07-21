@@ -242,6 +242,44 @@ describe('k6 generator', () => {
     await expectValidJavaScript(workspace, script);
   });
 
+  it('keeps later k6 steps runnable after a check fails', async () => {
+    const script = generateK6Script(
+      {
+        name: 'continue-after-check',
+        steps: [
+          {
+            id: 'create-order',
+            method: 'POST',
+            path: '/orders',
+            pathParameters: [],
+            request: {},
+            condition: 'status == 201',
+          },
+          {
+            id: 'cleanup-order',
+            method: 'DELETE',
+            path: '/orders/current',
+            pathParameters: [],
+            request: {},
+          },
+        ],
+      },
+      { baseUrl: 'https://api.test.local' },
+    );
+
+    const failedCheckStart = script.indexOf('if (!check0) {');
+    const nextStepStart = script.indexOf('group("cleanup-order DELETE /orders/current"');
+    const codeBeforeNextStep = script.slice(failedCheckStart, nextStepStart);
+
+    expect(failedCheckStart).toBeGreaterThanOrEqual(0);
+    expect(nextStepStart).toBeGreaterThan(failedCheckStart);
+    expect(codeBeforeNextStep).toContain('logFailedCheck(metadata0, "status == 201", url0, res0);');
+    expect(codeBeforeNextStep).not.toContain('return;');
+    expect(codeBeforeNextStep).not.toContain('throw new Error');
+    expect(script.indexOf('const res1 = http.del(url1, null, params1);')).toBeGreaterThan(nextStepStart);
+    await expectValidJavaScript(workspace, script);
+  });
+
   it('generates module-specific base URL env fallbacks for multi-module scenarios', async () => {
     const script = generateK6Script({
       name: 'cross-module',

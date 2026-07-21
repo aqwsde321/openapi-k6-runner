@@ -127,6 +127,8 @@ async function runInitSmoke(projectDir, packagePath, env) {
 }
 
 async function runExistingProjectSmoke(projectDir, baseUrl, packagePath, env) {
+  const configArgs = ['--config', 'load-tests/config.yaml'];
+
   await mkdir(path.join(projectDir, 'load-tests/openapi'), { recursive: true });
   await mkdir(path.join(projectDir, 'load-tests/scenarios'), { recursive: true });
 
@@ -134,31 +136,31 @@ async function runExistingProjectSmoke(projectDir, baseUrl, packagePath, env) {
   await writeFile(path.join(projectDir, 'load-tests/openapi/default.openapi.yaml'), createOpenApi(baseUrl), 'utf8');
   await writeFile(path.join(projectDir, 'load-tests/scenarios/smoke.yaml'), createScenario(), 'utf8');
 
-  const update = await runCli(['update'], projectDir, packagePath, env);
-  assertIncludes(update.stdout, 'Moved load-tests to openapi-k6', 'legacy workspace should be migrated');
+  const update = await runCli(['update', ...configArgs], projectDir, packagePath, env);
+  assertIncludes(update.stdout, 'Updated openapi-k6 workspace metadata in load-tests', 'legacy workspace should update in place');
 
-  await runCli(['sync'], projectDir, packagePath, env);
-  await assertFileContains(path.join(projectDir, 'openapi-k6/openapi/default.openapi.json'), '"operationId": "getHealth"');
-  await assertFileContains(path.join(projectDir, 'openapi-k6/openapi/catalog.json'), '"operationId": "getHealth"');
+  await runCli(['sync', ...configArgs], projectDir, packagePath, env);
+  await assertFileContains(path.join(projectDir, 'load-tests/openapi/default.openapi.json'), '"operationId": "getHealth"');
+  await assertFileContains(path.join(projectDir, 'load-tests/openapi/catalog.json'), '"operationId": "getHealth"');
 
-  const catalog = await runCli(['catalog', '--query', 'health'], projectDir, packagePath, env);
+  const catalog = await runCli(['catalog', ...configArgs, '--query', 'health'], projectDir, packagePath, env);
   assertIncludes(catalog.stdout, 'operationId: getHealth', 'catalog output should include the health operation');
 
-  const validate = await runCli(['validate', '-s', 'smoke'], projectDir, packagePath, env);
-  assertIncludes(validate.stdout, 'Validated openapi-k6/scenarios/smoke.yaml', 'scenario validate should pass');
+  const validate = await runCli(['validate', ...configArgs, '-s', 'smoke'], projectDir, packagePath, env);
+  assertIncludes(validate.stdout, 'Validated load-tests/scenarios/smoke.yaml', 'scenario validate should pass');
 
-  const test = await runCli(['test', '-s', 'smoke', '--no-color'], projectDir, packagePath, env);
+  const test = await runCli(['test', ...configArgs, '-s', 'smoke', '--no-color'], projectDir, packagePath, env);
   assertIncludes(test.stdout, 'summary:', 'scenario test should print a summary');
   assertIncludes(test.stdout, 'PASS', 'scenario test should pass');
 
-  await runCli(['generate', '-s', 'smoke'], projectDir, packagePath, env);
-  await assertFileContains(path.join(projectDir, 'openapi-k6/generated/smoke.k6.js'), '/health');
+  await runCli(['generate', ...configArgs, '-s', 'smoke'], projectDir, packagePath, env);
+  await assertFileContains(path.join(projectDir, 'load-tests/generated/smoke.k6.js'), '/health');
 
-  await runCli(['update'], projectDir, packagePath, env);
-  await assertFileContains(path.join(projectDir, 'openapi-k6/config.yaml'), `baseUrl: ${baseUrl}`);
-  await assertFileContains(path.join(projectDir, 'openapi-k6/scenarios/smoke.yaml'), 'name: smoke');
-  await assertFileContains(path.join(projectDir, 'openapi-k6/openapi/catalog.json'), '"operationId": "getHealth"');
-  await assertFileContains(path.join(projectDir, 'openapi-k6/generated/smoke.k6.js'), '/health');
+  await runCli(['update', ...configArgs], projectDir, packagePath, env);
+  await assertFileContains(path.join(projectDir, 'load-tests/config.yaml'), `baseUrl: ${baseUrl}`);
+  await assertFileContains(path.join(projectDir, 'load-tests/scenarios/smoke.yaml'), 'name: smoke');
+  await assertFileContains(path.join(projectDir, 'load-tests/openapi/catalog.json'), '"operationId": "getHealth"');
+  await assertFileContains(path.join(projectDir, 'load-tests/generated/smoke.k6.js'), '/health');
 }
 
 function runCli(args, cwd, packagePath, env) {

@@ -710,6 +710,7 @@ function renderCondition(
   urlVariable: string,
   metadataVariable: string,
 ): string[] {
+  // ponytail: k6 check 실패는 현재 iteration을 중단하지 않음, scenario 실패 정책을 설정 가능하게 만들 때 재검토
   const expression = step.condition ?? 'status < 400';
   const condition = step.condition === undefined
     ? { operator: '<', status: 400 }
