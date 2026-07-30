@@ -93,7 +93,7 @@ try {
     { cwd: fixtureDir, stdout: sink, stderr: sink },
   );
 
-  const indexResponse = await fetch(`${ui.url}/next/`);
+  const indexResponse = await fetch(`${ui.url}/`);
   if (indexResponse.status !== 200 || !indexResponse.headers.get('content-type')?.startsWith('text/html')) {
     throw new Error('Installed React UI index was not served with the HTML content type.');
   }

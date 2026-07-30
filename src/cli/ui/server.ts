@@ -186,7 +186,11 @@ async function handleUiRequest(
 ): Promise<void> {
   const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
 
-  if (request.method === 'GET' && (requestUrl.pathname === '/' || requestUrl.pathname === '/index.html')) {
+  if (request.method === 'GET' && (
+    requestUrl.pathname === '/legacy' ||
+    requestUrl.pathname === '/legacy/' ||
+    requestUrl.pathname === '/legacy/index.html'
+  )) {
     writeUiHtml(response);
     return;
   }

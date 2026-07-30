@@ -185,7 +185,8 @@ function listenUiServerOnce(server: Server, host: string, port: number): Promise
 }
 
 function resolveUiAppRelativePath(pathname: string): string | undefined {
-  if (pathname === '/next' || pathname === '/next/' || pathname === '/next/index.html') {
+  if (pathname === '/' || pathname === '/index.html' ||
+      pathname === '/next' || pathname === '/next/' || pathname === '/next/index.html') {
     return 'index.html';
   }
 
