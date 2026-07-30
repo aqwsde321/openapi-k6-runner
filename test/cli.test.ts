@@ -1967,9 +1967,11 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('aria-label="실행 로그 복사"');
       expect(html).toContain('class="copy-icon"');
       expect(html).toContain('class="terminal-frame"');
-      expect(html).toContain('id="runValuesToggle"');
+      expect(html).not.toContain('id="runValuesToggle"');
       expect(html).toContain('class="run-values-toggle"');
-      expect(html).toContain('disabled>요청/응답 보기</button>');
+      expect(html).toContain('data-run-values-toggle');
+      expect(html).toContain('renderRunValuesToggle(steps.some(hasRunStepValues))');
+      expect(html).toContain("item.command === 'test' ? renderRunValuesToggle(runHasValues(item)) : ''");
       expect(html).toContain('class="panel-subhead run-results-heading"');
       expect(html).toContain('class="section run-results-section"');
       expect(html).toContain('flex-shrink: 0;');

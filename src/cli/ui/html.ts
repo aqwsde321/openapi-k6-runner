@@ -848,6 +848,11 @@ export const UI_HTML = String.raw`<!doctype html>
       border-color: var(--line);
       color: var(--text);
     }
+    .run-result-actions {
+      align-items: center;
+      display: flex;
+      gap: 6px;
+    }
     .run-values-toggle:disabled {
       background: transparent;
       border-color: transparent;
@@ -1423,7 +1428,6 @@ export const UI_HTML = String.raw`<!doctype html>
       </div>
       <div class="panel-subhead run-results-heading">
         <h3 id="runSummaryTitle">최근 실행 결과</h3>
-        <button id="runValuesToggle" class="run-values-toggle" type="button" disabled>요청/응답 보기</button>
       </div>
       <div class="panel-body stack">
         <div id="scenarioSummary" class="section">
@@ -1553,7 +1557,6 @@ export const UI_HTML = String.raw`<!doctype html>
       testBtn: document.getElementById('testBtn'),
       copyLogBtn: document.getElementById('copyLogBtn'),
       clearBtn: document.getElementById('clearBtn'),
-      runValuesToggle: document.getElementById('runValuesToggle'),
       output: document.getElementById('output'),
       runStatus: document.getElementById('runStatus'),
       runHint: document.getElementById('runHint'),
@@ -2429,7 +2432,6 @@ export const UI_HTML = String.raw`<!doctype html>
     function renderDetail() {
       const detail = state.detail;
       els.runSummaryTitle.textContent = '최근 실행 결과';
-      els.runValuesToggle.style.display = '';
       els.detailTitle.textContent = formatScenarioListLabel(detail);
       setStatus(els.detailStatus, state.lastRun.get(detail.id) || 'not run');
       const descriptionText = formatScenarioDescription(detail);
@@ -2505,7 +2507,6 @@ export const UI_HTML = String.raw`<!doctype html>
     function renderSuiteDetail() {
       const detail = state.detail;
       els.runSummaryTitle.textContent = '최근 실행 결과';
-      els.runValuesToggle.style.display = '';
       els.detailTitle.textContent = detail.name;
       setStatus(els.detailStatus, state.lastSuiteRun.get(detail.id) || 'not run');
       const description = detail.description && detail.description.trim()
@@ -3170,7 +3171,10 @@ export const UI_HTML = String.raw`<!doctype html>
             '<div class="run-result-kind">시나리오 실행</div>' +
             '<div class="run-result-title">실행 예정 엔드포인트</div>' +
           '</div>' +
-          '<span class="pill">미실행</span>' +
+          '<div class="run-result-actions">' +
+            renderRunValuesToggle(steps.some(hasRunStepValues)) +
+            '<span class="pill">미실행</span>' +
+          '</div>' +
         '</div>' +
         renderRunStepResults({ id: '', preview: true, stepResults: steps }) +
       '</div>';
@@ -3245,7 +3249,10 @@ export const UI_HTML = String.raw`<!doctype html>
             '<div class="run-result-kind">' + escapeHtml(formatRunResultKind(item)) + '</div>' +
             '<div class="run-result-title">' + escapeHtml(formatRunResultTitle(item)) + '</div>' +
           '</div>' +
-          '<span class="pill' + statusTone(item.status) + '">' + escapeHtml(formatStatusLabel(item.status)) + '</span>' +
+          '<div class="run-result-actions">' +
+            (item.command === 'test' ? renderRunValuesToggle(runHasValues(item)) : '') +
+            '<span class="pill' + statusTone(item.status) + '">' + escapeHtml(formatStatusLabel(item.status)) + '</span>' +
+          '</div>' +
         '</div>' +
         '<div class="run-summary-grid">' +
           '<div class="run-summary-cell"><div class="run-summary-label">종료코드</div><div class="run-summary-value">' + escapeHtml(exitCode) + '</div></div>' +
@@ -3320,18 +3327,14 @@ export const UI_HTML = String.raw`<!doctype html>
       return Boolean(item && item.command === 'test' && (item.stepResults || []).some(hasRunStepValues));
     }
 
-    function updateRunValuesToggle(items, previewSteps) {
-      const hasValues = items.some(runHasValues) || (previewSteps || []).some(hasRunStepValues);
-      els.runValuesToggle.disabled = !hasValues;
-      els.runValuesToggle.textContent = state.showRunValues ? '요청/응답 숨김' : '요청/응답 보기';
-      els.runValuesToggle.title = hasValues
-        ? '요청/응답 값 표시를 전환합니다.'
-        : '표시할 요청/응답 값이 없습니다.';
+    function renderRunValuesToggle(hasValues) {
+      const label = state.showRunValues ? '요청/응답 숨김' : '요청/응답 보기';
+      const title = hasValues ? '요청/응답 값 표시를 전환합니다.' : '표시할 요청/응답 값이 없습니다.';
+      return '<button class="run-values-toggle" type="button" data-run-values-toggle aria-pressed="' + String(state.showRunValues) + '" title="' + title + '"' + (hasValues ? '' : ' disabled') + '>' + label + '</button>';
     }
 
     function renderRunSummary() {
       if (!state.selected) {
-        updateRunValuesToggle([]);
         els.runSummary.innerHTML = '<div class="muted">' + (state.selectedKind === 'suite' ? '이 스위트 실행 기록 없음' : '이 시나리오 실행 기록 없음') + '</div>';
         return;
       }
@@ -3343,7 +3346,6 @@ export const UI_HTML = String.raw`<!doctype html>
       const previewSteps = state.selectedKind === 'scenario' && !runs.test
         ? buildScenarioPreviewSteps(state.detail)
         : [];
-      updateRunValuesToggle(items, previewSteps);
       const preview = previewSteps.length > 0
         ? renderScenarioPreview(previewSteps)
         : '';
@@ -3757,7 +3759,9 @@ export const UI_HTML = String.raw`<!doctype html>
     els.expandGroupsBtn.addEventListener('click', expandAllScenarioGroups);
     els.checkServersBtn.addEventListener('click', checkServers);
     els.reconnectBtn.addEventListener('click', reconnectUi);
-    els.runValuesToggle.addEventListener('click', () => {
+    els.runSummary.addEventListener('click', (event) => {
+      const toggle = event.target && event.target.closest ? event.target.closest('[data-run-values-toggle]') : null;
+      if (!toggle) return;
       state.showRunValues = !state.showRunValues;
       renderRunSummary();
     });
