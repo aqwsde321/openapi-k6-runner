@@ -1,5 +1,6 @@
 import type { StepRequest } from '../../../core/types.js';
 import type { OpenApiResponsePreview } from '../../../openapi/openapi.catalog.js';
+import type { UiRunRequestValue, UiRunResponseValue } from '../run-state.js';
 import type { UiScenarioDetail } from '../scenarios.js';
 
 type TargetDetail = Pick<UiScenarioDetail, 'targetModules'> & {
@@ -48,6 +49,28 @@ export function formatResponsePreview(response: OpenApiResponsePreview | undefin
   ].filter((value): value is string => value !== undefined);
   const body = formatPreviewSection('body', response.body);
   return [...metadata, body].filter((value): value is string => value !== undefined).join('\n\n');
+}
+
+export function formatRunRequest(
+  url: string | undefined,
+  request: UiRunRequestValue | undefined,
+): string | undefined {
+  const sections = [
+    url === undefined ? undefined : `url: ${url}`,
+    formatPreviewSection('headers', request?.headers),
+    formatPreviewSection('body', request?.body),
+  ].filter((value): value is string => value !== undefined);
+  return sections.length === 0 ? undefined : sections.join('\n\n');
+}
+
+export function formatRunResponse(response: UiRunResponseValue | undefined): string | undefined {
+  if (response === undefined) return undefined;
+  const statusText = response.statusText === '' ? '' : ` ${response.statusText}`;
+  return [
+    `status: ${response.status}${statusText}`,
+    formatPreviewSection('headers', response.headers),
+    formatPreviewSection('body', response.body),
+  ].filter((value): value is string => value !== undefined).join('\n\n');
 }
 
 function formatPreviewSection(label: string, value: unknown): string | undefined {

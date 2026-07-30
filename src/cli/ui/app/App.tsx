@@ -5,7 +5,6 @@ import { IconButton } from '@astryxdesign/core/IconButton';
 import { HStack, VStack } from '@astryxdesign/core/Stack';
 import { StatusDot, type StatusDotVariant } from '@astryxdesign/core/StatusDot';
 import { Heading, Text } from '@astryxdesign/core/Text';
-import { Toolbar } from '@astryxdesign/core/Toolbar';
 import { TopNav, TopNavHeading } from '@astryxdesign/core/TopNav';
 import { useMediaQuery } from '@astryxdesign/core/hooks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -18,6 +17,10 @@ import {
   type ExplorerMode,
 } from './ScenarioExplorer';
 import { ScenarioFlow } from './ScenarioFlow';
+import {
+  ScenarioRunPanel,
+  useScenarioRunController,
+} from './ScenarioRunPanel';
 import { UiShell, type MobileView } from './UiShell';
 import { resolveActiveModule } from './active-module';
 import {
@@ -26,6 +29,7 @@ import {
   loadUiScenarios,
   loadUiSuites,
 } from './api';
+import { selectScenarioRun } from './scenario-runs';
 
 type SuiteItem = UiSuiteList['suites'][number];
 
@@ -47,6 +51,7 @@ export function App() {
   const [serverError, setServerError] = useState<string>();
   const loadController = useRef<AbortController | undefined>(undefined);
   const isCompactHeader = useMediaQuery('(max-width: 768px)');
+  const runController = useScenarioRunController();
 
   const load = useCallback(async (signal?: AbortSignal, serverFirst = false) => {
     const fetchScenarios = async () => {
@@ -147,6 +152,9 @@ export function App() {
     () => suites?.suites.find((item) => item.id === selectedSuiteId),
     [selectedSuiteId, suites],
   );
+  const selectedTestRun = selectedScenarioId === undefined
+    ? undefined
+    : selectScenarioRun(runController.runs, selectedScenarioId, 'test');
   const configPath = serverChecks?.configPath ?? scenarios?.configPath;
   const activeModule = resolveActiveModule(serverChecks, scenarios?.defaultModule);
   const defaultTarget = serverChecks?.modules.find((item) => item.name === activeModule)
@@ -185,6 +193,8 @@ export function App() {
             item={selectedScenario}
             loading={scenarioDetailLoading}
             modules={serverChecks?.modules ?? []}
+            testResult={selectedTestRun?.testResult}
+            testStatus={selectedTestRun?.status}
           />
         ) : <SuitePreview item={selectedSuite} />
       )}
@@ -219,7 +229,15 @@ export function App() {
       )}
       mobileView={mobileView}
       onMobileViewChange={setMobileView}
-      run={<RunPlaceholder />}
+      run={(
+        <ScenarioRunPanel
+          {...runController}
+          isReady={mode === 'scenario' && scenarioDetail?.id === selectedScenarioId &&
+            selectedScenario?.error === undefined && scenarioDetailError === undefined}
+          scenarioId={mode === 'scenario' ? selectedScenarioId : undefined}
+          scenarioName={mode === 'scenario' ? selectedScenario?.name : undefined}
+        />
+      )}
     />
   );
 }
@@ -270,26 +288,6 @@ function SuitePreview({ item }: { item?: SuiteItem }) {
         isCompact
         title="스위트 상세 준비 중"
       />
-    </VStack>
-  );
-}
-
-function RunPlaceholder() {
-  return (
-    <VStack height="100%">
-      <Toolbar
-        dividers={['bottom']}
-        label="실행 패널"
-        size="sm"
-        startContent={<Text type="label" weight="semibold">실행</Text>}
-      />
-      <VStack padding={6}>
-        <EmptyState
-          description="실행과 로그는 4단계에서 연결합니다."
-          isCompact
-          title="실행 대기"
-        />
-      </VStack>
     </VStack>
   );
 }

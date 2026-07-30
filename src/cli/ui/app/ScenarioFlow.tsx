@@ -21,10 +21,13 @@ import type {
   UiScenarioDetail,
   UiScenarioList,
 } from '../scenarios.js';
+import type { UiRunStatus, UiRunStepResult, UiRunTestResult } from '../run-state.js';
 import type { UiServerCheckResult } from '../server-checks.js';
 import {
   formatRequestPreview,
   formatResponsePreview,
+  formatRunRequest,
+  formatRunResponse,
   resolveScenarioTargetNames,
 } from './scenario-flow-format';
 
@@ -39,6 +42,8 @@ export interface ScenarioFlowProps {
   item?: ScenarioItem;
   loading: boolean;
   modules: ModuleCheck[];
+  testResult?: UiRunTestResult;
+  testStatus?: 'starting' | UiRunStatus;
 }
 
 export function ScenarioFlow({
@@ -48,6 +53,8 @@ export function ScenarioFlow({
   item,
   loading,
   modules,
+  testResult,
+  testStatus,
 }: ScenarioFlowProps) {
   if (item === undefined) {
     return (
@@ -105,7 +112,12 @@ export function ScenarioFlow({
           <Text color="secondary" type="supporting">시나리오 상세 불러오는 중…</Text>
         </VStack>
       ) : (
-        <ScenarioSteps defaultModule={defaultModule} detail={detail} />
+        <ScenarioSteps
+          defaultModule={defaultModule}
+          detail={detail}
+          testResult={testResult}
+          testStatus={testStatus}
+        />
       )}
     </VStack>
   );
@@ -114,9 +126,13 @@ export function ScenarioFlow({
 function ScenarioSteps({
   defaultModule,
   detail,
+  testResult,
+  testStatus,
 }: {
   defaultModule?: string;
   detail: UiScenarioDetail;
+  testResult?: UiRunTestResult;
+  testStatus?: 'starting' | UiRunStatus;
 }) {
   if (detail.steps.length === 0) {
     return (
@@ -139,7 +155,10 @@ function ScenarioSteps({
       <Section dividers={['bottom']} padding={4} paddingBlock={3}>
         <HStack gap={2} hAlign="between" vAlign="center">
           <Heading level={3}>실행 예정 endpoint</Heading>
-          <Badge label={detail.steps.length} />
+          <HStack gap={2} vAlign="center">
+            {testStatus !== undefined && <RunStatus status={testStatus} />}
+            <Badge label={detail.steps.length} />
+          </HStack>
         </HStack>
       </Section>
       {unresolved && (
@@ -157,12 +176,17 @@ function ScenarioSteps({
               <StepRow
                 defaultModule={defaultModule}
                 index={index}
+                result={testResult?.steps.find((candidate) => candidate.index === index)}
                 step={step}
+                testFinished={testStatus === 'passed' || testStatus === 'failed'}
               />
             )}
             value={String(index)}
           >
-            <StepDetail step={step} />
+            <StepDetail
+              result={testResult?.steps.find((candidate) => candidate.index === index)}
+              step={step}
+            />
           </Collapsible>
         ))}
       </CollapsibleGroup>
@@ -173,11 +197,15 @@ function ScenarioSteps({
 function StepRow({
   defaultModule,
   index,
+  result,
   step,
+  testFinished,
 }: {
   defaultModule?: string;
   index: number;
+  result?: UiRunStepResult;
   step: ScenarioStep;
+  testFinished: boolean;
 }) {
   const targetModule = step.input === undefined
     ? step.targetModule ?? step.module ?? defaultModule
@@ -203,14 +231,23 @@ function StepRow({
       marker={(
         <Text hasTabularNumbers type="supporting">{index + 1}</Text>
       )}
+      endContent={result !== undefined
+        ? <RunStatus status={result.status} />
+        : testFinished
+          ? <RunStatus status="not-run" />
+          : undefined}
     />
   );
 }
 
-function StepDetail({ step }: { step: ScenarioStep }) {
-  const request = formatRequestPreview(step.request);
-  const response = formatResponsePreview(step.expectedResponse);
-  const hasMetadata = step.input !== undefined || step.condition !== undefined || step.extract !== undefined;
+function StepDetail({ result, step }: { result?: UiRunStepResult; step: ScenarioStep }) {
+  const actualRequest = formatRunRequest(result?.url, result?.request);
+  const actualResponse = formatRunResponse(result?.response);
+  const request = actualRequest ?? formatRequestPreview(step.request);
+  const response = actualResponse ?? formatResponsePreview(step.expectedResponse);
+  const hasMetadata = step.input !== undefined || result?.input !== undefined ||
+    step.condition !== undefined || result?.condition !== undefined ||
+    step.extract !== undefined || (result?.extracts.length ?? 0) > 0;
 
   return (
     <VStack gap={4} paddingBlock={2}>
@@ -221,7 +258,7 @@ function StepDetail({ step }: { step: ScenarioStep }) {
           isWrapped
           language="plaintext"
           size="sm"
-          title="요청 · 예정 구조"
+          title={actualRequest === undefined ? '요청 · 예정 구조' : '요청 · 실제'}
           width="100%"
         />
       )}
@@ -232,31 +269,57 @@ function StepDetail({ step }: { step: ScenarioStep }) {
           isWrapped
           language="plaintext"
           size="sm"
-          title="응답 · 예상 (OpenAPI)"
+          title={actualResponse === undefined ? '응답 · 예상 (OpenAPI)' : '응답 · 실제'}
           width="100%"
         />
       )}
       {hasMetadata && (
         <MetadataList label={{ position: 'top' }}>
-          {step.input !== undefined && (
+          {(result?.input ?? step.input) !== undefined && (
             <MetadataListItem label="입력">
               <Text type="supporting">
-                {step.input.label ?? step.input.name} · {step.input.required ? '필수' : '선택'}
-                {step.input.sensitive ? ' · 민감값' : ''}
+                {formatInputResult(step, result)}
               </Text>
             </MetadataListItem>
           )}
-          {step.condition !== undefined && (
+          {(result?.condition ?? step.condition) !== undefined && (
             <MetadataListItem label="검증">
-              <Code>{step.condition}</Code>
+              <HStack gap={2} vAlign="center" wrap="wrap">
+                {result?.condition !== undefined && (
+                  <RunStatus status={result.condition.passed ? 'passed' : 'failed'} />
+                )}
+                <Code>{result?.condition?.expression ?? step.condition}</Code>
+              </HStack>
             </MetadataListItem>
           )}
-          {step.extract !== undefined && (
+          {(result?.extracts.length ?? 0) > 0 ? (
+            <MetadataListItem label="추출">
+              <VStack gap={1}>
+                {result?.extracts.map((extract) => (
+                  <HStack key={extract.name} gap={2} vAlign="center" wrap="wrap">
+                    <RunStatus status={extract.passed ? 'passed' : 'failed'} />
+                    <Text type="code">{extract.name} · {extract.path}</Text>
+                    {extract.error !== undefined && (
+                      <Text color="secondary" type="supporting">{extract.error}</Text>
+                    )}
+                  </HStack>
+                ))}
+              </VStack>
+            </MetadataListItem>
+          ) : step.extract !== undefined && (
             <MetadataListItem label="추출">
               <Text type="code">{step.extract.join(', ')}</Text>
             </MetadataListItem>
           )}
         </MetadataList>
+      )}
+      {result?.error !== undefined && (
+        <Banner
+          container="section"
+          description={result.error}
+          status="error"
+          title="단계 실행 실패"
+        />
       )}
       {step.definition !== undefined && (
         <CodeBlock
@@ -274,6 +337,43 @@ function StepDetail({ step }: { step: ScenarioStep }) {
       )}
     </VStack>
   );
+}
+
+function RunStatus({ status }: { status: 'starting' | UiRunStatus | 'not-run' }) {
+  const value = status === 'starting'
+    ? { label: '시작 중', variant: 'accent' as const }
+    : status === 'running'
+      ? { label: '실행 중', variant: 'accent' as const }
+      : status === 'passed'
+        ? { label: '성공', variant: 'success' as const }
+        : status === 'failed'
+          ? { label: '실패', variant: 'error' as const }
+          : { label: '미실행', variant: 'neutral' as const };
+
+  return (
+    <HStack as="span" gap={1} vAlign="center">
+      <StatusDot
+        isPulsing={status === 'starting' || status === 'running'}
+        label={value.label}
+        variant={value.variant}
+      />
+      <Text type="supporting">{value.label}</Text>
+    </HStack>
+  );
+}
+
+function formatInputResult(step: ScenarioStep, result: UiRunStepResult | undefined): string {
+  if (result?.input !== undefined) {
+    const source = result.input.source === 'prompt'
+      ? '화면 입력'
+      : result.input.source === 'vars'
+        ? '변수'
+        : '미입력';
+    return `${result.input.label ?? result.input.name} · ${source}${result.input.sensitive ? ' · 민감값' : ''}`;
+  }
+
+  if (step.input === undefined) return '';
+  return `${step.input.label ?? step.input.name} · ${step.input.required ? '필수' : '선택'}${step.input.sensitive ? ' · 민감값' : ''}`;
 }
 
 function TargetRow({ module, name }: { module?: ModuleCheck; name: string }) {

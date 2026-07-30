@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   formatRequestPreview,
   formatResponsePreview,
+  formatRunRequest,
+  formatRunResponse,
   resolveScenarioTargetNames,
 } from '../src/cli/ui/app/scenario-flow-format.js';
 import { resolveActiveModule } from '../src/cli/ui/app/active-module.js';
@@ -66,6 +68,19 @@ describe('React UI explorer', () => {
       '{\n  "loginId": "{{vars.loginId}}"\n}',
     ].join('\n'));
     expect(formatResponsePreview({ status: '200' })).toBe('status: 200');
+  });
+
+  it('실행 후 실제 요청과 응답을 읽기 쉬운 텍스트로 만든다', () => {
+    expect(formatRunRequest(undefined, undefined)).toBeUndefined();
+    expect(formatRunRequest('https://api.test.local/users', {
+      headers: { authorization: '***' },
+      body: '{"name":"tester"}',
+    })).toContain('body:\n{\n  "name": "tester"\n}');
+    expect(formatRunResponse({
+      status: 201,
+      statusText: 'Created',
+      body: '{"token":"***"}',
+    })).toContain('status: 201 Created');
   });
 
   it('input 단계는 API 실행 대상으로 집계하지 않는다', () => {
