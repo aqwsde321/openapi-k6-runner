@@ -1,6 +1,7 @@
 import type { Dirent } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 import { buildAst } from '../../compiler/ast.builder.js';
 import type { LoadTestConfig } from '../../config/load-test.config.js';
@@ -189,6 +190,10 @@ export async function readUiScenarioDetail(
     steps: scenario.steps.map((step, index) => {
       const resolvedStep = resolvedSteps[index];
       const resolvedApi = resolvedStep && isASTApiStep(resolvedStep) ? resolvedStep : undefined;
+      const definition = stepDefinitions[index];
+      const definitionCode = definition === undefined
+        ? undefined
+        : maskUiYamlDefinitionCode(definition.code);
 
       return {
         id: step.id,
@@ -221,10 +226,38 @@ export async function readUiScenarioDetail(
               ...(step.condition === undefined ? {} : { condition: step.condition }),
               ...(step.extract === undefined ? {} : { extract: Object.keys(step.extract) }),
             }),
-        ...(stepDefinitions[index] === undefined ? {} : { definition: stepDefinitions[index] }),
+        ...(definition === undefined || definitionCode === undefined
+          ? {}
+          : { definition: { ...definition, code: definitionCode } }),
       };
     }),
   };
+}
+
+export function maskUiYamlDefinitionCode(code: string): string | undefined {
+  try {
+    const parsed = parseYaml(code);
+
+    if (!Array.isArray(parsed) || parsed.length !== 1) {
+      return undefined;
+    }
+
+    const step = parsed[0];
+
+    if (!step || typeof step !== 'object' || Array.isArray(step)) {
+      return undefined;
+    }
+
+    const record = step as Record<string, unknown>;
+
+    if (record.request !== undefined) {
+      record.request = maskUiPreviewValue(record.request);
+    }
+
+    return stringifyYaml(parsed).trimEnd();
+  } catch {
+    return undefined;
+  }
 }
 
 async function listUiScenarioFiles(directoryPath: string): Promise<string[]> {
@@ -280,18 +313,20 @@ function maskUiResponsePreview(preview: OpenApiResponsePreview): OpenApiResponse
     : { ...preview, body: maskUiPreviewValue(preview.body) };
 }
 
-function maskUiPreviewValue(value: unknown, fieldName = ''): unknown {
+function maskUiPreviewValue(value: unknown, fieldName = '', inheritedSensitive = false): unknown {
+  const sensitive = inheritedSensitive || isSensitivePreviewField(fieldName);
+
   if (Array.isArray(value)) {
-    return value.map((item) => maskUiPreviewValue(item));
+    return value.map((item) => maskUiPreviewValue(item, fieldName, sensitive));
   }
 
   if (value && typeof value === 'object') {
     return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, maskUiPreviewValue(item, key)]),
+      Object.entries(value).map(([key, item]) => [key, maskUiPreviewValue(item, key, sensitive)]),
     );
   }
 
-  if (isSensitivePreviewField(fieldName) && !containsTemplateReference(value)) {
+  if (sensitive && !containsTemplateReference(value)) {
     return '***';
   }
 
