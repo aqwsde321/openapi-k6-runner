@@ -4,7 +4,7 @@
 - 기준 커밋: `bf8961b`
 - 범위: `openapi-k6 ui` 프런트엔드
 - 목표: 시나리오 엔드포인트 흐름을 빠르게 읽고, 검증·실행·결과 확인까지 한 화면에서 끝낸다.
-- 진행 상태: 5단계 완료, 6단계 대기
+- 진행 상태: 6단계 완료, 7단계 대기
 
 ## 1. 결정 사항
 
@@ -411,6 +411,14 @@ Dialog overflow를 확인했고 브라우저 console 경고·오류는 없었다
 - 설치된 tarball에서 UI와 API/SSE가 동작한다.
 - 기존 CLI 호환성 검증이 통과한다.
 
+검증(2026-07-30): 사용자 행동 중심 React DOM 테스트를 포함한 267개 테스트,
+`pnpm run typecheck`, `pnpm run build`, E2E·호환성·설치 tarball UI/API/SSE smoke,
+`npm pack --dry-run`을 통과했다. `/`에서 민감 입력 제출, suite validate, 실패 후 다음
+scenario 계속 실행, report 실패 필터·다운로드 경로를 확인했다. 639×782 모바일 탭과
+가로 overflow를 확인했고 브라우저 console 경고·오류는 없었다. `/legacy/`는 기존 UI
+복구 경로로, `/next/`는 전환 호환 경로로 7단계까지 유지한다. `/` 전환은 routing-only
+커밋 `c758e55`로 분리했다.
+
 ### 7단계 — 기존 UI 제거
 
 범위:
@@ -430,6 +438,7 @@ Dialog overflow를 확인했고 브라우저 console 경고·오류는 없었다
 ```bash
 pnpm test
 pnpm build
+pnpm run smoke:ui-assets
 pnpm run smoke:e2e
 pnpm run test:compat
 npm pack --dry-run
