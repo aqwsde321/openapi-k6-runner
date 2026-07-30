@@ -2,21 +2,29 @@ import type {
   UiRunChunk,
   UiRunInputRequest,
   UiRunStatus,
+  UiSuiteRunResult,
   UiRunTestResult,
 } from '../run-state.js';
 
+export type UiRunTargetKind = 'scenario' | 'suite';
 export type ScenarioRunCommand = 'validate' | 'test';
 export type ScenarioRunStatus = 'starting' | UiRunStatus;
 export type ScenarioRunConnection = 'connecting' | 'connected' | 'reconnecting' | 'closed';
 
-export interface ScenarioRun {
-  scenario: string;
+export interface UiRunTarget {
+  kind: UiRunTargetKind;
+  id: string;
+}
+
+export interface UiRun {
+  target: UiRunTarget;
   command: ScenarioRunCommand;
   runId?: string;
   status: ScenarioRunStatus;
   connection: ScenarioRunConnection;
   chunks: UiRunChunk[];
   testResult?: UiRunTestResult;
+  suiteResult?: UiSuiteRunResult;
   pendingInput?: UiRunInputRequest;
   error?: string;
   requestedAt: string;
@@ -25,53 +33,65 @@ export interface ScenarioRun {
   exitCode?: number;
 }
 
-interface ScenarioRunSlots {
-  validate?: ScenarioRun;
-  test?: ScenarioRun;
+export type ScenarioRun = UiRun;
+
+interface UiRunSlots {
+  validate?: UiRun;
+  test?: UiRun;
 }
 
-export type ScenarioRuns = ReadonlyMap<string, Readonly<ScenarioRunSlots>>;
+export type UiRuns = ReadonlyMap<string, Readonly<UiRunSlots>>;
+export type ScenarioRuns = UiRuns;
 
-interface ScenarioRunTarget {
-  scenario: string;
+interface UiRunCommandTarget extends UiRunTarget {
   command: ScenarioRunCommand;
 }
 
-interface ActiveScenarioRunTarget extends ScenarioRunTarget {
+interface ActiveUiRunTarget extends UiRunCommandTarget {
   runId: string;
 }
 
-export type ScenarioRunsAction =
-  | (ScenarioRunTarget & { type: 'requested'; at: string })
-  | (ActiveScenarioRunTarget & { type: 'started'; at: string })
-  | (ScenarioRunTarget & { type: 'start-failed'; error: string; at: string })
-  | (ActiveScenarioRunTarget & { type: 'connected' })
-  | (ActiveScenarioRunTarget & { type: 'reconnecting'; error?: string })
-  | (ActiveScenarioRunTarget & { type: 'chunk'; chunk: UiRunChunk })
-  | (ActiveScenarioRunTarget & { type: 'test-result'; result: UiRunTestResult })
-  | (ActiveScenarioRunTarget & { type: 'input-request'; request: UiRunInputRequest })
-  | (ActiveScenarioRunTarget & { type: 'input-submitted' })
-  | (ActiveScenarioRunTarget & {
+export type UiRunsAction =
+  | (UiRunCommandTarget & { type: 'requested'; at: string })
+  | (ActiveUiRunTarget & { type: 'started'; at: string })
+  | (UiRunCommandTarget & { type: 'start-failed'; error: string; at: string })
+  | (ActiveUiRunTarget & { type: 'connected' })
+  | (ActiveUiRunTarget & { type: 'reconnecting'; error?: string })
+  | (ActiveUiRunTarget & { type: 'chunk'; chunk: UiRunChunk })
+  | (ActiveUiRunTarget & { type: 'test-result'; result: UiRunTestResult })
+  | (ActiveUiRunTarget & { type: 'suite-result'; result: UiSuiteRunResult })
+  | (ActiveUiRunTarget & { type: 'input-request'; request: UiRunInputRequest })
+  | (ActiveUiRunTarget & { type: 'input-submitted' })
+  | (ActiveUiRunTarget & {
       type: 'done';
       status: Exclude<UiRunStatus, 'running'>;
       exitCode: number;
       error?: string;
       at: string;
     });
+export type ScenarioRunsAction = UiRunsAction;
 
-export function selectScenarioRun(
-  state: ScenarioRuns,
-  scenario: string,
+export function selectUiRun(
+  state: UiRuns,
+  target: UiRunTarget,
   command: ScenarioRunCommand,
-): ScenarioRun | undefined {
-  return state.get(scenario)?.[command];
+): UiRun | undefined {
+  return state.get(formatTargetKey(target))?.[command];
 }
 
-export function reduceScenarioRuns(state: ScenarioRuns, action: ScenarioRunsAction): ScenarioRuns {
+export function selectScenarioRun(
+  state: UiRuns,
+  scenario: string,
+  command: ScenarioRunCommand,
+): UiRun | undefined {
+  return selectUiRun(state, { kind: 'scenario', id: scenario }, command);
+}
+
+export function reduceUiRuns(state: UiRuns, action: UiRunsAction): UiRuns {
   switch (action.type) {
     case 'requested':
-      return setScenarioRun(state, action, {
-        scenario: action.scenario,
+      return setUiRun(state, action, {
+        target: { kind: action.kind, id: action.id },
         command: action.command,
         status: 'starting',
         connection: 'connecting',
@@ -79,9 +99,9 @@ export function reduceScenarioRuns(state: ScenarioRuns, action: ScenarioRunsActi
         requestedAt: action.at,
       });
     case 'started': {
-      const current = selectScenarioRun(state, action.scenario, action.command);
-      return setScenarioRun(state, action, {
-        scenario: action.scenario,
+      const current = selectUiRun(state, action, action.command);
+      return setUiRun(state, action, {
+        target: { kind: action.kind, id: action.id },
         command: action.command,
         runId: action.runId,
         status: 'running',
@@ -92,9 +112,9 @@ export function reduceScenarioRuns(state: ScenarioRuns, action: ScenarioRunsActi
       });
     }
     case 'start-failed': {
-      const current = selectScenarioRun(state, action.scenario, action.command);
-      return setScenarioRun(state, action, {
-        scenario: action.scenario,
+      const current = selectUiRun(state, action, action.command);
+      return setUiRun(state, action, {
+        target: { kind: action.kind, id: action.id },
         command: action.command,
         status: 'failed',
         connection: 'closed',
@@ -123,6 +143,8 @@ export function reduceScenarioRuns(state: ScenarioRuns, action: ScenarioRunsActi
       }));
     case 'test-result':
       return updateActiveRun(state, action, (run) => ({ ...run, testResult: action.result }));
+    case 'suite-result':
+      return updateActiveRun(state, action, (run) => ({ ...run, suiteResult: action.result }));
     case 'input-request':
       return updateActiveRun(state, action, (run) => ({ ...run, pendingInput: action.request }));
     case 'input-submitted':
@@ -140,24 +162,31 @@ export function reduceScenarioRuns(state: ScenarioRuns, action: ScenarioRunsActi
   }
 }
 
+export const reduceScenarioRuns = reduceUiRuns;
+
 function updateActiveRun(
-  state: ScenarioRuns,
-  target: ActiveScenarioRunTarget,
-  update: (run: ScenarioRun) => ScenarioRun,
-): ScenarioRuns {
-  const run = selectScenarioRun(state, target.scenario, target.command);
-  return run?.runId === target.runId ? setScenarioRun(state, target, update(run)) : state;
+  state: UiRuns,
+  target: ActiveUiRunTarget,
+  update: (run: UiRun) => UiRun,
+): UiRuns {
+  const run = selectUiRun(state, target, target.command);
+  return run?.runId === target.runId ? setUiRun(state, target, update(run)) : state;
 }
 
-function setScenarioRun(
-  state: ScenarioRuns,
-  target: ScenarioRunTarget,
-  run: ScenarioRun,
-): ScenarioRuns {
+function setUiRun(
+  state: UiRuns,
+  target: UiRunCommandTarget,
+  run: UiRun,
+): UiRuns {
   const next = new Map(state);
-  next.set(target.scenario, {
-    ...state.get(target.scenario),
+  const key = formatTargetKey(target);
+  next.set(key, {
+    ...state.get(key),
     [target.command]: run,
   });
   return next;
+}
+
+function formatTargetKey(target: UiRunTarget): string {
+  return `${target.kind}\0${target.id}`;
 }

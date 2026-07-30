@@ -3,6 +3,7 @@ import { Button } from '@astryxdesign/core/Button';
 import { CodeBlock } from '@astryxdesign/core/CodeBlock';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Icon } from '@astryxdesign/core/Icon';
+import { List, ListItem } from '@astryxdesign/core/List';
 import { ProgressBar } from '@astryxdesign/core/ProgressBar';
 import { HStack, StackItem, VStack } from '@astryxdesign/core/Stack';
 import { StatusDot, type StatusDotVariant } from '@astryxdesign/core/StatusDot';
@@ -23,25 +24,29 @@ import type {
   UiRunChunk,
   UiRunInputRequest,
   UiRunStatus,
+  UiSuiteRunResult,
   UiRunTestResult,
 } from '../run-state.js';
 import {
-  reduceScenarioRuns,
-  selectScenarioRun,
+  reduceUiRuns,
+  selectUiRun,
   type ScenarioRun,
   type ScenarioRunCommand,
-  type ScenarioRuns,
+  type UiRun,
+  type UiRuns,
+  type UiRunTarget,
+  type UiRunTargetKind,
 } from './scenario-runs';
-import { startUiScenarioRun, submitUiRunInput } from './api';
+import { startUiScenarioRun, startUiSuiteRun, submitUiRunInput } from './api';
 
-interface ScenarioRunController {
-  runs: ScenarioRuns;
-  start(scenario: string, command: ScenarioRunCommand): Promise<void>;
-  submit(run: ScenarioRun, value: string): Promise<void>;
+export interface UiRunController {
+  runs: UiRuns;
+  start(target: UiRunTarget, command: ScenarioRunCommand): Promise<void>;
+  submit(run: UiRun, value: string): Promise<void>;
 }
 
-export function useScenarioRunController(): ScenarioRunController {
-  const [runs, dispatch] = useReducer(reduceScenarioRuns, new Map() as ScenarioRuns);
+export function useScenarioRunController(): UiRunController {
+  const [runs, dispatch] = useReducer(reduceUiRuns, new Map() as UiRuns);
   const streams = useRef(new Map<string, EventSource>());
 
   useEffect(() => () => {
@@ -49,58 +54,63 @@ export function useScenarioRunController(): ScenarioRunController {
     streams.current.clear();
   }, []);
 
-  const connect = useCallback((scenario: string, command: ScenarioRunCommand, runId: string) => {
-    const key = `${scenario}\0${command}`;
+  const connect = useCallback((target: UiRunTarget, command: ScenarioRunCommand, runId: string) => {
+    const key = `${target.kind}\0${target.id}\0${command}`;
     streams.current.get(key)?.close();
 
     const stream = new EventSource(`/api/runs/${encodeURIComponent(runId)}/events`);
     streams.current.set(key, stream);
-    const target = { scenario, command, runId };
+    const activeTarget = { ...target, command, runId };
 
-    stream.onopen = () => dispatch({ type: 'connected', ...target });
+    stream.onopen = () => dispatch({ type: 'connected', ...activeTarget });
     stream.onerror = () => dispatch({
       type: 'reconnecting',
       error: '실행 로그 연결이 끊겨 자동 재연결 중입니다.',
-      ...target,
+      ...activeTarget,
     });
     stream.addEventListener('chunk', (event) => {
-      dispatch({ type: 'chunk', chunk: readEventData<UiRunChunk>(event), ...target });
+      dispatch({ type: 'chunk', chunk: readEventData<UiRunChunk>(event), ...activeTarget });
     });
     stream.addEventListener('test-result', (event) => {
-      dispatch({ type: 'test-result', result: readEventData<UiRunTestResult>(event), ...target });
+      dispatch({ type: 'test-result', result: readEventData<UiRunTestResult>(event), ...activeTarget });
+    });
+    stream.addEventListener('suite-result', (event) => {
+      dispatch({ type: 'suite-result', result: readEventData<UiSuiteRunResult>(event), ...activeTarget });
     });
     stream.addEventListener('input-request', (event) => {
-      dispatch({ type: 'input-request', request: readEventData<UiRunInputRequest>(event), ...target });
+      dispatch({ type: 'input-request', request: readEventData<UiRunInputRequest>(event), ...activeTarget });
     });
     stream.addEventListener('input-submitted', () => {
-      dispatch({ type: 'input-submitted', ...target });
+      dispatch({ type: 'input-submitted', ...activeTarget });
     });
     stream.addEventListener('done', (event) => {
       const done = readEventData<{ status: Exclude<UiRunStatus, 'running'>; exitCode: number }>(event);
-      dispatch({ type: 'done', ...done, at: new Date().toISOString(), ...target });
+      dispatch({ type: 'done', ...done, at: new Date().toISOString(), ...activeTarget });
       stream.close();
       if (streams.current.get(key) === stream) streams.current.delete(key);
     });
   }, []);
 
-  const start = useCallback(async (scenario: string, command: ScenarioRunCommand) => {
+  const start = useCallback(async (target: UiRunTarget, command: ScenarioRunCommand) => {
     const requestedAt = new Date().toISOString();
-    dispatch({ type: 'requested', scenario, command, at: requestedAt });
+    dispatch({ type: 'requested', ...target, command, at: requestedAt });
 
     try {
-      const result = await startUiScenarioRun(command, scenario);
+      const result = target.kind === 'scenario'
+        ? await startUiScenarioRun(command, target.id)
+        : await startUiSuiteRun(command, target.id);
       dispatch({
         type: 'started',
-        scenario,
+        ...target,
         command,
         runId: result.runId,
         at: new Date().toISOString(),
       });
-      connect(scenario, command, result.runId);
+      connect(target, command, result.runId);
     } catch (error) {
       dispatch({
         type: 'start-failed',
-        scenario,
+        ...target,
         command,
         error: toErrorMessage(error),
         at: new Date().toISOString(),
@@ -116,7 +126,7 @@ export function useScenarioRunController(): ScenarioRunController {
     await submitUiRunInput(run.runId, run.pendingInput.name, value);
     dispatch({
       type: 'input-submitted',
-      scenario: run.scenario,
+      ...run.target,
       command: run.command,
       runId: run.runId,
     });
@@ -125,8 +135,11 @@ export function useScenarioRunController(): ScenarioRunController {
   return { runs, start, submit };
 }
 
-export interface ScenarioRunPanelProps extends ScenarioRunController {
+export interface ScenarioRunPanelProps extends UiRunController {
   isReady: boolean;
+  targetKind?: UiRunTargetKind;
+  targetId?: string;
+  targetName?: string;
   scenarioId?: string;
   scenarioName?: string;
 }
@@ -138,25 +151,31 @@ export function ScenarioRunPanel({
   scenarioName,
   start,
   submit,
+  targetId: requestedTargetId,
+  targetKind = 'scenario',
+  targetName: requestedTargetName,
 }: ScenarioRunPanelProps) {
   const [activeCommand, setActiveCommand] = useState<ScenarioRunCommand>('test');
-  const validateRun = scenarioId === undefined
+  const targetId = requestedTargetId ?? scenarioId;
+  const targetName = requestedTargetName ?? scenarioName;
+  const target = targetId === undefined ? undefined : { kind: targetKind, id: targetId };
+  const validateRun = target === undefined
     ? undefined
-    : selectScenarioRun(runs, scenarioId, 'validate');
-  const testRun = scenarioId === undefined
+    : selectUiRun(runs, target, 'validate');
+  const testRun = target === undefined
     ? undefined
-    : selectScenarioRun(runs, scenarioId, 'test');
+    : selectUiRun(runs, target, 'test');
   const activeRun = activeCommand === 'validate' ? validateRun : testRun;
   const isBusy = [validateRun, testRun].some((run) => (
     run?.status === 'starting' || run?.status === 'running'
   ));
 
-  useEffect(() => setActiveCommand('test'), [scenarioId]);
+  useEffect(() => setActiveCommand('test'), [targetId, targetKind]);
 
   const run = async (command: ScenarioRunCommand) => {
-    if (scenarioId === undefined || !isReady || isBusy) return;
+    if (target === undefined || !isReady || isBusy) return;
     setActiveCommand(command);
-    await start(scenarioId, command);
+    await start(target, command);
   };
 
   return (
@@ -168,7 +187,7 @@ export function ScenarioRunPanel({
             <Button
               clickAction={() => run('validate')}
               icon={<Icon icon="check" size="sm" />}
-              isDisabled={!isReady || scenarioId === undefined || isBusy}
+              isDisabled={!isReady || target === undefined || isBusy}
               label="검증"
               size="sm"
               variant="secondary"
@@ -176,7 +195,7 @@ export function ScenarioRunPanel({
             <Button
               clickAction={() => run('test')}
               icon={<Icon icon="chevronRight" size="sm" />}
-              isDisabled={!isReady || scenarioId === undefined || isBusy}
+              isDisabled={!isReady || target === undefined || isBusy}
               label="실행"
               size="sm"
               variant="primary"
@@ -201,15 +220,15 @@ export function ScenarioRunPanel({
 
       <StackItem isScrollable size="fill">
         <VStack gap={4} padding={4}>
-          {scenarioId === undefined ? (
+          {target === undefined ? (
             <EmptyState
-              description="탐색에서 실행할 시나리오를 선택하세요. 스위트 실행은 5단계에서 연결합니다."
+              description="탐색에서 실행할 시나리오 또는 스위트를 선택하세요."
               isCompact
               title="실행 대상 없음"
             />
           ) : activeRun === undefined ? (
             <EmptyState
-              description={`${scenarioName ?? scenarioId} · ${activeCommand === 'validate' ? '검증' : '실행'}을 시작하세요.`}
+              description={`${targetName ?? targetId} · ${activeCommand === 'validate' ? '검증' : '실행'}을 시작하세요.`}
               isCompact
               title="실행 대기"
             />
@@ -225,7 +244,11 @@ export function ScenarioRunPanel({
 function RunResult({ run, submit }: { run: ScenarioRun; submit(run: ScenarioRun, value: string): Promise<void> }) {
   const status = formatRunStatus(run);
   const log = stripAnsi(run.chunks.map((chunk) => chunk.chunk).join(''));
-  const passedSteps = run.testResult?.steps.filter((step) => step.status === 'passed').length;
+  const passedSteps = run.testResult?.steps.filter((step) => step.status === 'passed').length
+    ?? run.suiteResult?.scenarios.reduce((sum, scenario) => sum + scenario.passedSteps, 0);
+  const totalSteps = run.testResult?.steps.length
+    ?? run.suiteResult?.scenarios.reduce((sum, scenario) => sum + scenario.totalSteps, 0);
+  const durationMs = run.testResult?.durationMs ?? run.suiteResult?.durationMs;
 
   return (
     <VStack gap={4}>
@@ -238,7 +261,7 @@ function RunResult({ run, submit }: { run: ScenarioRun; submit(run: ScenarioRun,
           />
           <Text type="label" weight="semibold">{status.label}</Text>
         </HStack>
-        <Text color="secondary" type="code">{run.scenario}</Text>
+        <Text color="secondary" type="code">{run.target.id}</Text>
       </HStack>
 
       {(run.status === 'starting' || run.status === 'running') && (
@@ -249,13 +272,13 @@ function RunResult({ run, submit }: { run: ScenarioRun; submit(run: ScenarioRun,
         {run.exitCode !== undefined && (
           <Text color="secondary" type="supporting">종료 {run.exitCode}</Text>
         )}
-        {run.testResult !== undefined && (
+        {passedSteps !== undefined && totalSteps !== undefined && (
           <Text color="secondary" type="supporting">
-            단계 {passedSteps}/{run.testResult.steps.length}
+            단계 {passedSteps}/{totalSteps}
           </Text>
         )}
-        {run.testResult !== undefined && (
-          <Text color="secondary" type="supporting">{formatDuration(run.testResult.durationMs)}</Text>
+        {durationMs !== undefined && (
+          <Text color="secondary" type="supporting">{formatDuration(durationMs)}</Text>
         )}
         <Text color="secondary" type="supporting">
           {formatRunTime(run.finishedAt ?? run.startedAt ?? run.requestedAt)}
@@ -284,6 +307,8 @@ function RunResult({ run, submit }: { run: ScenarioRun; submit(run: ScenarioRun,
         />
       )}
 
+      {run.suiteResult !== undefined && <SuiteRunSummary result={run.suiteResult} />}
+
       {log === '' ? (
         <Text color="secondary" type="supporting">로그 기다리는 중…</Text>
       ) : (
@@ -297,6 +322,60 @@ function RunResult({ run, submit }: { run: ScenarioRun; submit(run: ScenarioRun,
           width="100%"
         />
       )}
+    </VStack>
+  );
+}
+
+function SuiteRunSummary({ result }: { result: UiSuiteRunResult }) {
+  const passedScenarios = result.scenarios.filter((scenario) => scenario.status === 'passed').length;
+  const passedSteps = result.scenarios.reduce((sum, scenario) => sum + scenario.passedSteps, 0);
+  const totalSteps = result.scenarios.reduce((sum, scenario) => sum + scenario.totalSteps, 0);
+
+  return (
+    <VStack gap={3}>
+      <HStack gap={3} wrap="wrap">
+        <Text color="secondary" type="supporting">
+          시나리오 {passedScenarios}/{result.scenarios.length}
+        </Text>
+        <Text color="secondary" type="supporting">단계 {passedSteps}/{totalSteps}</Text>
+        {result.reportPath !== undefined && (
+          <Text color="secondary" hasTruncateTooltip maxLines={1} type="code">
+            {result.reportPath}
+          </Text>
+        )}
+      </HStack>
+
+      <List
+        density="compact"
+        hasDividers
+        header={<Text type="label" weight="semibold">시나리오 결과</Text>}
+      >
+        {result.scenarios.map((scenario) => (
+          <ListItem
+            key={scenario.scenarioKey}
+            description={(
+              <VStack gap={1}>
+                <Text color="secondary" type="supporting">
+                  {formatSuiteScenarioMeta(scenario)}
+                </Text>
+                {formatSuiteFailure(scenario) !== undefined && (
+                  <Text color="secondary" type="supporting">{formatSuiteFailure(scenario)}</Text>
+                )}
+              </VStack>
+            )}
+            endContent={(
+              <HStack gap={1} vAlign="center">
+                <StatusDot
+                  label={scenario.status === 'passed' ? '성공' : '실패'}
+                  variant={scenario.status === 'passed' ? 'success' : 'error'}
+                />
+                <Text type="supporting">{scenario.status === 'passed' ? '성공' : '실패'}</Text>
+              </HStack>
+            )}
+            label={scenario.scenarioName ?? scenario.scenarioKey}
+          />
+        ))}
+      </List>
     </VStack>
   );
 }
@@ -385,6 +464,25 @@ function formatFailedStep(result: UiRunTestResult): string {
   return [failed.id, failed.error, failed.responseStatus === undefined ? undefined : `HTTP ${failed.responseStatus}`]
     .filter((value): value is string => value !== undefined)
     .join(' · ');
+}
+
+function formatSuiteScenarioMeta(scenario: UiSuiteRunResult['scenarios'][number]): string {
+  return [
+    [scenario.method, scenario.path].filter(Boolean).join(' '),
+    `단계 ${scenario.passedSteps}/${scenario.totalSteps}`,
+    formatDuration(scenario.durationMs),
+  ].filter(Boolean).join(' · ');
+}
+
+function formatSuiteFailure(scenario: UiSuiteRunResult['scenarios'][number]): string | undefined {
+  if (scenario.failedStep === undefined) return scenario.error;
+  return [
+    `실패 단계 ${scenario.failedStep.id}`,
+    [scenario.failedStep.method, scenario.failedStep.path].filter(Boolean).join(' '),
+    scenario.failedStep.responseStatus === undefined ? undefined : `HTTP ${scenario.failedStep.responseStatus}`,
+    scenario.failedStep.condition,
+    scenario.failedStep.error,
+  ].filter((value): value is string => value !== undefined && value !== '').join(' · ');
 }
 
 function formatDuration(value: number): string {

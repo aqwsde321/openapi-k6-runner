@@ -1,6 +1,6 @@
 import type { UiScenarioDetail, UiScenarioList } from '../scenarios.js';
 import type { UiServerCheckResult } from '../server-checks.js';
-import type { UiSuiteList } from '../suites.js';
+import type { UiSuiteDetail, UiSuiteList } from '../suites.js';
 
 export type UiScenarioRunCommand = 'validate' | 'test';
 
@@ -31,6 +31,10 @@ export function loadUiSuites(signal?: AbortSignal): Promise<UiSuiteList> {
   return requestJson('/api/suites', { signal });
 }
 
+export function loadUiSuite(id: string, signal?: AbortSignal): Promise<UiSuiteDetail> {
+  return requestJson(`/api/suite?suite=${encodeURIComponent(id)}`, { signal });
+}
+
 export function checkUiServers(signal?: AbortSignal): Promise<UiServerCheckResult> {
   return requestJson('/api/check-servers', { method: 'POST', signal });
 }
@@ -43,6 +47,17 @@ export function startUiScenarioRun(
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ command, scenario, showValues: command === 'test' }),
+  });
+}
+
+export function startUiSuiteRun(
+  command: UiScenarioRunCommand,
+  suite: string,
+): Promise<{ runId: string; status: 'running' }> {
+  return requestJson('/api/run-suite', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ command, suite, showValues: command === 'test' }),
   });
 }
 
