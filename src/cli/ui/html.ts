@@ -367,6 +367,7 @@ export const UI_HTML = String.raw`<!doctype html>
     .nav-tab {
       border-radius: 6px;
       color: var(--muted);
+      font-size: 13px;
       min-width: 0;
       padding: 6px 8px;
     }
@@ -383,6 +384,7 @@ export const UI_HTML = String.raw`<!doctype html>
       gap: 8px;
       padding: 10px 12px;
     }
+    .scenario-tools input { font-size: 13px; }
     .scenario-actions {
       display: grid;
       gap: 6px;
@@ -465,7 +467,7 @@ export const UI_HTML = String.raw`<!doctype html>
       grid-template-columns: 14px minmax(0, 1fr) max-content;
       align-items: center;
       gap: 6px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 800;
       line-height: 1.2;
       min-width: 0;
@@ -737,6 +739,7 @@ export const UI_HTML = String.raw`<!doctype html>
     }
     .scenario-name {
       display: block;
+      font-size: 13px;
       min-width: 0;
       font-weight: 760;
       line-height: 1.25;
@@ -939,6 +942,7 @@ export const UI_HTML = String.raw`<!doctype html>
       min-width: 0;
     }
     .step-title {
+      font-size: 13px;
       min-width: 0;
       font-weight: 760;
       overflow-wrap: anywhere;
