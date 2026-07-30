@@ -4,7 +4,7 @@
 - 기준 커밋: `bf8961b`
 - 범위: `openapi-k6 ui` 프런트엔드
 - 목표: 시나리오 엔드포인트 흐름을 빠르게 읽고, 검증·실행·결과 확인까지 한 화면에서 끝낸다.
-- 진행 상태: 4단계 완료, 5단계 대기
+- 진행 상태: 5단계 완료, 6단계 대기
 
 ## 1. 결정 사항
 
@@ -76,7 +76,6 @@ openapi-k6 ui
 - 지우기
 - 닫기
 - 요청·응답 숨기기·보기
-- 리포트 열기·다운로드
 
 모든 `IconButton`에는 접근성 label과 tooltip을 둔다. 상태 아이콘은 상태 글자 없이 단독 사용하지 않는다.
 
@@ -87,6 +86,7 @@ openapi-k6 ui
 - HTTP method와 endpoint path
 - 대상 모듈과 base URL
 - 실행 상태, 오류, 입력 요청
+- 리포트와 HTML·JSON 다운로드 형식
 
 ## 4. 목표 화면 구조
 
@@ -389,6 +389,12 @@ validate/test 결과 분리·민감 입력 제출과 실행 후 마스킹을 데
 - 기존 report 파일을 그대로 읽고 다운로드한다.
 - 연결 끊김 중 실행이 막히고 화면은 유지되며 복구 후 갱신된다.
 - 아이콘 버튼이 label, tooltip, focus 상태를 가진다.
+
+검증(2026-07-30): suite·report·연결 상태를 포함한 263개 테스트, `pnpm typecheck`,
+`pnpm build`, E2E·호환성·UI 자산 smoke, `npm pack --dry-run`을 통과했다. `/next/`에서
+suite validate, 실패 후 다음 scenario 계속 실행, report 실패 필터·다운로드 경로·복사,
+열린 report와 실행 중 UI 서버 재시작 복구를 확인했다. 데스크톱과 639×782 모바일 탭·
+Dialog overflow를 확인했고 브라우저 console 경고·오류는 없었다.
 
 ### 6단계 — 기능 동등성 확인과 전환
 
