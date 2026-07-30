@@ -50,14 +50,17 @@ async function writeSampleWorkspace(workspace, baseUrl) {
   await mkdir(path.join(workspaceDir, 'openapi'), { recursive: true });
   await mkdir(path.join(workspaceDir, 'scenarios/auth'), { recursive: true });
   await mkdir(path.join(workspaceDir, 'scenarios/order'), { recursive: true });
+  await mkdir(path.join(workspaceDir, 'suites'), { recursive: true });
 
   await writeFile(path.join(workspaceDir, 'config.yaml'), createConfig(baseUrl), 'utf8');
   await writeFile(path.join(workspaceDir, '.openapi-k6.json'), await createScaffoldMetadata(), 'utf8');
   await writeFile(path.join(workspaceDir, 'openapi/app.openapi.yaml'), createOpenApi(baseUrl), 'utf8');
   await writeFile(path.join(workspaceDir, 'scenarios/health.yaml'), createHealthScenario(), 'utf8');
+  await writeFile(path.join(workspaceDir, 'scenarios/manual-health.yaml'), createManualHealthScenario(), 'utf8');
   await writeFile(path.join(workspaceDir, 'scenarios/auth/login.yaml'), createLoginScenario(), 'utf8');
   await writeFile(path.join(workspaceDir, 'scenarios/order/use-login.yaml'), createUseLoginScenario(), 'utf8');
   await writeFile(path.join(workspaceDir, 'scenarios/order/use-health.yaml'), createUseHealthScenario(), 'utf8');
+  await writeFile(path.join(workspaceDir, 'suites/smoke.yaml'), createSmokeSuite(), 'utf8');
 }
 
 async function createScaffoldMetadata() {
@@ -171,6 +174,24 @@ function createHealthScenario() {
   ].join('\n');
 }
 
+function createManualHealthScenario() {
+  return [
+    'name: manual-health',
+    'description: Manual input followed by a passing health check.',
+    'steps:',
+    '  - id: enter-check-code',
+    '    input:',
+    '      name: checkCode',
+    '      label: Check code',
+    '      sensitive: true',
+    '  - id: health',
+    '    api:',
+    '      operationId: getHealth',
+    '    condition: status == 200',
+    '',
+  ].join('\n');
+}
+
 function createLoginScenario() {
   return [
     'name: login',
@@ -219,6 +240,18 @@ function createUseHealthScenario() {
     '    api:',
     '      operationId: getHealth',
     '    condition: status == 200',
+    '',
+  ].join('\n');
+}
+
+function createSmokeSuite() {
+  return [
+    'name: smoke',
+    'description: Pass, fail, then continue with another passing scenario.',
+    'scenarios:',
+    '  - health',
+    '  - order/use-login',
+    '  - order/use-health',
     '',
   ].join('\n');
 }
@@ -349,8 +382,10 @@ function printSampleInstructions({ workspace, backendUrl, uiUrl }) {
   console.log('');
   console.log('Try these scenarios in the UI:');
   console.log('  health                passes and shows 직접 정의');
+  console.log('  manual-health         requests a sensitive input before passing');
   console.log('  order/use-health      passes and shows 시나리오 사용: health');
   console.log('  order/use-login       fails login on purpose and shows 시나리오 사용: auth/login in 최근 실행 결과');
+  console.log('  smoke suite           continues after the intentional failure and creates a report');
   console.log('');
   console.log('Press Ctrl+C to stop the UI. The workspace is left on disk for inspection.');
 }
