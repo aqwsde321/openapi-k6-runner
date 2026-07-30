@@ -259,6 +259,7 @@ function StepRow({
   const targetModule = step.input === undefined
     ? step.targetModule ?? step.module ?? defaultModule
     : undefined;
+  const source = formatStepSource(step);
 
   return (
     <Item
@@ -273,7 +274,9 @@ function StepRow({
           {targetModule !== undefined && (
             <Text color="secondary" type="supporting">{targetModule}</Text>
           )}
-          <Text color="secondary" type="supporting">{formatStepSource(step)}</Text>
+          {source !== undefined && (
+            <Text color="secondary" type="supporting">{source}</Text>
+          )}
         </HStack>
       )}
       label={step.id}
@@ -441,7 +444,12 @@ function formatStepEndpoint(step: ScenarioStep): string {
   return 'endpoint 미해석';
 }
 
-function formatStepSource(step: ScenarioStep): string {
-  if (step.source.kind === 'direct') return '직접 정의';
-  return `${step.source.kind} · ${step.source.reference ?? '-'}`;
+function formatStepSource(step: ScenarioStep): string | undefined {
+  if (step.source.kind === 'direct') return undefined;
+
+  const lineage = step.source.lineage ?? (
+    step.source.reference === undefined ? [] : [step.source]
+  );
+  const references = lineage.map((source) => source.reference).join(' › ');
+  return references === '' ? '출처 미확인' : `포함 · ${references}`;
 }

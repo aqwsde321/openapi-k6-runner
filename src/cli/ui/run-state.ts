@@ -148,6 +148,12 @@ export interface UiRunResponseValue {
 export interface UiScenarioStepSource {
   kind: 'direct' | 'use' | 'include';
   reference?: string;
+  lineage?: UiScenarioStepSourceReference[];
+}
+
+export interface UiScenarioStepSourceReference {
+  kind: 'use' | 'include';
+  reference: string;
 }
 
 export function createUiRunRecord(options: {

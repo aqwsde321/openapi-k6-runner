@@ -2,7 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { isMap, isSeq, parse as parseYaml, parseDocument, type YAMLMap } from 'yaml';
 
-import type { UiScenarioStepSource } from './run-state.js';
+import type {
+  UiScenarioStepSource,
+  UiScenarioStepSourceReference,
+} from './run-state.js';
 
 export interface UiScenarioReaderContext {
   resolveScenarioPath(value: string): string;
@@ -108,14 +111,20 @@ async function readUiScenarioStepSourcesInternal(
     if (useReference !== undefined) {
       const nestedPath = context.resolveScenarioPath(useReference);
       const nestedSources = await readUiScenarioStepSourcesInternal(context, nestedPath, nextStack);
-      sources.push(...nestedSources.map(() => ({ kind: 'use' as const, reference: useReference })));
+      sources.push(...nestedSources.map((source) => prependUiScenarioStepSource(source, {
+        kind: 'use',
+        reference: useReference,
+      })));
       continue;
     }
 
     if (includeReference !== undefined) {
       const nestedPath = path.resolve(path.dirname(filePath), includeReference);
       const nestedSources = await readUiScenarioStepSourcesInternal(context, nestedPath, nextStack);
-      sources.push(...nestedSources.map(() => ({ kind: 'include' as const, reference: includeReference })));
+      sources.push(...nestedSources.map((source) => prependUiScenarioStepSource(source, {
+        kind: 'include',
+        reference: includeReference,
+      })));
       continue;
     }
 
@@ -123,6 +132,21 @@ async function readUiScenarioStepSourcesInternal(
   }
 
   return sources;
+}
+
+function prependUiScenarioStepSource(
+  source: UiScenarioStepSource,
+  parent: UiScenarioStepSourceReference,
+): UiScenarioStepSource {
+  const nestedLineage = source.lineage ?? (
+    source.kind === 'direct' || source.reference === undefined
+      ? []
+      : [{ kind: source.kind, reference: source.reference }]
+  );
+
+  return nestedLineage.length === 0
+    ? parent
+    : { ...parent, lineage: [parent, ...nestedLineage] };
 }
 
 export async function readUiScenarioStepDefinitions(

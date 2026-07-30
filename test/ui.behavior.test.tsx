@@ -126,7 +126,14 @@ describe('React UI behavior', () => {
       },
       steps: [{
         id: 'create-user',
-        source: { kind: 'direct' },
+        source: {
+          kind: 'use',
+          reference: 'auth/session',
+          lineage: [
+            { kind: 'use', reference: 'auth/session' },
+            { kind: 'use', reference: 'auth/login' },
+          ],
+        },
         targetModule: 'app',
         method: 'POST',
         path: '/users',
@@ -149,6 +156,7 @@ describe('React UI behavior', () => {
       />,
     );
     const stepButton = getButtonContaining('create-user');
+    expect(stepButton.textContent).toContain('포함 · auth/session › auth/login');
     expect(stepButton.getAttribute('aria-expanded')).toBe('false');
     await click(stepButton);
     expect(stepButton.getAttribute('aria-expanded')).toBe('true');
