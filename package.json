@@ -35,29 +35,37 @@
   },
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "tsc -p tsconfig.build.json && pnpm run build:assets",
+    "build": "tsc -p tsconfig.build.json && pnpm run build:ui && pnpm run build:assets",
     "build:assets": "mkdir -p dist/scaffold/templates && rm -f dist/scaffold/templates/load-tests.README.md && cp src/scaffold/templates/openapi-k6.README.md dist/scaffold/templates/openapi-k6.README.md",
+    "build:ui": "vite build --config vite.ui.config.ts",
     "build:watch": "pnpm run build:assets && tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "test": "vitest run",
     "test:compat": "node scripts/backward-compat-smoke.mjs",
     "smoke:e2e": "node scripts/e2e-local-backend-smoke.mjs",
+    "smoke:ui-assets": "node scripts/ui-assets-smoke.mjs",
     "smoke:published": "node scripts/published-smoke.mjs",
     "sample:ui": "node scripts/ui-sample-workspace.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.ui.json"
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
-    "@astryxdesign/cli": "^0.1.9",
-    "@astryxdesign/core": "^0.1.9",
-    "@astryxdesign/theme-neutral": "^0.1.9",
     "commander": "^12.1.0",
     "dotenv": "^16.4.7",
     "yaml": "^2.8.3"
   },
   "devDependencies": {
+    "@astryxdesign/cli": "^0.1.9",
+    "@astryxdesign/core": "^0.1.9",
+    "@astryxdesign/theme-neutral": "^0.1.9",
+    "@stylexjs/stylex": "^0.19.0",
     "@types/node": "^22.10.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "tsx": "^4.20.5",
     "typescript": "^5.9.3",
+    "vite": "^7.3.2",
     "vitest": "^3.2.4"
   },
   "engines": {

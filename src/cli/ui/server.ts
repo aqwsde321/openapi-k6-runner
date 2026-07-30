@@ -13,6 +13,7 @@ import {
   normalizeUiHost,
   parseUiPort,
   readUiJsonBody,
+  writeUiAppFile,
   writeUiHtml,
   writeUiJson,
 } from './server-http.js';
@@ -70,6 +71,7 @@ export interface UiResult {
 
 export interface UiServerDeps {
   runCli(argv: string[], context: CliContext): Promise<void>;
+  uiAppDir?: string;
 }
 
 const DEFAULT_LOAD_TEST_DIR = DEFAULT_WORKSPACE_DIR;
@@ -137,6 +139,7 @@ export async function runUiServerCommand(
     context,
     config,
     runCli: deps.runCli,
+    uiAppDir: deps.uiAppDir,
     runs: new Map(),
     nextRunId: 1,
   };
@@ -166,6 +169,7 @@ interface UiState {
   context: CliContext;
   config: LoadTestConfig;
   runCli: (argv: string[], context: CliContext) => Promise<void>;
+  uiAppDir?: string;
   runs: Map<string, UiRunRecord>;
   nextRunId: number;
 }
@@ -179,6 +183,10 @@ async function handleUiRequest(
 
   if (request.method === 'GET' && (requestUrl.pathname === '/' || requestUrl.pathname === '/index.html')) {
     writeUiHtml(response);
+    return;
+  }
+
+  if (request.method === 'GET' && await writeUiAppFile(response, requestUrl.pathname, state.uiAppDir)) {
     return;
   }
 

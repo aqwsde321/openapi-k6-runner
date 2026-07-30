@@ -1,7 +1,18 @@
+import { readFile } from 'node:fs/promises';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { UI_HTML } from './html.js';
+
+const DEFAULT_UI_APP_DIR = fileURLToPath(new URL('./app/', import.meta.url));
+const UI_ASSET_PREFIX = '/ui-assets/';
+const UI_APP_CONTENT_TYPES = new Map([
+  ['.css', 'text/css; charset=utf-8'],
+  ['.html', 'text/html; charset=utf-8'],
+  ['.js', 'text/javascript; charset=utf-8'],
+]);
 
 export async function readUiJsonBody(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
@@ -31,6 +42,56 @@ export function writeUiHtml(response: ServerResponse): void {
     'cache-control': 'no-cache',
   });
   response.end(UI_HTML);
+}
+
+export async function writeUiAppFile(
+  response: ServerResponse,
+  pathname: string,
+  appDir = DEFAULT_UI_APP_DIR,
+): Promise<boolean> {
+  const relativePath = resolveUiAppRelativePath(pathname);
+
+  if (relativePath === undefined) {
+    return false;
+  }
+
+  const contentType = UI_APP_CONTENT_TYPES.get(path.extname(relativePath));
+
+  if (contentType === undefined) {
+    return false;
+  }
+
+  const root = path.resolve(appDir);
+  const filePath = path.resolve(root, relativePath);
+  const nestedPath = path.relative(root, filePath);
+
+  if (nestedPath === '..' || nestedPath.startsWith(`..${path.sep}`) || path.isAbsolute(nestedPath)) {
+    return false;
+  }
+
+  let body: Buffer;
+
+  try {
+    body = await readFile(filePath);
+  } catch (error) {
+    if (isNodeErrorCode(error, 'ENOENT') ||
+        isNodeErrorCode(error, 'ENOTDIR') ||
+        isNodeErrorCode(error, 'EISDIR')) {
+      return false;
+    }
+
+    throw error;
+  }
+
+  response.writeHead(200, {
+    'content-type': contentType,
+    'cache-control': relativePath === 'index.html'
+      ? 'no-cache'
+      : 'public, max-age=31536000, immutable',
+    'x-content-type-options': 'nosniff',
+  });
+  response.end(body);
+  return true;
 }
 
 export function writeUiJson(response: ServerResponse, statusCode: number, data: unknown): void {
@@ -121,6 +182,32 @@ function listenUiServerOnce(server: Server, host: string, port: number): Promise
     server.once('listening', onListening);
     server.listen(port, host);
   });
+}
+
+function resolveUiAppRelativePath(pathname: string): string | undefined {
+  if (pathname === '/next' || pathname === '/next/' || pathname === '/next/index.html') {
+    return 'index.html';
+  }
+
+  if (!pathname.startsWith(UI_ASSET_PREFIX)) {
+    return undefined;
+  }
+
+  let decodedPath: string;
+
+  try {
+    decodedPath = decodeURIComponent(pathname.slice(UI_ASSET_PREFIX.length)).replaceAll('\\', '/');
+  } catch {
+    return undefined;
+  }
+
+  const segments = decodedPath.split('/');
+
+  if (segments.some((segment) => segment === '' || segment === '.' || segment === '..' || segment.startsWith('.'))) {
+    return undefined;
+  }
+
+  return segments.join(path.sep);
 }
 
 function isNodeErrorCode(error: unknown, code: string): boolean {

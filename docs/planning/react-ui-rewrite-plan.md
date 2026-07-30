@@ -4,6 +4,7 @@
 - 기준 커밋: `bf8961b`
 - 범위: `openapi-k6 ui` 프런트엔드
 - 목표: 시나리오 엔드포인트 흐름을 빠르게 읽고, 검증·실행·결과 확인까지 한 화면에서 끝낸다.
+- 진행 상태: 1단계 완료, 2단계 대기
 
 ## 1. 결정 사항
 
@@ -293,9 +294,11 @@ stateDiagram-v2
 범위:
 
 - React, React DOM, StyleX peer를 직접 의존성으로 명시한다.
+- React, Astryx, Vite 등 번들 빌드 전용 패키지는 devDependency로 둔다.
 - UI 전용 TypeScript/Vite 설정과 `build:ui`를 추가한다.
 - Astryx `AppShell`만 렌더링하는 최소 엔트리를 만든다.
 - 빌드 산출물을 `dist/cli/ui/app/**`에 둔다.
+- 자산 URL은 `/ui-assets/**`로 고정해 `/next/`와 최종 `/`가 같은 번들을 사용한다.
 - 서버가 `import.meta.url` 기준으로 정적 자산을 안전하게 제공하도록 한다.
 - 기존 `/`는 유지하고 `/next/`에서 새 UI를 연다.
 
@@ -388,7 +391,6 @@ stateDiagram-v2
 범위:
 
 - 안정화 확인 후 `html.ts`와 임시 `/next/`·legacy 경로를 제거한다.
-- 빌드 전용 패키지를 devDependency로 정리한다.
 - 문서와 배포 smoke를 최종 상태로 갱신한다.
 
 완료·검증:
