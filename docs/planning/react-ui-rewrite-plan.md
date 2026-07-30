@@ -4,7 +4,7 @@
 - 기준 커밋: `bf8961b`
 - 범위: `openapi-k6 ui` 프런트엔드
 - 목표: 시나리오 엔드포인트 흐름을 빠르게 읽고, 검증·실행·결과 확인까지 한 화면에서 끝낸다.
-- 진행 상태: 6단계 완료, 7단계 대기
+- 진행 상태: 7단계 완료
 
 ## 1. 결정 사항
 
@@ -14,7 +14,7 @@
 - UI는 시나리오 작성기가 아니다. 탐색, 실행 전 확인, 실행, 결과·리포트 확인에 집중한다.
 - 같은 정보를 여러 영역에 반복하지 않는다. 기존의 `실행 예정 엔드포인트`와 `시나리오 실행 단계`는 하나의 단계 흐름으로 합친다.
 - 범용 동작은 아이콘으로 줄이되, 의미가 모호한 실행 동작과 핵심 정보는 글자를 유지한다.
-- React 전환 중에는 기존 화면을 유지하고 `/next/`에서 새 화면을 검증한다. 기능 동등성 확인 후 `/`만 전환한다.
+- React 전환 중에는 `/next/`에서 새 화면을 검증했고, 기능 동등성 확인 후 `/`로 전환한 뒤 임시 경로와 기존 UI를 제거했다.
 
 ## 2. 사용자와 완료 기준
 
@@ -431,6 +431,11 @@ scenario 계속 실행, report 실패 필터·다운로드 경로를 확인했�
 - 배포 tarball에 사용하지 않는 기존 UI가 없다.
 - clean install, build, pack, 실행이 재현된다.
 
+검증(2026-07-30): `html.ts`와 `/next*`·`/legacy*` route를 제거했다. clean build,
+267개 테스트, `pnpm run typecheck`, E2E·호환성·설치 tarball UI/API/SSE smoke,
+`npm pack --dry-run`을 통과했다. pack manifest는 70개 파일이며 기존
+`dist/cli/ui/html.js`가 없고, 설치본에서 제거된 route가 404임을 확인한다.
+
 ## 10. 검증과 롤백
 
 단계별 최소 검증:
@@ -487,9 +492,10 @@ React 동작 테스트는 컴포넌트 내부 구현이 아니라 다음 사용�
 
 현재 주요 소스:
 
-- `src/cli/ui/html.ts`
+- `src/cli/ui/app/App.tsx`
 - `src/cli/ui/server.ts`
 - `src/cli/ui/server-http.ts`
+- `scripts/ui-assets-smoke.mjs`
 - `test/cli.test.ts`
 - `package.json`
 

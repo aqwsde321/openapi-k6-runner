@@ -89,12 +89,16 @@ pnpm run build:watch
 ```bash
 pnpm test
 pnpm run typecheck
+pnpm run clean
 pnpm run build
+pnpm run smoke:ui-assets
 pnpm run smoke:e2e
 npm pack --dry-run
 ```
 
 `smoke:e2e`는 빌드된 `dist/cli/index.js`를 서로 다른 로컬 포트의 seed/auth/bos fixture 백엔드에 붙여 `init -> module add --base-url --sync -> module list -> validate -> test -> generate -> run` 흐름을 확인합니다. auth와 bos는 서로 다른 OpenAPI discovery 경로를 쓰고, cross-module scenario의 실제 API 호출도 서로 다른 서버로 나뉘는지 검증합니다. 실제 k6 설치는 요구하지 않고, smoke 내부 fake k6로 `run` orchestration과 로그/리포트 환경값만 검증합니다. 이 smoke는 CI와 Publish workflow 모두에서 `pnpm run build` 다음에 실행됩니다.
+
+`smoke:ui-assets`는 실제 tarball을 빈 임시 프로젝트에 설치해 React UI, 정적 자산, API/SSE를 확인하고 제거된 legacy UI 파일과 route가 다시 포함되지 않는지 검증합니다.
 
 UI를 직접 확인할 때는 빌드 후 샘플 workspace를 띄웁니다.
 
@@ -103,7 +107,7 @@ pnpm run build
 pnpm run sample:ui
 ```
 
-`sample:ui`는 임시 `openapi-k6/` workspace와 로컬 fixture 백엔드를 만들고, 빌드된 `dist/cli/index.js ui`를 실행합니다. UI에서 `health`, `order/use-health`, `order/use-login`을 선택해 폴더 그룹, 시나리오 사용 step 출처, 실패 step 최근 실행 결과를 확인합니다. 서버는 `Ctrl+C`로 종료하고, workspace는 파일 확인을 위해 출력된 경로에 남습니다.
+`sample:ui`는 임시 `openapi-k6/` workspace와 로컬 fixture 백엔드를 만들고, 빌드된 `dist/cli/index.js ui`를 실행합니다. `health`, `manual-health`, `order/use-health`, `order/use-login`, `smoke` suite로 성공, 입력 대기, 재사용 step, 실패 후 suite 계속 실행과 report를 확인합니다. 서버는 `Ctrl+C`로 종료하고, workspace는 파일 확인을 위해 출력된 경로에 남습니다.
 
 로컬 npm 캐시 권한 문제로 `npm pack --dry-run`이 실패하면 임시 캐시를 지정해 패키지 내용을 확인할 수 있습니다.
 
