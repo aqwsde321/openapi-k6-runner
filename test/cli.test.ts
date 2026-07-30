@@ -1749,6 +1749,9 @@ describe('openapi-k6 CLI', () => {
         '  - id: health',
         '    api:',
         '      operationId: getHealth',
+        '    request:',
+        '      headers:',
+        '        X-Preview: preview-header',
         '    condition: status == 201',
         '',
       ].join('\n'),
@@ -1828,7 +1831,7 @@ describe('openapi-k6 CLI', () => {
         id: string;
         name: string;
         description?: string;
-        steps: Array<{ id: string; operationId?: string }>;
+        steps: Array<{ id: string; operationId?: string; method?: string; path?: string }>;
       };
       const nestedDetail = await (await fetch(`${ui.url}/api/scenario?scenario=${encodeURIComponent('auth/login')}`)).json() as {
         id: string;
@@ -1842,6 +1845,11 @@ describe('openapi-k6 CLI', () => {
         steps: Array<{
           id: string;
           operationId?: string;
+          targetModule?: string;
+          method?: string;
+          path?: string;
+          request?: { headers?: Record<string, unknown> };
+          expectedResponse?: { status: string; contentType?: string; source?: string; body?: unknown };
           source: { kind: 'direct' | 'use' | 'include'; reference?: string };
           definition?: { path: string; code: string };
         }>;
@@ -1858,6 +1866,16 @@ describe('openapi-k6 CLI', () => {
         description?: string;
         scenarioCount: number;
         scenarios: Array<{ id: string; name?: string; stepCount?: number }>;
+      };
+      const executionConfig = await (await fetch(`${ui.url}/api/check-servers`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })).json() as {
+        configPath: string;
+        defaultModule?: string;
+        moduleOption?: string;
+        modules: Array<{ name: string; baseUrl?: string; source?: string; openapi?: string }>;
       };
       const run = await (await fetch(`${ui.url}/api/run`, {
         method: 'POST',
@@ -1951,6 +1969,7 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('class="terminal-frame"');
       expect(html).toContain('id="runValuesToggle"');
       expect(html).toContain('class="run-values-toggle"');
+      expect(html).toContain('disabled>요청/응답 보기</button>');
       expect(html).toContain('class="panel-subhead run-results-heading"');
       expect(html).toContain('class="section run-results-section"');
       expect(html).toContain('flex-shrink: 0;');
@@ -2036,7 +2055,7 @@ describe('openapi-k6 CLI', () => {
       expect(html).not.toContain('run-summary-label">작업');
       expect(html).toContain("line.startsWith('Next:')");
       expect(html).toContain("events.addEventListener('test-result'");
-      expect(html).toContain('runItem.stepResults = Array.isArray(data.steps) ? data.steps : [];');
+      expect(html).toContain('runItem.stepResults = mergeRunStepResults(runItem.stepResults, Array.isArray(data.steps) ? data.steps : []);');
       expect(html).toContain('run-step-results');
       expect(html).toContain('run-step-values');
       expect(html).toContain('run-step-copy');
@@ -2046,6 +2065,17 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('copyExecutionLog');
       expect(html).toContain('readActiveOutputText');
       expect(html).toContain("showValues: command === 'test'");
+      expect(html).toContain('showRunValues: false,');
+      expect(html).toContain('buildScenarioPreviewSteps');
+      expect(html).toContain('mergeRunStepResults');
+      expect(html).toContain('renderScenarioPreview');
+      expect(html).toContain('renderExecutionConfig');
+      expect(html).toContain('대상 모듈 미결정');
+      expect(html).toContain('const showTargetModule = new Set');
+      expect(html).toContain('formatStepResultMeta(step, showTargetModule)');
+      expect(html).toContain("await selectScenario(state.selected)");
+      expect(html).toContain('요청 (예정)');
+      expect(html).toContain('응답 (예상 · OpenAPI)');
       expect(html).toContain('state.showRunValues = !state.showRunValues;');
       expect(html).toContain('formatStepSource');
       expect(html).toContain('step-source');
@@ -2100,7 +2130,12 @@ describe('openapi-k6 CLI', () => {
         id: 'smoke',
         name: 'smoke',
         description: 'Smoke scenario for the UI summary.',
-        steps: [expect.objectContaining({ id: 'health', operationId: 'getHealth' })],
+        steps: [expect.objectContaining({
+          id: 'health',
+          operationId: 'getHealth',
+          method: 'GET',
+          path: '/app-health',
+        })],
       });
       expect(nestedDetail).toMatchObject({
         id: 'auth/login',
@@ -2115,6 +2150,16 @@ describe('openapi-k6 CLI', () => {
           expect.objectContaining({
             id: 'health',
             operationId: 'getHealth',
+            targetModule: 'app',
+            method: 'GET',
+            path: '/app-health',
+            request: { headers: { 'X-Preview': 'preview-header' } },
+            expectedResponse: {
+              status: '200',
+              contentType: 'application/json',
+              source: 'schema',
+              body: { ok: false },
+            },
             source: { kind: 'use', reference: 'auth/login' },
             definition: expect.objectContaining({
               path: 'openapi-k6/scenarios/auth/login.yaml',
@@ -2143,6 +2188,16 @@ describe('openapi-k6 CLI', () => {
         description: 'UI suite smoke run.',
         scenarioCount: 1,
         scenarios: [expect.objectContaining({ id: 'smoke', name: 'smoke', stepCount: 1 })],
+      });
+      expect(executionConfig).toMatchObject({
+        configPath: 'openapi-k6/config.yaml',
+        defaultModule: 'app',
+        modules: [expect.objectContaining({
+          name: 'app',
+          baseUrl: 'https://app-api.test.local',
+          source: 'baseUrl',
+          openapi: 'https://app-api.test.local/v3/api-docs',
+        })],
       });
       expect(events).toContain('$ npx --yes openapi-k6 validate -s smoke --config openapi-k6/config.yaml');
       expect(events).toContain('Validated openapi-k6/scenarios/smoke.yaml');
@@ -2394,6 +2449,104 @@ describe('openapi-k6 CLI', () => {
     } finally {
       await ui.close();
       await closeTestServer(targetServer);
+    }
+  });
+
+  it('shows each effective module target for multi-module UI scenarios', async () => {
+    await writeRunFixtures();
+    await writeModuleOpenApi('vendor.openapi.yaml', '/vendor-health', 'https://vendor-openapi.test.local');
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/multi-target.yaml'),
+      [
+        'name: multi-target',
+        'steps:',
+        '  - id: app-health',
+        '    api:',
+        '      module: app',
+        '      operationId: getHealth',
+        '  - id: vendor-health',
+        '    api:',
+        '      module: vendor',
+        '      operationId: getHealth',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeConfig([
+      'baseUrl: https://app-api.test.local',
+      'defaultModule: app',
+      'modules:',
+      '  app:',
+      '    snapshot: openapi/app.openapi.yaml',
+      '    catalog: openapi/app.catalog.json',
+      '  vendor:',
+      '    baseUrl: https://vendor-api.test.local',
+      '    snapshot: openapi/vendor.openapi.yaml',
+      '    catalog: openapi/vendor.catalog.json',
+      '',
+    ]);
+    const ui = await runUiCommand(
+      { port: '0' },
+      {
+        cwd: workspace,
+        stdout: createSink(),
+        stderr: createSink(),
+        env: {},
+        fetch: async () => new Response(null, { status: 200 }),
+      },
+    );
+
+    try {
+      const detail = await (await fetch(`${ui.url}/api/scenario?scenario=multi-target`)).json() as {
+        targetModules?: string[];
+        steps: Array<{ id: string; targetModule?: string; method?: string; path?: string }>;
+      };
+      const config = await (await fetch(`${ui.url}/api/check-servers`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })).json() as {
+        modules: Array<{ name: string; baseUrl?: string; source?: string }>;
+      };
+
+      expect(detail).toMatchObject({
+        targetModules: ['app', 'vendor'],
+        steps: [
+          expect.objectContaining({ id: 'app-health', targetModule: 'app', method: 'GET', path: '/app-health' }),
+          expect.objectContaining({ id: 'vendor-health', targetModule: 'vendor', method: 'GET', path: '/vendor-health' }),
+        ],
+      });
+      expect(config.modules).toEqual([
+        expect.objectContaining({ name: 'app', baseUrl: 'https://app-api.test.local', source: 'baseUrl' }),
+        expect.objectContaining({ name: 'vendor', baseUrl: 'https://vendor-api.test.local', source: 'modules.vendor.baseUrl' }),
+      ]);
+
+      await writeConfig([
+        'baseUrl: https://app-api.changed.local',
+        'defaultModule: app',
+        'modules:',
+        '  app:',
+        '    snapshot: openapi/app.openapi.yaml',
+        '    catalog: openapi/app.catalog.json',
+        '  vendor:',
+        '    baseUrl: https://vendor-api.changed.local',
+        '    snapshot: openapi/vendor.openapi.yaml',
+        '    catalog: openapi/vendor.catalog.json',
+        '',
+      ]);
+      const refreshedConfig = await (await fetch(`${ui.url}/api/check-servers`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })).json() as {
+        modules: Array<{ name: string; baseUrl?: string }>;
+      };
+      expect(refreshedConfig.modules).toEqual([
+        expect.objectContaining({ name: 'app', baseUrl: 'https://app-api.changed.local' }),
+        expect.objectContaining({ name: 'vendor', baseUrl: 'https://vendor-api.changed.local' }),
+      ]);
+    } finally {
+      await ui.close();
     }
   });
 
@@ -6464,6 +6617,7 @@ describe('openapi-k6 CLI', () => {
       'defaultModule: app',
       'modules:',
       '  app:',
+      '    openapi: https://app-api.test.local/v3/api-docs',
       '    snapshot: openapi/app.openapi.yaml',
       '    catalog: openapi/app.catalog.json',
       '',
@@ -6535,6 +6689,13 @@ describe('openapi-k6 CLI', () => {
         '      responses:',
         '        "200":',
         '          description: OK',
+        '          content:',
+        '            application/json:',
+        '              schema:',
+        '                type: object',
+        '                properties:',
+        '                  ok:',
+        '                    type: boolean',
         '',
       ].join('\n'),
       'utf8',

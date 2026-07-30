@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { LoadTestConfig, LoadTestModuleConfig } from '../src/config/load-test.config.js';
 import { resolveUiModuleBaseUrl } from '../src/cli/ui/base-url.js';
+import { checkUiServers } from '../src/cli/ui/server-checks.js';
 
 describe('UI baseUrl resolver', () => {
   let workspace: string;
@@ -80,6 +81,71 @@ describe('UI baseUrl resolver', () => {
       BASE_URL_APP: 'TODO',
       BASE_URL: ' ',
     })).resolves.toEqual({});
+  });
+
+  it('keeps configured OpenAPI URLs intact in the UI config summary', async () => {
+    const cwd = process.cwd();
+    const moduleConfig = createModuleConfig({
+      openapi: 'http://localhost:8080/v3/api-docs',
+      baseUrl: 'http://localhost:8080/',
+    });
+    const config: LoadTestConfig = {
+      path: path.join(cwd, 'openapi-k6/config.yaml'),
+      dir: workspace,
+      defaultModule: 'app',
+      modules: new Map([['app', moduleConfig]]),
+    };
+
+    const result = await checkUiServers({
+      cwd,
+      config,
+      env: {},
+      fetch: async () => new Response(null, { status: 200 }),
+    });
+
+    expect(result.modules[0]).toMatchObject({
+      openapi: 'http://localhost:8080/v3/api-docs',
+      baseUrl: 'http://localhost:8080/',
+    });
+  });
+
+  it('masks URL credentials and values only in the UI summary', async () => {
+    let fetchedUrl = '';
+    const moduleConfig = createModuleConfig({
+      openapi: 'https://user:secret@spec.test.local/openapi.json?token=secret#private',
+      baseUrl: 'https://api.test.local/?apiKey=secret',
+    });
+    const config: LoadTestConfig = {
+      path: path.join(workspace, 'config.yaml'),
+      dir: workspace,
+      modules: new Map([['app', moduleConfig]]),
+    };
+
+    const result = await checkUiServers({
+      cwd: workspace,
+      config,
+      env: {},
+      fetch: async (input) => {
+        fetchedUrl = input.toString();
+        return new Response(null, { status: 200 });
+      },
+    });
+
+    expect(fetchedUrl).toBe('https://api.test.local/?apiKey=secret');
+    expect(result.modules[0]).toMatchObject({
+      openapi: 'https://***@spec.test.local/openapi.json?token=***#***',
+      baseUrl: 'https://api.test.local/?apiKey=***',
+    });
+
+    const failed = await checkUiServers({
+      cwd: workspace,
+      config,
+      env: {},
+      fetch: async (input) => {
+        throw new Error(`failed ${input.toString()}`);
+      },
+    });
+    expect(failed.modules[0]?.error).toBe('failed https://api.test.local/?apiKey=***');
   });
 
   function createConfig(options: { baseUrl?: string } = {}): LoadTestConfig {

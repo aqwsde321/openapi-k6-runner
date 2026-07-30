@@ -25,6 +25,18 @@ export interface OpenApiSyncResult {
   operationCount: number;
 }
 
+export interface OpenApiResponsePreview {
+  status: string;
+  contentType?: string;
+  source?: 'example' | 'schema';
+  body?: unknown;
+}
+
+type OpenApiResponseBodyPreview = Required<Pick<
+  OpenApiResponsePreview,
+  'contentType' | 'source' | 'body'
+>>;
+
 interface LoadedOpenApiDocument {
   document: unknown;
   source: string;
@@ -148,6 +160,29 @@ export function buildOpenApiCatalog(
     source: options.source,
     operations,
   };
+}
+
+export function buildOpenApiResponsePreview(
+  responses: unknown,
+): OpenApiResponsePreview | undefined {
+  if (!isRecord(responses)) {
+    return undefined;
+  }
+
+  const status = Object.keys(responses)
+    .filter((candidate) => isRecord(responses[candidate]))
+    .sort((left, right) =>
+      Number(!isPreviewSuccessStatus(left)) - Number(!isPreviewSuccessStatus(right)) ||
+      compareResponseStatus(left, right))[0];
+
+  if (status === undefined) {
+    return undefined;
+  }
+
+  const response = responses[status] as Record<string, unknown>;
+  const preview = buildResponseMediaPreview(response.content);
+
+  return preview === undefined ? { status } : { status, ...preview };
 }
 
 function renderRequestBodyContentTypes(requestBody: unknown): Pick<ApiCatalogOperation, 'requestBodyContentTypes'> | Record<string, never> {
@@ -278,6 +313,69 @@ function readRequestBodyContentTypes(requestBody: unknown): string[] {
   }
 
   return Object.keys(content).sort((left, right) => left.localeCompare(right));
+}
+
+function buildResponseMediaPreview(
+  content: unknown,
+): OpenApiResponseBodyPreview | undefined {
+  if (!isRecord(content)) {
+    return undefined;
+  }
+
+  const previews = Object.keys(content).flatMap<OpenApiResponseBodyPreview>((contentType) => {
+    const mediaType = content[contentType];
+
+    if (!isRecord(mediaType)) {
+      return [];
+    }
+
+    const explicitExample = readMediaTypeExample(mediaType);
+
+    if (explicitExample !== undefined) {
+      return [{
+        contentType,
+        source: 'example',
+        body: normalizeCatalogHintValue(explicitExample, 0),
+      }];
+    }
+
+    const schemaExample = createCatalogHintFromSchema(mediaType.schema, 'value', 0);
+
+    return schemaExample === undefined
+      ? []
+      : [{ contentType, source: 'schema', body: normalizeResponseSchemaPreview(schemaExample) }];
+  });
+
+  return previews.sort((left, right) =>
+    rankResponsePreviewContentType(left.contentType) - rankResponsePreviewContentType(right.contentType))[0];
+}
+
+function normalizeResponseSchemaPreview(value: unknown, propertyName = 'value'): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeResponseSchemaPreview(item, propertyName));
+  }
+
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, normalizeResponseSchemaPreview(item, key)]),
+    );
+  }
+
+  if (typeof value === 'string' && /^\{\{env\.[A-Z0-9_]+\}\}$/.test(value)) {
+    return `<${propertyName}>`;
+  }
+
+  return value;
+}
+
+function rankResponsePreviewContentType(contentType: string): number {
+  const jsonRank = rankJsonContentType(contentType);
+
+  if (jsonRank < 3) {
+    return jsonRank;
+  }
+
+  return contentType.toLowerCase() === '*/*' ? 3 : 4;
 }
 
 function selectJsonMediaType(content: unknown): { contentType: string; mediaType: Record<string, unknown> } | undefined {
@@ -875,6 +973,10 @@ function isSuccessStatus(status: string): boolean {
   const code = Number(status);
 
   return code >= 200 && code < 300;
+}
+
+function isPreviewSuccessStatus(status: string): boolean {
+  return isSuccessStatus(status) || /^2XX$/i.test(status);
 }
 
 function compareResponseStatus(left: string, right: string): number {

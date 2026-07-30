@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   buildOpenApiCatalog,
+  buildOpenApiResponsePreview,
   syncOpenApiSnapshot,
 } from '../src/openapi/openapi.catalog.js';
 import { parseOpenApiFile } from '../src/openapi/openapi.parser.js';
@@ -235,6 +236,82 @@ describe('OpenAPI snapshot and catalog', () => {
         placeholder: '<city>',
       },
     ]);
+  });
+
+  it('builds a response preview from the preferred success response example', () => {
+    expect(buildOpenApiResponsePreview({
+      400: {
+        description: 'Bad request',
+        content: {
+          'application/json': { example: { error: 'invalid' } },
+        },
+      },
+      201: {
+        description: 'Created',
+        content: {
+          '*/*': { example: { id: 'wildcard' } },
+          'application/json': {
+            examples: {
+              created: { value: { id: 'order-1' } },
+            },
+          },
+        },
+      },
+    })).toEqual({
+      status: '201',
+      contentType: 'application/json',
+      source: 'example',
+      body: { id: 'order-1' },
+    });
+  });
+
+  it('falls back to wildcard or first media schema for a response preview', () => {
+    expect(buildOpenApiResponsePreview({
+      200: {
+        description: 'OK',
+        content: {
+          'text/plain': { example: 'ignored' },
+          '*/*': {
+            schema: {
+              type: 'object',
+              properties: {
+                token: { type: 'string' },
+                active: { type: 'boolean' },
+              },
+            },
+          },
+        },
+      },
+    })).toEqual({
+      status: '200',
+      contentType: '*/*',
+      source: 'schema',
+      body: {
+        token: '<token>',
+        active: false,
+      },
+    });
+
+    expect(buildOpenApiResponsePreview({
+      default: {
+        description: 'Fallback',
+        content: {
+          'text/plain': { example: 'fallback' },
+        },
+      },
+    })).toEqual({
+      status: 'default',
+      contentType: 'text/plain',
+      source: 'example',
+      body: 'fallback',
+    });
+  });
+
+  it('keeps a response preview status when the response has no body', () => {
+    expect(buildOpenApiResponsePreview({
+      204: { description: 'No content' },
+    })).toEqual({ status: '204' });
+    expect(buildOpenApiResponsePreview(undefined)).toBeUndefined();
   });
 
   it('syncs an OpenAPI URL into snapshot and catalog files', async () => {

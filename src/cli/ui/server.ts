@@ -290,9 +290,18 @@ async function handleUiRequest(
   }
 
   if (request.method === 'POST' && requestUrl.pathname === '/api/check-servers') {
+    const config = await loadOptionalConfig(state.cwd, state.options.config, true);
+    if (config === undefined) {
+      throw new Error(`${DEFAULT_CONFIG_PATH} was not found. Run openapi-k6 init or pass --config.`);
+    }
+    if (state.options.module !== undefined) {
+      resolveConfigModule(config, state.options.module);
+    }
+    state.config = config;
     writeUiJson(response, 200, await checkUiServers({
       cwd: state.cwd,
-      config: state.config,
+      config,
+      ...(state.options.module === undefined ? {} : { moduleOption: state.options.module }),
       env: state.context.env,
       fetch: state.context.fetch,
     }));

@@ -12,17 +12,22 @@ export type UiSnapshotStatus = 'present' | 'missing' | 'error';
 export interface UiServerCheckContext {
   cwd: string;
   config: LoadTestConfig;
+  moduleOption?: string;
   env?: Record<string, string | undefined>;
   fetch?: typeof fetch;
 }
 
 export interface UiServerCheckResult {
   checkedAt: string;
+  configPath: string;
+  defaultModule?: string;
+  moduleOption?: string;
   modules: UiModuleServerCheckResult[];
 }
 
 export interface UiModuleServerCheckResult {
   name: string;
+  openapi?: string;
   baseUrl?: string;
   source?: string;
   status: 'unknown' | 'reachable' | 'failed';
@@ -50,6 +55,9 @@ export async function checkUiServers(context: UiServerCheckContext): Promise<UiS
 
   return {
     checkedAt: new Date().toISOString(),
+    configPath: formatDisplayPath(context.cwd, context.config.path),
+    ...(context.config.defaultModule === undefined ? {} : { defaultModule: context.config.defaultModule }),
+    ...(context.moduleOption === undefined ? {} : { moduleOption: context.moduleOption }),
     modules,
   };
 }
@@ -74,10 +82,14 @@ async function checkUiModuleServer(
 ): Promise<UiModuleServerCheckResult> {
   const snapshot = await checkUiSnapshot(context, moduleConfig);
   const resolved = await resolveUiModuleBaseUrl(context, moduleConfig, runtimeEnv);
+  const metadata = {
+    name: moduleConfig.name,
+    ...formatUiOpenApiSource(context, moduleConfig),
+  };
 
   if (resolved.baseUrl === undefined) {
     return {
-      name: moduleConfig.name,
+      ...metadata,
       status: 'unknown',
       error: 'baseUrl is not configured',
       snapshot,
@@ -89,8 +101,8 @@ async function checkUiModuleServer(
   try {
     const response = await fetchUiReachability(context.fetch ?? fetch, resolved.baseUrl);
     return {
-      name: moduleConfig.name,
-      baseUrl: resolved.baseUrl,
+      ...metadata,
+      baseUrl: formatUiUrl(resolved.baseUrl),
       source: resolved.source,
       status: 'reachable',
       httpStatus: response.status,
@@ -99,15 +111,57 @@ async function checkUiModuleServer(
     };
   } catch (error) {
     return {
-      name: moduleConfig.name,
-      baseUrl: resolved.baseUrl,
+      ...metadata,
+      baseUrl: formatUiUrl(resolved.baseUrl),
       source: resolved.source,
       status: 'failed',
       durationMs: Date.now() - startedAt,
-      error: formatUiError(error),
+      error: formatUiUrlError(error, resolved.baseUrl),
       snapshot,
     };
   }
+}
+
+function formatUiOpenApiSource(
+  context: UiServerCheckContext,
+  moduleConfig: LoadTestModuleConfig,
+): { openapi?: string } {
+  if (!isConfiguredValue(moduleConfig.openapi)) {
+    return {};
+  }
+
+  const openapi = resolveConfigFilePath(context.config, moduleConfig.openapi);
+  return {
+    openapi: /^https?:\/\//i.test(openapi) ? formatUiUrl(openapi) : formatDisplayPath(context.cwd, openapi),
+  };
+}
+
+function formatUiUrl(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return 'invalid URL';
+  }
+  if (!url.username && !url.password && !url.search && !url.hash) {
+    return value;
+  }
+
+  if (url.username || url.password) {
+    url.username = '***';
+    url.password = '';
+  }
+  if (url.search) {
+    const masked = new URLSearchParams();
+    for (const key of url.searchParams.keys()) {
+      masked.append(key, '***');
+    }
+    url.search = masked.toString();
+  }
+  if (url.hash) {
+    url.hash = '#***';
+  }
+  return url.toString();
 }
 
 async function checkUiSnapshot(
@@ -162,6 +216,17 @@ function formatUiError(error: unknown): string {
   }
 
   return message;
+}
+
+function formatUiUrlError(error: unknown, rawUrl: string): string {
+  const displayUrl = formatUiUrl(rawUrl);
+  let message = formatUiError(error);
+  try {
+    message = message.replaceAll(new URL(rawUrl).toString(), displayUrl);
+  } catch {
+    // Invalid URL is already rendered as a generic label.
+  }
+  return message.replaceAll(rawUrl, displayUrl);
 }
 
 async function fetchUiReachability(fetchImpl: typeof fetch, baseUrl: string): Promise<Response> {

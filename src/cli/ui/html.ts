@@ -740,6 +740,30 @@ export const UI_HTML = String.raw`<!doctype html>
       overflow-wrap: anywhere;
       white-space: pre-wrap;
     }
+    .execution-config {
+      border-top: 1px solid var(--line);
+      display: grid;
+      gap: 6px;
+      padding-top: 7px;
+    }
+    .execution-target {
+      align-items: start;
+      display: grid;
+      gap: 6px;
+      grid-template-columns: max-content minmax(0, 1fr);
+      min-width: 0;
+    }
+    .execution-config-title,
+    .execution-target-module {
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .execution-target-url {
+      font: 11px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
     .row {
       display: flex;
       align-items: center;
@@ -1320,16 +1344,17 @@ export const UI_HTML = String.raw`<!doctype html>
       <button id="reportsBtn" class="header-action-button" type="button">
         리포트 <span id="reportCount" class="pill">0</span>
       </button>
-      <div id="serverStatus" class="server-status" tabindex="0" aria-label="서버 상태">
+      <div id="serverStatus" class="server-status" tabindex="0" aria-label="실행 설정">
         <div id="serverStatusSummary" class="server-status-summary">
           <span class="server-count"><span class="server-dot ok" aria-hidden="true"></span><span id="serverConnectedCount">0</span></span>
           <span class="server-count"><span class="server-dot bad" aria-hidden="true"></span><span id="serverIssueCount">0</span></span>
         </div>
         <div class="server-popover">
           <div class="server-popover-head">
-            <strong>서버 상태</strong>
+            <strong>실행 설정</strong>
             <button id="checkServersBtn" class="icon-button" type="button" title="서버 다시 확인" aria-label="서버 다시 확인">↻</button>
           </div>
+          <span id="serverConfigMeta" class="muted">config 확인 전</span>
           <span id="serverCheckedAt" class="muted"></span>
           <div id="serverList" class="server-grid"><div class="empty">서버 확인 전</div></div>
         </div>
@@ -1364,7 +1389,7 @@ export const UI_HTML = String.raw`<!doctype html>
       </div>
       <div class="panel-subhead run-results-heading">
         <h3 id="runSummaryTitle">최근 실행 결과</h3>
-        <button id="runValuesToggle" class="run-values-toggle" type="button" disabled>요청/응답 숨김</button>
+        <button id="runValuesToggle" class="run-values-toggle" type="button" disabled>요청/응답 보기</button>
       </div>
       <div class="panel-body stack">
         <div id="scenarioSummary" class="section">
@@ -1445,13 +1470,14 @@ export const UI_HTML = String.raw`<!doctype html>
       reportModalReportId: null,
       reportModalReport: null,
       reportModalFailuresOnly: false,
-      showRunValues: true,
+      showRunValues: false,
       lastRun: new Map(),
       lastSuiteRun: new Map(),
       runsByScenario: new Map(),
       runsBySuite: new Map(),
       activeOutputRunId: null,
       uiDisconnected: false,
+      executionConfig: { configPath: '', defaultModule: '', moduleOption: '', modules: [] },
       serverSummary: { checked: false, moduleCount: 0, connectedServers: 0, failedServers: 0, missingSnapshots: 0, issueModules: 0 }
     };
 
@@ -1475,6 +1501,7 @@ export const UI_HTML = String.raw`<!doctype html>
       serverConnectedCount: document.getElementById('serverConnectedCount'),
       serverIssueCount: document.getElementById('serverIssueCount'),
       checkServersBtn: document.getElementById('checkServersBtn'),
+      serverConfigMeta: document.getElementById('serverConfigMeta'),
       serverCheckedAt: document.getElementById('serverCheckedAt'),
       serverList: document.getElementById('serverList'),
       validateBtn: document.getElementById('validateBtn'),
@@ -1734,6 +1761,8 @@ export const UI_HTML = String.raw`<!doctype html>
     async function loadScenarios() {
       const data = await fetchJson('/api/scenarios');
       state.scenarios = data.scenarios;
+      state.executionConfig.configPath = data.configPath || '';
+      state.executionConfig.defaultModule = data.defaultModule || '';
       await loadSuites();
       await loadReports();
       renderCurrentList();
@@ -2229,6 +2258,7 @@ export const UI_HTML = String.raw`<!doctype html>
         '<div class="stack" style="gap: 6px;">' +
           description +
           '<div class="row"><span class="pill">시나리오</span><span class="pill">' + escapeHtml(formatStepCount(detail.stepCount)) + '</span></div>' +
+          renderExecutionConfig(detail) +
         '</div>';
       for (const index of Array.from(state.openStepIndexes)) {
         if (index >= detail.steps.length) state.openStepIndexes.delete(index);
@@ -2268,6 +2298,26 @@ export const UI_HTML = String.raw`<!doctype html>
           renderDetail();
         });
       }
+    }
+
+    function renderExecutionConfig(detail) {
+      const config = state.executionConfig || {};
+      const configuredModules = Array.isArray(config.modules) ? config.modules : [];
+      const targetNames = Array.isArray(detail && detail.targetModules) && detail.targetModules.length > 0
+        ? detail.targetModules
+        : Array.isArray(detail && detail.modules) ? detail.modules : [];
+      const targets = targetNames.map((name) => configuredModules.find((module) => module.name === name) || { name: name });
+      const targetRows = targets.map((module) => {
+        return '<div class="execution-target">' +
+          '<span class="execution-target-module">' + escapeHtml(module.name || '-') + '</span>' +
+          '<span class="execution-target-url">' + escapeHtml(module.baseUrl || 'baseUrl 확인 중') + '</span>' +
+        '</div>';
+      }).join('') || '<div class="muted">대상 모듈 미결정</div>';
+
+      return '<div class="execution-config">' +
+        '<div class="execution-config-title">실행 대상</div>' +
+        targetRows +
+      '</div>';
     }
 
     function renderSuiteDetail() {
@@ -2478,15 +2528,24 @@ export const UI_HTML = String.raw`<!doctype html>
       els.serverCheckedAt.textContent = '확인 중';
       try {
         const result = await fetchJson('/api/check-servers', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+        state.executionConfig = {
+          configPath: result.configPath || state.executionConfig.configPath || '',
+          defaultModule: result.defaultModule || state.executionConfig.defaultModule || '',
+          moduleOption: result.moduleOption || '',
+          modules: Array.isArray(result.modules) ? result.modules : []
+        };
         state.serverSummary = summarizeServerResult(result);
         updateServerStatusSummary();
+        els.serverConfigMeta.textContent = formatExecutionConfigMeta(state.executionConfig);
         els.serverCheckedAt.textContent = formatServerStatusSummaryText(state.serverSummary) + ' · ' + new Date(result.checkedAt).toLocaleTimeString();
         els.serverList.innerHTML = result.modules.map((module) => {
           const snapshot = module.snapshot || { status: 'missing', error: 'snapshot unknown' };
           const serverMeta = formatServerMeta(module);
           const snapshotMeta = formatSnapshotMeta(snapshot);
-          return '<div class="server"><strong>' + escapeHtml(module.name) + '</strong><div class="server-lines"><div>' + escapeHtml(module.baseUrl || 'baseUrl 미설정') + '</div><div class="muted">' + escapeHtml(serverMeta) + '</div><div class="muted">' + escapeHtml(snapshotMeta) + '</div></div><span class="pill' + statusTone(module.status) + '">' + escapeHtml(formatStatusLabel(module.status)) + '</span></div>';
+          const openApiMeta = module.openapi ? 'OpenAPI: ' + module.openapi : '';
+          return '<div class="server"><strong>' + escapeHtml(module.name) + '</strong><div class="server-lines"><div>' + escapeHtml(module.baseUrl || 'baseUrl 미설정') + '</div><div class="muted">' + escapeHtml(serverMeta) + '</div>' + (openApiMeta ? '<div class="muted">' + escapeHtml(openApiMeta) + '</div>' : '') + '<div class="muted">' + escapeHtml(snapshotMeta) + '</div></div><span class="pill' + statusTone(module.status) + '">' + escapeHtml(formatStatusLabel(module.status)) + '</span></div>';
         }).join('');
+        if (state.selectedKind === 'scenario' && state.selected) await selectScenario(state.selected);
       } catch (error) {
         state.serverSummary = { checked: false, moduleCount: 0, connectedServers: 0, failedServers: 1, missingSnapshots: 0, issueModules: 1 };
         updateServerStatusSummary();
@@ -2535,6 +2594,13 @@ export const UI_HTML = String.raw`<!doctype html>
       const connected = summary.connectedServers === 1 ? '1 connected' : summary.connectedServers + ' connected';
       const missing = summary.missingSnapshots === 1 ? '1 missing snapshot' : summary.missingSnapshots + ' missing snapshots';
       return modules + ' · ' + connected + ' · ' + missing;
+    }
+
+    function formatExecutionConfigMeta(config) {
+      return [
+        config.configPath || 'config 경로 없음',
+        config.moduleOption ? '--module ' + config.moduleOption : config.defaultModule ? 'default ' + config.defaultModule : ''
+      ].filter(Boolean).join(' · ');
     }
 
     function formatServerMeta(module) {
@@ -2736,10 +2802,12 @@ export const UI_HTML = String.raw`<!doctype html>
       return source.kind + ' ' + (source.reference || '');
     }
 
-    function formatStepResultMeta(step) {
+    function formatStepResultMeta(step, showTargetModule) {
       const parts = [];
+      if (showTargetModule && step.targetModule) parts.push('module ' + step.targetModule);
       const api = ((step.method || '') + ' ' + (step.path || '')).trim();
       if (api) parts.push(api);
+      else if (step.operationId) parts.push('operationId ' + step.operationId);
       if (step.input && step.input.name) parts.push('입력 ' + step.input.name);
       if (typeof step.responseStatus === 'number') parts.push('HTTP ' + step.responseStatus);
       if (typeof step.durationMs === 'number') parts.push(Math.round(step.durationMs) + 'ms');
@@ -2747,6 +2815,7 @@ export const UI_HTML = String.raw`<!doctype html>
     }
 
     function formatBodyValue(value) {
+      if (typeof value !== 'string') return formatJsonValue(value);
       const text = String(value);
       try {
         return JSON.stringify(JSON.parse(text), null, 2);
@@ -2768,14 +2837,14 @@ export const UI_HTML = String.raw`<!doctype html>
     }
 
     function hasRunStepValues(step) {
-      return Boolean(step && (step.url || step.request || step.response));
+      return Boolean(step && (step.url || step.request || step.response || step.expectedResponse));
     }
 
-    function renderRunStepValues(step) {
+    function renderRunStepValues(step, preview) {
       const values = formatRunStepValues(step);
       const body = [
-        renderStepValueBlock('요청', values.request),
-        renderStepValueBlock('응답', values.response)
+        renderStepValueBlock(preview ? '요청 (예정)' : '요청', values.request),
+        renderStepValueBlock(values.expected ? '응답 (예상 · OpenAPI)' : '응답', values.response)
       ].filter(Boolean).join('');
 
       return body ? '<div class="run-step-values">' + body + '</div>' : '';
@@ -2783,23 +2852,30 @@ export const UI_HTML = String.raw`<!doctype html>
 
     function formatRunStepValues(step) {
       const request = step.request || {};
-      const response = step.response;
+      const response = step.response || step.expectedResponse;
+      const expected = !step.response && Boolean(step.expectedResponse);
       const requestParts = [];
       if (step.url) requestParts.push('url: ' + step.url);
       if (request.headers) requestParts.push('headers:\n' + formatJsonValue(request.headers));
+      if (request.query) requestParts.push('query:\n' + formatJsonValue(request.query));
+      if (request.pathParams) requestParts.push('pathParams:\n' + formatJsonValue(request.pathParams));
       if (request.body !== undefined) requestParts.push('body:\n' + formatBodyValue(request.body));
+      if (request.multipart) requestParts.push('multipart:\n' + formatJsonValue(request.multipart));
 
       const responseParts = [];
       if (response) {
         const statusText = response.statusText ? ' ' + response.statusText : '';
         responseParts.push('status: ' + response.status + statusText);
+        if (response.contentType) responseParts.push('content-type: ' + response.contentType);
+        if (expected && response.source) responseParts.push('source: ' + response.source);
         if (response.headers) responseParts.push('headers:\n' + formatJsonValue(response.headers));
-        responseParts.push('body:\n' + formatBodyValue(response.body || ''));
+        if (response.body !== undefined) responseParts.push('body:\n' + formatBodyValue(response.body));
       }
 
       return {
         request: requestParts.join('\n\n'),
-        response: responseParts.join('\n\n')
+        response: responseParts.join('\n\n'),
+        expected
       };
     }
 
@@ -2807,7 +2883,7 @@ export const UI_HTML = String.raw`<!doctype html>
       const values = formatRunStepValues(step);
       return [
         values.request ? 'request values:\n' + values.request : '',
-        values.response ? 'response values:\n' + values.response : ''
+        values.response ? (values.expected ? 'expected response values:\n' : 'response values:\n') + values.response : ''
       ].filter(Boolean).join('\n\n');
     }
 
@@ -2855,6 +2931,7 @@ export const UI_HTML = String.raw`<!doctype html>
 
     function renderRunStepResults(item) {
       if (!item.stepResults || item.stepResults.length === 0) return '';
+      const showTargetModule = new Set(item.stepResults.map((step) => step.targetModule).filter(Boolean)).size > 1;
 
       return '<div class="run-step-results">' + item.stepResults.map((step) => {
         const index = typeof step.index === 'number' ? step.index + 1 : '';
@@ -2864,16 +2941,57 @@ export const UI_HTML = String.raw`<!doctype html>
           '<div class="run-step-result-row">' +
             '<span class="run-step-result-main">' +
               '<span class="run-step-result-title">' + escapeHtml(title) + ' <span class="pill' + statusTone(status) + '">' + escapeHtml(formatStatusLabel(status)) + '</span></span>' +
-              '<span class="run-step-result-meta">' + escapeHtml(formatStepResultMeta(step)) + '</span>' +
+              '<span class="run-step-result-meta">' + escapeHtml(formatStepResultMeta(step, showTargetModule)) + '</span>' +
             '</span>' +
             '<span class="run-step-result-actions">' +
-              '<button class="run-step-copy" type="button" data-copy-run-step data-run-id="' + escapeHtml(item.id) + '" data-step-index="' + escapeHtml(String(step.index)) + '">복사</button>' +
+              (item.preview ? '' : '<button class="run-step-copy" type="button" data-copy-run-step data-run-id="' + escapeHtml(item.id) + '" data-step-index="' + escapeHtml(String(step.index)) + '">복사</button>') +
               '<span class="pill run-step-result-source">' + escapeHtml(formatStepSource(step.source)) + '</span>' +
             '</span>' +
           '</div>' +
-          (state.showRunValues ? renderRunStepValues(step) : '') +
+          (state.showRunValues ? renderRunStepValues(step, Boolean(item.preview || step.preview)) : '') +
         '</div>';
       }).join('') + '</div>';
+    }
+
+    function buildScenarioPreviewSteps(detail) {
+      if (!detail || !Array.isArray(detail.steps)) return [];
+      return detail.steps.map((step, index) => ({
+        index,
+        id: step.id,
+        status: 'not run',
+        preview: true,
+        source: step.source,
+        targetModule: step.targetModule,
+        operationId: step.operationId,
+        method: step.method,
+        path: step.path,
+        request: step.request,
+        expectedResponse: step.expectedResponse,
+        input: step.input,
+        extracts: []
+      }));
+    }
+
+    function mergeRunStepResults(plannedSteps, resultSteps) {
+      const merged = new Map((plannedSteps || []).map((step) => [step.index, step]));
+      for (const step of resultSteps || []) {
+        merged.set(step.index, { ...(merged.get(step.index) || {}), ...step, preview: false });
+      }
+      return Array.from(merged.values()).sort((left, right) => left.index - right.index);
+    }
+
+    function renderScenarioPreview(steps) {
+      if (steps.length === 0) return '';
+      return '<div class="run-result run-result-test">' +
+        '<div class="run-result-title-row">' +
+          '<div class="run-result-heading">' +
+            '<div class="run-result-kind">시나리오 실행</div>' +
+            '<div class="run-result-title">실행 예정 엔드포인트</div>' +
+          '</div>' +
+          '<span class="pill">미실행</span>' +
+        '</div>' +
+        renderRunStepResults({ id: '', preview: true, stepResults: steps }) +
+      '</div>';
     }
 
     function renderRunInputPrompt(item) {
@@ -3020,13 +3138,13 @@ export const UI_HTML = String.raw`<!doctype html>
       return Boolean(item && item.command === 'test' && (item.stepResults || []).some(hasRunStepValues));
     }
 
-    function updateRunValuesToggle(items) {
-      const hasValues = items.some(runHasValues);
+    function updateRunValuesToggle(items, previewSteps) {
+      const hasValues = items.some(runHasValues) || (previewSteps || []).some(hasRunStepValues);
       els.runValuesToggle.disabled = !hasValues;
       els.runValuesToggle.textContent = state.showRunValues ? '요청/응답 숨김' : '요청/응답 보기';
       els.runValuesToggle.title = hasValues
-        ? '최근 실행 결과의 요청/응답 값 표시를 전환합니다.'
-        : '요청/응답 값이 있는 test 실행 결과가 없습니다.';
+        ? '요청/응답 값 표시를 전환합니다.'
+        : '표시할 요청/응답 값이 없습니다.';
     }
 
     function renderRunSummary() {
@@ -3040,13 +3158,19 @@ export const UI_HTML = String.raw`<!doctype html>
         ? getSuiteRuns(state.selected)
         : getScenarioRuns(state.selected);
       const items = [runs.validate, runs.test].filter(Boolean);
-      updateRunValuesToggle(items);
+      const previewSteps = state.selectedKind === 'scenario' && !runs.test
+        ? buildScenarioPreviewSteps(state.detail)
+        : [];
+      updateRunValuesToggle(items, previewSteps);
+      const preview = previewSteps.length > 0
+        ? renderScenarioPreview(previewSteps)
+        : '';
       if (items.length === 0) {
-        els.runSummary.innerHTML = '<div class="muted">' + (state.selectedKind === 'suite' ? '이 스위트 실행 기록 없음' : '이 시나리오 실행 기록 없음') + '</div>';
+        els.runSummary.innerHTML = preview || '<div class="muted">' + (state.selectedKind === 'suite' ? '이 스위트 실행 기록 없음' : '이 시나리오 실행 기록 없음') + '</div>';
         return;
       }
 
-      els.runSummary.innerHTML = renderSuiteReportShortcut(items) + items.map(renderRunResult).join('');
+      els.runSummary.innerHTML = renderSuiteReportShortcut(items) + preview + items.map(renderRunResult).join('');
     }
 
     function clearRunOutput() {
@@ -3092,7 +3216,7 @@ export const UI_HTML = String.raw`<!doctype html>
         exitCode: null,
         html: '',
         text: '',
-        stepResults: [],
+        stepResults: command === 'test' ? buildScenarioPreviewSteps(state.detail) : [],
         pendingInput: null
       };
       saveScenarioRun(runItem);
@@ -3119,7 +3243,7 @@ export const UI_HTML = String.raw`<!doctype html>
       });
       events.addEventListener('test-result', (event) => {
         const data = JSON.parse(event.data);
-        runItem.stepResults = Array.isArray(data.steps) ? data.steps : [];
+        runItem.stepResults = mergeRunStepResults(runItem.stepResults, Array.isArray(data.steps) ? data.steps : []);
         if (state.selectedKind === 'scenario' && state.selected === runScenario) {
           renderRunSummary();
         }
