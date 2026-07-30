@@ -8,6 +8,7 @@ const projectRoot = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   root: path.join(projectRoot, 'src/cli/ui/app'),
   base: '/ui-assets/',
+  esbuild: { jsx: 'automatic' },
   build: {
     outDir: path.join(projectRoot, 'dist/cli/ui/app'),
     emptyOutDir: true,

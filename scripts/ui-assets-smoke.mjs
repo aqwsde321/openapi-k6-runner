@@ -27,7 +27,12 @@ if (!assetPaths.some((assetPath) => assetPath.endsWith('.js')) ||
 }
 
 for (const assetPath of assetPaths) {
-  await access(path.join(appDir, assetPath.slice('/ui-assets/'.length)));
+  const filePath = path.join(appDir, assetPath.slice('/ui-assets/'.length));
+  await access(filePath);
+
+  if (assetPath.endsWith('.js') && /\bReact\.createElement\b/.test(await readFile(filePath, 'utf8'))) {
+    throw new Error('React UI bundle contains an unbound classic JSX runtime reference.');
+  }
 }
 
 const { stdout } = await runFile(npmCommand, ['pack', '--dry-run', '--json'], {
