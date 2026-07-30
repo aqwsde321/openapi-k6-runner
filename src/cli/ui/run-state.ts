@@ -25,8 +25,16 @@ export interface UiRunRecord {
   testResult?: UiRunTestResult;
   suiteResult?: UiSuiteRunResult;
   pendingInput?: UiRunPendingInput;
+  events: UiRunEvent[];
+  nextEventId: number;
   clients: Set<ServerResponse>;
   ansiHtmlState: AnsiHtmlState;
+}
+
+interface UiRunEvent {
+  id: number;
+  name: string;
+  data: unknown;
 }
 
 export interface UiRunChunk {
@@ -152,6 +160,8 @@ export function createUiRunRecord(options: {
     scenario: options.scenario,
     status: 'running',
     chunks: [],
+    events: [],
+    nextEventId: 1,
     clients: new Set(),
     ansiHtmlState: createAnsiHtmlState(),
   };
@@ -168,10 +178,11 @@ export function createUiRunWritable(run: UiRunRecord, stream: 'stdout' | 'stderr
 }
 
 export function appendUiRunChunk(run: UiRunRecord, stream: 'stdout' | 'stderr', chunk: string): void {
+  const maskedChunk = maskUiRunText(chunk, []);
   const event = {
     stream,
-    chunk,
-    html: renderAnsiChunkToHtml(chunk, run.ansiHtmlState),
+    chunk: maskedChunk,
+    html: renderAnsiChunkToHtml(maskedChunk, run.ansiHtmlState),
   };
   run.chunks.push(event);
   writeUiRunEvent(run, 'chunk', event);
@@ -241,6 +252,9 @@ export function createUiRunTestResult(
   options: { includeValues?: boolean } = {},
 ): UiRunTestResult {
   const includeValues = options.includeValues === true;
+  const secretValues = [...result.secretValues]
+    .filter((value) => value.length > 0)
+    .sort((left, right) => right.length - left.length);
 
   return {
     scenario: result.scenario,
@@ -253,22 +267,26 @@ export function createUiRunTestResult(
       durationMs: Math.round(step.durationMs),
       source: stepSources[step.index] ?? { kind: 'direct' },
       method: step.method,
-      path: step.path,
+      path: maskUiRunText(step.path, secretValues),
       extracts: step.extracts.map((extract) => ({
         name: extract.name,
         path: extract.path,
         passed: extract.passed,
-        ...(extract.error === undefined ? {} : { error: extract.error }),
+        ...(extract.error === undefined ? {} : { error: maskUiRunText(extract.error, secretValues) }),
       })),
-      ...(includeValues && step.url !== undefined ? { url: step.url } : {}),
-      ...(includeValues && step.request !== undefined ? { request: step.request } : {}),
+      ...(includeValues && step.url !== undefined ? { url: maskUiRunUrl(step.url, secretValues) } : {}),
+      ...(includeValues && step.request !== undefined
+        ? { request: maskUiRunRequest(step.request, secretValues) }
+        : {}),
       ...(includeValues && step.response !== undefined
         ? {
             response: {
               status: step.response.status,
-              statusText: step.response.statusText,
-              ...(step.response.headers === undefined ? {} : { headers: step.response.headers }),
-              body: step.response.body,
+              statusText: maskUiRunText(step.response.statusText, secretValues),
+              ...(step.response.headers === undefined
+                ? {}
+                : { headers: maskUiRunHeaders(step.response.headers, secretValues) }),
+              body: maskUiRunBody(step.response.body, secretValues),
             },
           }
         : {}),
@@ -287,11 +305,11 @@ export function createUiRunTestResult(
         ? {}
         : {
             condition: {
-              expression: step.condition.expression,
+              expression: maskUiRunText(step.condition.expression, secretValues),
               passed: step.condition.passed,
             },
           }),
-      ...(step.error === undefined ? {} : { error: step.error }),
+      ...(step.error === undefined ? {} : { error: maskUiRunText(step.error, secretValues) }),
       ...(step.response === undefined ? {} : { responseStatus: step.response.status }),
     })),
   };
@@ -331,34 +349,27 @@ export function finishUiRun(run: UiRunRecord, status: 'passed' | 'failed', exitC
   run.clients.clear();
 }
 
-export function streamUiRunEvents(run: UiRunRecord, response: ServerResponse): void {
+export function streamUiRunEvents(
+  run: UiRunRecord,
+  response: ServerResponse,
+  lastEventId?: string,
+): void {
   response.writeHead(200, {
     'content-type': 'text/event-stream; charset=utf-8',
     'cache-control': 'no-cache',
     connection: 'keep-alive',
   });
 
-  for (const chunk of run.chunks) {
-    writeSseEvent(response, 'chunk', chunk);
-  }
+  const resumeAfter = parseLastEventId(lastEventId);
+  const replay = resumeAfter === undefined
+    ? createUiRunSnapshot(run)
+    : run.events.filter((event) => event.id > resumeAfter);
 
-  if (run.testResult !== undefined) {
-    writeSseEvent(response, 'test-result', run.testResult);
-  }
-
-  if (run.suiteResult !== undefined) {
-    writeSseEvent(response, 'suite-result', run.suiteResult);
-  }
-
-  if (run.pendingInput !== undefined) {
-    writeSseEvent(response, 'input-request', run.pendingInput.request);
+  for (const event of replay) {
+    writeSseEvent(response, event);
   }
 
   if (run.status !== 'running') {
-    writeSseEvent(response, 'done', {
-      status: run.status,
-      exitCode: run.exitCode ?? 1,
-    });
     response.end();
     return;
   }
@@ -398,12 +409,173 @@ function teeScenarioReporters(
 }
 
 function writeUiRunEvent(run: UiRunRecord, name: string, data: unknown): void {
+  const event = {
+    id: run.nextEventId++,
+    name,
+    data,
+  };
+  run.events.push(event);
+
   for (const client of run.clients) {
-    writeSseEvent(client, name, data);
+    writeSseEvent(client, event);
   }
 }
 
-function writeSseEvent(response: ServerResponse, event: string, data: unknown): void {
-  response.write(`event: ${event}\n`);
-  response.write(`data: ${JSON.stringify(data)}\n\n`);
+function createUiRunSnapshot(run: UiRunRecord): UiRunEvent[] {
+  return run.events.filter((event) => (
+    event.name === 'chunk' ||
+    (event.name === 'test-result' && event.data === run.testResult) ||
+    (event.name === 'suite-result' && event.data === run.suiteResult) ||
+    (event.name === 'input-request' && event.data === run.pendingInput?.request) ||
+    (event.name === 'done' && run.status !== 'running')
+  ));
+}
+
+function parseLastEventId(value: string | undefined): number | undefined {
+  const normalized = value?.trim();
+
+  if (normalized === undefined || !/^\d+$/.test(normalized)) {
+    return undefined;
+  }
+
+  const id = Number(normalized);
+  return Number.isSafeInteger(id) ? id : undefined;
+}
+
+function writeSseEvent(response: ServerResponse, event: UiRunEvent): void {
+  response.write(`id: ${event.id}\n`);
+  response.write(`event: ${event.name}\n`);
+  response.write(`data: ${JSON.stringify(event.data)}\n\n`);
+}
+
+const SENSITIVE_KEY_PARTS = [
+  'password',
+  'secret',
+  'token',
+  'apikey',
+  'authorization',
+  'cookie',
+  'setcookie',
+];
+const SENSITIVE_ASSIGNMENT = /(\b[A-Za-z0-9_.-]*(?:password|secret|token|api[-_.]?key|authorization|set[-_.]?cookie|cookie)[A-Za-z0-9_.-]*\b)(\s*(?:={1,3}|:)\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\r\n]+)/gi;
+const SENSITIVE_QUOTED_ASSIGNMENT = /(["'])([A-Za-z0-9_.-]*(?:password|secret|token|api[-_.]?key|authorization|set[-_.]?cookie|cookie)[A-Za-z0-9_.-]*)(["'])(\s*:\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\r\n,}]+)/gi;
+const SENSITIVE_BRACKET_ASSIGNMENT = /(\[\s*["'])([A-Za-z0-9_.-]*(?:password|secret|token|api[-_.]?key|authorization|set[-_.]?cookie|cookie)[A-Za-z0-9_.-]*)(["']\s*\])(\s*(?:={1,3}|:)\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\r\n]+)/gi;
+
+function maskUiRunRequest(
+  request: NonNullable<ScenarioExecutionResult['steps'][number]['request']>,
+  secretValues: string[],
+): UiRunRequestValue {
+  return {
+    ...(request.headers === undefined ? {} : { headers: maskUiRunHeaders(request.headers, secretValues) }),
+    ...(request.body === undefined ? {} : { body: maskUiRunBody(request.body, secretValues) }),
+  };
+}
+
+function maskUiRunHeaders(headers: Record<string, string>, secretValues: string[]): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => [
+      key,
+      isSensitiveUiRunKey(key) ? '***' : maskUiRunText(value, secretValues),
+    ]),
+  );
+}
+
+function maskUiRunBody(value: string, secretValues: string[]): string {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(value) as unknown;
+  } catch {
+    return maskUiRunText(value, secretValues);
+  }
+
+  const masked = maskUiRunJsonValue(parsed, secretValues);
+  return JSON.stringify(masked) === JSON.stringify(parsed)
+    ? value
+    : JSON.stringify(masked, null, 2);
+}
+
+function maskUiRunJsonValue(value: unknown, secretValues: string[]): unknown {
+  if (typeof value === 'string') {
+    return maskUiRunText(value, secretValues);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => maskUiRunJsonValue(item, secretValues));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        isSensitiveUiRunKey(key) ? '***' : maskUiRunJsonValue(item, secretValues),
+      ]),
+    );
+  }
+
+  return value;
+}
+
+function maskUiRunUrl(value: string, secretValues: string[]): string {
+  try {
+    const url = new URL(value);
+    const pathname = maskEncodedUiRunUrlPart(url.pathname, secretValues);
+    const username = maskEncodedUiRunUrlPart(url.username, secretValues);
+    const search = new URLSearchParams();
+
+    if (pathname !== undefined) url.pathname = pathname;
+    if (username !== undefined) url.username = username;
+    for (const [key, item] of url.searchParams) {
+      search.append(key, isSensitiveUiRunKey(key) ? '***' : maskUiRunSecrets(item, secretValues));
+    }
+
+    url.search = search.toString();
+    if (url.hash) {
+      const fragment = url.hash.slice(1);
+      if (fragment.includes('=')) {
+        const hash = new URLSearchParams();
+        for (const [key, item] of new URLSearchParams(fragment)) {
+          hash.append(key, isSensitiveUiRunKey(key) ? '***' : maskUiRunSecrets(item, secretValues));
+        }
+        url.hash = hash.toString();
+      } else {
+        const decoded = decodeURIComponent(fragment);
+        url.hash = maskUiRunText(decoded, secretValues);
+      }
+    }
+    if (url.password) url.password = '***';
+    return maskUiRunSecrets(url.toString(), secretValues);
+  } catch {
+    return maskUiRunText(value, secretValues);
+  }
+}
+
+function maskUiRunText(value: string, secretValues: string[]): string {
+  return maskUiRunSecrets(value, secretValues)
+    .replace(
+      SENSITIVE_BRACKET_ASSIGNMENT,
+      (_match, start: string, key: string, end: string, separator: string) => `${start}${key}${end}${separator}***`,
+    )
+    .replace(
+      SENSITIVE_QUOTED_ASSIGNMENT,
+      (_match, open: string, key: string, close: string, separator: string) => (
+        `${open}${key}${close}${separator}"***"`
+      ),
+    )
+    .replace(SENSITIVE_ASSIGNMENT, (_match, key: string, separator: string) => `${key}${separator}***`);
+}
+
+function maskUiRunSecrets(value: string, secretValues: string[]): string {
+  return secretValues.reduce((text, secret) => text.split(secret).join('***'), value);
+}
+
+function maskEncodedUiRunUrlPart(value: string, secretValues: string[]): string | undefined {
+  const decoded = decodeURIComponent(value);
+  const masked = maskUiRunSecrets(decoded, secretValues);
+  return masked === decoded ? undefined : masked;
+}
+
+function isSensitiveUiRunKey(value: string): boolean {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return SENSITIVE_KEY_PARTS.some((part) => normalized.includes(part));
 }

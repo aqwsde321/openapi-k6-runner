@@ -279,7 +279,8 @@ async function handleUiRequest(
       return;
     }
 
-    streamUiRunEvents(run, response);
+    const lastEventId = request.headers['last-event-id'];
+    streamUiRunEvents(run, response, Array.isArray(lastEventId) ? lastEventId[0] : lastEventId);
     return;
   }
 

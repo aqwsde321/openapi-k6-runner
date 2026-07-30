@@ -1913,6 +1913,9 @@ describe('openapi-k6 CLI', () => {
         body: JSON.stringify({ command: 'validate', scenario: 'smoke' }),
       })).json() as { runId: string };
       const events = await (await fetch(`${ui.url}/api/runs/${run.runId}/events`)).text();
+      const resumedEvents = await (await fetch(`${ui.url}/api/runs/${run.runId}/events`, {
+        headers: { 'last-event-id': '1' },
+      })).text();
       const nestedRun = await (await fetch(`${ui.url}/api/run`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -2250,6 +2253,9 @@ describe('openapi-k6 CLI', () => {
       expect(events).toContain('$ npx --yes openapi-k6 validate -s smoke --config openapi-k6/config.yaml');
       expect(events).toContain('Validated openapi-k6/scenarios/smoke.yaml');
       expect(events).toContain('"status":"passed"');
+      expect(events).toContain('id: 1\n');
+      expect(resumedEvents).not.toContain('id: 1\n');
+      expect(resumedEvents).toContain('event: done');
       expect(nestedEvents).toContain('$ npx --yes openapi-k6 validate -s auth/login --config openapi-k6/config.yaml');
       expect(nestedEvents).toContain('Validated openapi-k6/scenarios/auth/login.yaml');
       expect(nestedEvents).toContain('"status":"passed"');
@@ -2379,6 +2385,7 @@ describe('openapi-k6 CLI', () => {
         '    input:',
         '      name: signupPhoneCode',
         '      label: SMS 인증번호',
+        '      sensitive: true',
         '  - id: verify-phone-code',
         '    api:',
         '      method: POST',
@@ -2429,9 +2436,11 @@ describe('openapi-k6 CLI', () => {
       expect(requestBodies.map((body) => JSON.parse(body))).toEqual([{ code: '123456' }]);
       expect(eventText).toContain('event: input-request');
       expect(eventText).toContain('"name":"signupPhoneCode"');
+      expect(eventText).toContain('"sensitive":true');
       expect(eventText).toContain('event: input-submitted');
       expect(eventText).toContain('event: test-result');
       expect(eventText).toContain('"status":"passed"');
+      expect(eventText).not.toContain('123456');
     } finally {
       await ui.close();
     }
