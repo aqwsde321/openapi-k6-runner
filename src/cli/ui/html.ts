@@ -131,11 +131,38 @@ export const UI_HTML = String.raw`<!doctype html>
       width: 30px;
     }
     main {
+      --log-panel-width: 0.9fr;
+      --scenario-panel-width: 300px;
       display: grid;
-      grid-template-columns: minmax(250px, 300px) minmax(430px, 1fr) minmax(390px, 0.9fr);
-      gap: 12px;
+      grid-template-columns: minmax(250px, var(--scenario-panel-width)) 12px minmax(430px, 1fr) 12px minmax(390px, var(--log-panel-width));
+      gap: 0;
       padding: 12px;
       height: calc(100vh - 60px);
+    }
+    .panel-resizer {
+      cursor: col-resize;
+      min-width: 0;
+      position: relative;
+      touch-action: none;
+    }
+    .panel-resizer::after {
+      background: transparent;
+      border-radius: 2px;
+      content: '';
+      inset: 8px 5px;
+      position: absolute;
+    }
+    .panel-resizer:hover::after,
+    .panel-resizer:focus-visible::after,
+    .panel-resizer.active::after {
+      background: #98b9ed;
+    }
+    .panel-resizer:focus-visible {
+      outline: 0;
+    }
+    body.panel-resizing {
+      cursor: col-resize;
+      user-select: none;
     }
     body.ui-disconnected header,
     body.ui-disconnected main {
@@ -1313,9 +1340,11 @@ export const UI_HTML = String.raw`<!doctype html>
     }
     @media (max-width: 1100px) {
       main {
+        gap: 12px;
         height: auto;
         grid-template-columns: 1fr;
       }
+      .panel-resizer { display: none; }
       header { align-items: flex-start; flex-direction: column; gap: 10px; }
       .header-meta { justify-content: flex-start; }
       .section-heading {
@@ -1362,7 +1391,7 @@ export const UI_HTML = String.raw`<!doctype html>
     </div>
   </header>
   <main>
-    <section class="panel">
+    <section id="scenarioPanel" class="panel">
       <div class="panel-head">
         <h2 id="listTitle" class="panel-title">시나리오</h2>
         <span id="scenarioCount" class="pill">0</span>
@@ -1382,7 +1411,8 @@ export const UI_HTML = String.raw`<!doctype html>
         <div id="scenarioList" class="scenario-list"></div>
       </div>
     </section>
-    <section class="panel">
+    <div class="panel-resizer" data-panel-resizer="scenario" role="separator" aria-label="시나리오와 결과 너비 조절" aria-orientation="vertical" tabindex="0"></div>
+    <section id="detailPanel" class="panel">
       <div class="panel-head">
         <h2 class="panel-title" id="detailTitle">시나리오</h2>
         <span id="detailStatus" class="pill">미실행</span>
@@ -1403,7 +1433,8 @@ export const UI_HTML = String.raw`<!doctype html>
         </div>
       </div>
     </section>
-    <section class="panel">
+    <div class="panel-resizer" data-panel-resizer="log" role="separator" aria-label="결과와 로그 너비 조절" aria-orientation="vertical" tabindex="0"></div>
+    <section id="logPanel" class="panel">
       <div class="panel-head">
         <h2 class="panel-title">실행 로그</h2>
         <span id="runStatus" class="pill">대기</span>
@@ -1455,6 +1486,10 @@ export const UI_HTML = String.raw`<!doctype html>
     const COLLAPSED_GROUPS_STORAGE_KEY = 'openapi-k6.ui.collapsedScenarioGroups';
     const COLLAPSED_SUITE_GROUPS_STORAGE_KEY = 'openapi-k6.ui.collapsedSuiteGroups';
     const UI_CONNECTION_CHECK_INTERVAL_MS = 5000;
+    const PANEL_RESIZE_MEDIA = window.matchMedia('(min-width: 1101px)');
+    const PANEL_RESIZER_WIDTH = 12;
+    const PANEL_RESIZE_STEP = 16;
+    const PANEL_MIN_WIDTHS = { scenario: 250, detail: 430, log: 390 };
 
     const state = {
       mode: 'scenario',
@@ -1477,11 +1512,17 @@ export const UI_HTML = String.raw`<!doctype html>
       runsBySuite: new Map(),
       activeOutputRunId: null,
       uiDisconnected: false,
+      panelWidths: null,
       executionConfig: { configPath: '', defaultModule: '', moduleOption: '', modules: [] },
       serverSummary: { checked: false, moduleCount: 0, connectedServers: 0, failedServers: 0, missingSnapshots: 0, issueModules: 0 }
     };
 
     const els = {
+      workspace: document.querySelector('main'),
+      scenarioPanel: document.getElementById('scenarioPanel'),
+      detailPanel: document.getElementById('detailPanel'),
+      logPanel: document.getElementById('logPanel'),
+      panelResizers: Array.from(document.querySelectorAll('[data-panel-resizer]')),
       listTitle: document.getElementById('listTitle'),
       scenarioCount: document.getElementById('scenarioCount'),
       scenarioTabBtn: document.getElementById('scenarioTabBtn'),
@@ -1575,6 +1616,143 @@ export const UI_HTML = String.raw`<!doctype html>
 
     function formatUiPath(value) {
       return String(value || '').replace(/^openapi-k6\//, '').replace(/^scenarios\//, '');
+    }
+
+    function clampPanelWidth(value, min, max) {
+      return Math.min(Math.max(value, min), Math.max(min, max));
+    }
+
+    function readPanelWidths() {
+      return {
+        scenario: els.scenarioPanel.getBoundingClientRect().width,
+        log: els.logPanel.getBoundingClientRect().width
+      };
+    }
+
+    function getPanelAvailableWidth() {
+      const styles = getComputedStyle(els.workspace);
+      const padding = (parseFloat(styles.paddingLeft) || 0) + (parseFloat(styles.paddingRight) || 0);
+      return els.workspace.clientWidth - padding - (PANEL_RESIZER_WIDTH * els.panelResizers.length);
+    }
+
+    function updatePanelResizerAria(widths) {
+      const available = getPanelAvailableWidth();
+      for (const resizer of els.panelResizers) {
+        const side = resizer.getAttribute('data-panel-resizer');
+        const isScenario = side === 'scenario';
+        const min = isScenario ? PANEL_MIN_WIDTHS.scenario : PANEL_MIN_WIDTHS.scenario + PANEL_MIN_WIDTHS.detail;
+        const max = isScenario
+          ? available - PANEL_MIN_WIDTHS.detail - PANEL_MIN_WIDTHS.log
+          : available - PANEL_MIN_WIDTHS.log;
+        const value = isScenario ? widths.scenario : available - widths.log;
+        resizer.setAttribute('aria-valuemin', String(Math.round(min)));
+        resizer.setAttribute('aria-valuemax', String(Math.round(Math.max(min, max))));
+        resizer.setAttribute('aria-valuenow', String(Math.round(value)));
+        resizer.setAttribute('aria-valuetext', (isScenario ? '시나리오 ' + widths.scenario : '로그 ' + widths.log) + 'px');
+      }
+    }
+
+    function setPanelWidths(widths) {
+      const next = {
+        scenario: Math.round(widths.scenario),
+        log: Math.round(widths.log)
+      };
+      state.panelWidths = next;
+      els.workspace.style.setProperty('--scenario-panel-width', next.scenario + 'px');
+      els.workspace.style.setProperty('--log-panel-width', next.log + 'px');
+      updatePanelResizerAria(next);
+    }
+
+    function fitPanelWidths(widths) {
+      const available = getPanelAvailableWidth();
+      const maxOuter = Math.max(
+        PANEL_MIN_WIDTHS.scenario + PANEL_MIN_WIDTHS.log,
+        available - PANEL_MIN_WIDTHS.detail
+      );
+      const scenario = clampPanelWidth(
+        widths.scenario,
+        PANEL_MIN_WIDTHS.scenario,
+        maxOuter - PANEL_MIN_WIDTHS.log
+      );
+      const log = clampPanelWidth(
+        widths.log,
+        PANEL_MIN_WIDTHS.log,
+        maxOuter - scenario
+      );
+      return { scenario, log };
+    }
+
+    function resizePanel(side, widths, delta) {
+      const available = getPanelAvailableWidth();
+      if (side === 'scenario') {
+        setPanelWidths({
+          scenario: clampPanelWidth(
+            widths.scenario + delta,
+            PANEL_MIN_WIDTHS.scenario,
+            available - widths.log - PANEL_MIN_WIDTHS.detail
+          ),
+          log: widths.log
+        });
+      } else {
+        setPanelWidths({
+          scenario: widths.scenario,
+          log: clampPanelWidth(
+            widths.log - delta,
+            PANEL_MIN_WIDTHS.log,
+            available - widths.scenario - PANEL_MIN_WIDTHS.detail
+          )
+        });
+      }
+    }
+
+    function startPanelResize(event) {
+      if (!PANEL_RESIZE_MEDIA.matches || event.button !== 0) return;
+      event.preventDefault();
+      const resizer = event.currentTarget;
+      const side = resizer.getAttribute('data-panel-resizer');
+      const startX = event.clientX;
+      const startWidths = readPanelWidths();
+      const controller = new AbortController();
+      setPanelWidths(startWidths);
+      resizer.classList.add('active');
+      document.body.classList.add('panel-resizing');
+
+      const stop = () => {
+        controller.abort();
+        resizer.classList.remove('active');
+        document.body.classList.remove('panel-resizing');
+      };
+      window.addEventListener('pointermove', (moveEvent) => {
+        resizePanel(side, startWidths, moveEvent.clientX - startX);
+      }, { signal: controller.signal });
+      window.addEventListener('pointerup', stop, { signal: controller.signal });
+      window.addEventListener('pointercancel', stop, { signal: controller.signal });
+      window.addEventListener('blur', stop, { signal: controller.signal });
+    }
+
+    function resizePanelWithKeyboard(event) {
+      if (!PANEL_RESIZE_MEDIA.matches || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+      event.preventDefault();
+      const direction = event.key === 'ArrowRight' ? 1 : -1;
+      resizePanel(event.currentTarget.getAttribute('data-panel-resizer'), readPanelWidths(), direction * PANEL_RESIZE_STEP);
+    }
+
+    function handlePanelViewportResize() {
+      if (!PANEL_RESIZE_MEDIA.matches) return;
+      if (state.panelWidths) {
+        setPanelWidths(fitPanelWidths(state.panelWidths));
+      } else {
+        updatePanelResizerAria(readPanelWidths());
+      }
+    }
+
+    function initPanelResizers() {
+      for (const resizer of els.panelResizers) {
+        resizer.addEventListener('pointerdown', startPanelResize);
+        resizer.addEventListener('keydown', resizePanelWithKeyboard);
+      }
+      window.addEventListener('resize', handlePanelViewportResize);
+      handlePanelViewportResize();
     }
 
     function formatStatusLabel(value) {
@@ -3596,6 +3774,7 @@ export const UI_HTML = String.raw`<!doctype html>
     els.testBtn.addEventListener('click', () => runCommand('test'));
     els.copyLogBtn.addEventListener('click', copyExecutionLog);
     els.clearBtn.addEventListener('click', clearRunOutput);
+    initPanelResizers();
     setInterval(checkUiConnection, UI_CONNECTION_CHECK_INTERVAL_MS);
 
     loadScenarios().then(checkServers).catch((error) => {

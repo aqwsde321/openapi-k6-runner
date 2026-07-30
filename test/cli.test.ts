@@ -2073,6 +2073,12 @@ describe('openapi-k6 CLI', () => {
       expect(html).toContain('대상 모듈 미결정');
       expect(html).toContain('const showTargetModule = new Set');
       expect(html).toContain('formatStepResultMeta(step, showTargetModule)');
+      expect(html).toContain('data-panel-resizer="scenario"');
+      expect(html).toContain('data-panel-resizer="log"');
+      expect(html).toContain('initPanelResizers');
+      expect(html).toContain("window.matchMedia('(min-width: 1101px)')");
+      expect(html).toContain("resizer.addEventListener('pointerdown'");
+      expect(html).toContain("resizer.addEventListener('keydown'");
       expect(html).toContain("await selectScenario(state.selected)");
       expect(html).toContain('요청 (예정)');
       expect(html).toContain('응답 (예상 · OpenAPI)');
