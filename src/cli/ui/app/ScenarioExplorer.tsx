@@ -3,7 +3,8 @@ import { Banner } from '@astryxdesign/core/Banner';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Icon } from '@astryxdesign/core/Icon';
 import { IconButton } from '@astryxdesign/core/IconButton';
-import { Stack, StackItem } from '@astryxdesign/core/Stack';
+import { HStack, Stack, StackItem } from '@astryxdesign/core/Stack';
+import { StatusDot, type StatusDotVariant } from '@astryxdesign/core/StatusDot';
 import { Tab, TabList } from '@astryxdesign/core/TabList';
 import { Text } from '@astryxdesign/core/Text';
 import { TextInput } from '@astryxdesign/core/TextInput';
@@ -14,6 +15,11 @@ import { useMemo, useState } from 'react';
 import type { UiScenarioList } from '../scenarios.js';
 import type { UiSuiteList } from '../suites.js';
 import { groupExplorerItems, type ExplorerGroup } from './explorer-groups';
+import {
+  selectLatestUiRun,
+  type ScenarioRunStatus,
+  type UiRuns,
+} from './scenario-runs';
 
 export type ExplorerMode = 'scenario' | 'suite';
 
@@ -28,6 +34,7 @@ export interface ScenarioExplorerProps {
   suites?: UiSuiteList;
   selectedId?: string;
   onSelect: (id: string) => void;
+  runs: UiRuns;
   loading?: boolean;
   error?: string;
 }
@@ -39,6 +46,7 @@ export function ScenarioExplorer({
   suites,
   selectedId,
   onSelect,
+  runs,
   loading = false,
   error,
 }: ScenarioExplorerProps) {
@@ -61,8 +69,9 @@ export function ScenarioExplorer({
       selectedId,
       onSelect,
       normalizedQuery !== '' || groupsExpanded,
+      runs,
     ),
-    [filteredItems, groupsExpanded, mode, normalizedQuery, onSelect, selectedId],
+    [filteredItems, groupsExpanded, mode, normalizedQuery, onSelect, runs, selectedId],
   );
 
   const setAllGroups = (expanded: boolean) => {
@@ -192,6 +201,7 @@ function buildTreeItems(
   selectedId: string | undefined,
   onSelect: (id: string) => void,
   isExpanded: boolean,
+  runs: UiRuns,
 ): TreeListItemData[] {
   return groups.map((group) => ({
     id: `group:${mode}:${group.key}`,
@@ -199,28 +209,52 @@ function buildTreeItems(
     endContent: <Badge label={String(group.count)} />,
     isExpanded,
     children: [
-      ...buildTreeItems(group.children, mode, selectedId, onSelect, isExpanded),
-      ...group.items.map((item) => ({
-        id: `item:${mode}:${item.id}`,
-        label: (
-          <Text maxLines={1} type="label">
-            {formatItemLabel(item)}
-          </Text>
-        ),
-        ...(item.error === undefined
-          ? {}
-          : {
-              description: item.error,
-              startContent: <Icon icon="error" color="error" label="파싱 오류" size="sm" />,
-            }),
-        endContent: item.error === undefined
-          ? <Badge label={String(getItemCount(item, mode) ?? 0)} />
-          : <Badge label="오류" variant="error" />,
-        isSelected: item.id === selectedId,
-        onClick: () => onSelect(item.id),
-      })),
+      ...buildTreeItems(group.children, mode, selectedId, onSelect, isExpanded, runs),
+      ...group.items.map((item) => {
+        const run = selectLatestUiRun(runs, { kind: mode, id: item.id });
+        const status = formatItemStatus(run?.status);
+        return {
+          id: `item:${mode}:${item.id}`,
+          label: (
+            <Text hasTruncateTooltip maxLines={1} type="label">
+              {formatItemLabel(item)}
+            </Text>
+          ),
+          ...(item.error === undefined
+            ? {}
+            : {
+                description: item.error,
+                startContent: <Icon icon="error" color="error" label="파싱 오류" size="sm" />,
+              }),
+          endContent: item.error === undefined ? (
+            <HStack gap={1} vAlign="center">
+              <Badge label={String(getItemCount(item, mode) ?? 0)} />
+              <StatusDot
+                isPulsing={run?.status === 'starting' || run?.status === 'running'}
+                label={status.label}
+                tooltip={status.label}
+                variant={status.variant}
+              />
+              <Text color="secondary" type="supporting">{status.label}</Text>
+            </HStack>
+          ) : <Badge label="오류" variant="error" />,
+          isSelected: item.id === selectedId,
+          onClick: () => onSelect(item.id),
+        };
+      }),
     ],
   }));
+}
+
+function formatItemStatus(status: ScenarioRunStatus | undefined): {
+  label: string;
+  variant: StatusDotVariant;
+} {
+  if (status === 'starting') return { label: '시작', variant: 'accent' };
+  if (status === 'running') return { label: '실행 중', variant: 'accent' };
+  if (status === 'passed') return { label: '성공', variant: 'success' };
+  if (status === 'failed') return { label: '실패', variant: 'error' };
+  return { label: '미실행', variant: 'neutral' };
 }
 
 function formatItemLabel(item: ExplorerItem): string {

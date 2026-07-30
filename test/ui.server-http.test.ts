@@ -86,5 +86,17 @@ describe('React UI asset server', () => {
 
     const post = await fetch(`${ui?.url}/next/`, { method: 'POST' });
     expect(post.status).toBe(404);
+
+    const missingRun = await fetch(`${ui?.url}/api/runs/missing/events`);
+    expect(missingRun.status).toBe(404);
+
+    const missingRunStream = await fetch(`${ui?.url}/api/runs/missing/events`, {
+      headers: { accept: 'text/event-stream' },
+    });
+    expect(missingRunStream.status).toBe(200);
+    expect(missingRunStream.headers.get('content-type')).toBe('text/event-stream; charset=utf-8');
+    expect(await missingRunStream.text()).toContain(
+      'data: {"status":"failed","exitCode":1,"error":"UI 서버가 재시작되어 진행 중이던 실행을 이어갈 수 없습니다."}',
+    );
   });
 });

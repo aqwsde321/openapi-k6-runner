@@ -4,7 +4,12 @@ import path from 'node:path';
 import { loadTestConfig, resolveConfigModule, type LoadTestConfig } from '../../config/load-test.config.js';
 import type { ScenarioExecutionReporter, ScenarioInputProvider } from '../../executor/scenario.executor.js';
 import { DEFAULT_WORKSPACE_DIR } from '../../scaffold/load-test.init.js';
-import { streamUiRunEvents, submitUiRunInput, type UiRunRecord } from './run-state.js';
+import {
+  streamMissingUiRun,
+  streamUiRunEvents,
+  submitUiRunInput,
+  type UiRunRecord,
+} from './run-state.js';
 import { startUiRun, startUiSuiteRun } from './run-command.js';
 import { checkUiServers } from './server-checks.js';
 import {
@@ -275,6 +280,13 @@ async function handleUiRequest(
     const run = state.runs.get(runId);
 
     if (run === undefined) {
+      const accept = Array.isArray(request.headers.accept)
+        ? request.headers.accept.join(',')
+        : request.headers.accept ?? '';
+      if (accept.includes('text/event-stream')) {
+        streamMissingUiRun(response);
+        return;
+      }
       writeUiJson(response, 404, { error: `run ${JSON.stringify(runId)} was not found` });
       return;
     }

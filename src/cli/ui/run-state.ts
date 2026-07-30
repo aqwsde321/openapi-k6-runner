@@ -378,11 +378,7 @@ export function streamUiRunEvents(
   response: ServerResponse,
   lastEventId?: string,
 ): void {
-  response.writeHead(200, {
-    'content-type': 'text/event-stream; charset=utf-8',
-    'cache-control': 'no-cache',
-    connection: 'keep-alive',
-  });
+  writeSseHeaders(response);
 
   const resumeAfter = parseLastEventId(lastEventId);
   const replay = resumeAfter === undefined
@@ -402,6 +398,20 @@ export function streamUiRunEvents(
   response.on('close', () => {
     run.clients.delete(response);
   });
+}
+
+export function streamMissingUiRun(response: ServerResponse): void {
+  writeSseHeaders(response);
+  writeSseEvent(response, {
+    id: 0,
+    name: 'done',
+    data: {
+      status: 'failed',
+      exitCode: 1,
+      error: 'UI 서버가 재시작되어 진행 중이던 실행을 이어갈 수 없습니다.',
+    },
+  });
+  response.end();
 }
 
 function teeScenarioReporters(
@@ -470,6 +480,14 @@ function writeSseEvent(response: ServerResponse, event: UiRunEvent): void {
   response.write(`id: ${event.id}\n`);
   response.write(`event: ${event.name}\n`);
   response.write(`data: ${JSON.stringify(event.data)}\n\n`);
+}
+
+function writeSseHeaders(response: ServerResponse): void {
+  response.writeHead(200, {
+    'content-type': 'text/event-stream; charset=utf-8',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+  });
 }
 
 const SENSITIVE_KEY_PARTS = [

@@ -3,7 +3,6 @@ import { Button } from '@astryxdesign/core/Button';
 import { CodeBlock } from '@astryxdesign/core/CodeBlock';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Icon } from '@astryxdesign/core/Icon';
-import { List, ListItem } from '@astryxdesign/core/List';
 import { ProgressBar } from '@astryxdesign/core/ProgressBar';
 import { HStack, StackItem, VStack } from '@astryxdesign/core/Stack';
 import { StatusDot, type StatusDotVariant } from '@astryxdesign/core/StatusDot';
@@ -38,6 +37,7 @@ import {
   type UiRunTargetKind,
 } from './scenario-runs';
 import { startUiScenarioRun, startUiSuiteRun, submitUiRunInput } from './api';
+import { reportIdFromPath } from './report-view';
 
 export interface UiRunController {
   runs: UiRuns;
@@ -84,7 +84,11 @@ export function useScenarioRunController(): UiRunController {
       dispatch({ type: 'input-submitted', ...activeTarget });
     });
     stream.addEventListener('done', (event) => {
-      const done = readEventData<{ status: Exclude<UiRunStatus, 'running'>; exitCode: number }>(event);
+      const done = readEventData<{
+        status: Exclude<UiRunStatus, 'running'>;
+        exitCode: number;
+        error?: string;
+      }>(event);
       dispatch({ type: 'done', ...done, at: new Date().toISOString(), ...activeTarget });
       stream.close();
       if (streams.current.get(key) === stream) streams.current.delete(key);
@@ -136,7 +140,9 @@ export function useScenarioRunController(): UiRunController {
 }
 
 export interface ScenarioRunPanelProps extends UiRunController {
+  isConnected?: boolean;
   isReady: boolean;
+  onOpenReport?(reportId: string): void;
   targetKind?: UiRunTargetKind;
   targetId?: string;
   targetName?: string;
@@ -145,7 +151,9 @@ export interface ScenarioRunPanelProps extends UiRunController {
 }
 
 export function ScenarioRunPanel({
+  isConnected = true,
   isReady,
+  onOpenReport,
   runs,
   scenarioId,
   scenarioName,
@@ -173,7 +181,7 @@ export function ScenarioRunPanel({
   useEffect(() => setActiveCommand('test'), [targetId, targetKind]);
 
   const run = async (command: ScenarioRunCommand) => {
-    if (target === undefined || !isReady || isBusy) return;
+    if (target === undefined || !isConnected || !isReady || isBusy) return;
     setActiveCommand(command);
     await start(target, command);
   };
@@ -187,7 +195,7 @@ export function ScenarioRunPanel({
             <Button
               clickAction={() => run('validate')}
               icon={<Icon icon="check" size="sm" />}
-              isDisabled={!isReady || target === undefined || isBusy}
+              isDisabled={!isConnected || !isReady || target === undefined || isBusy}
               label="검증"
               size="sm"
               variant="secondary"
@@ -195,7 +203,7 @@ export function ScenarioRunPanel({
             <Button
               clickAction={() => run('test')}
               icon={<Icon icon="chevronRight" size="sm" />}
-              isDisabled={!isReady || target === undefined || isBusy}
+              isDisabled={!isConnected || !isReady || target === undefined || isBusy}
               label="실행"
               size="sm"
               variant="primary"
@@ -220,6 +228,14 @@ export function ScenarioRunPanel({
 
       <StackItem isScrollable size="fill">
         <VStack gap={4} padding={4}>
+          {!isConnected && (
+            <Banner
+              container="section"
+              description="기존 화면은 유지합니다. 서버가 다시 응답하면 자동으로 갱신합니다."
+              status="error"
+              title="UI 서버 재연결 중"
+            />
+          )}
           {target === undefined ? (
             <EmptyState
               description="탐색에서 실행할 시나리오 또는 스위트를 선택하세요."
@@ -233,7 +249,12 @@ export function ScenarioRunPanel({
               title="실행 대기"
             />
           ) : (
-            <RunResult run={activeRun} submit={submit} />
+            <RunResult
+              isConnected={isConnected}
+              onOpenReport={onOpenReport}
+              run={activeRun}
+              submit={submit}
+            />
           )}
         </VStack>
       </StackItem>
@@ -241,9 +262,19 @@ export function ScenarioRunPanel({
   );
 }
 
-function RunResult({ run, submit }: { run: ScenarioRun; submit(run: ScenarioRun, value: string): Promise<void> }) {
+function RunResult({
+  isConnected,
+  onOpenReport,
+  run,
+  submit,
+}: {
+  isConnected: boolean;
+  onOpenReport?: (reportId: string) => void;
+  run: ScenarioRun;
+  submit(run: ScenarioRun, value: string): Promise<void>;
+}) {
   const status = formatRunStatus(run);
-  const log = stripAnsi(run.chunks.map((chunk) => chunk.chunk).join(''));
+  const log = stripAnsi(run.log);
   const passedSteps = run.testResult?.steps.filter((step) => step.status === 'passed').length
     ?? run.suiteResult?.scenarios.reduce((sum, scenario) => sum + scenario.passedSteps, 0);
   const totalSteps = run.testResult?.steps.length
@@ -290,12 +321,19 @@ function RunResult({ run, submit }: { run: ScenarioRun; submit(run: ScenarioRun,
           container="section"
           description={run.error}
           status={run.connection === 'reconnecting' ? 'warning' : 'error'}
-          title={run.connection === 'reconnecting' ? '실행 로그 재연결 중' : '명령 시작 실패'}
+          title={run.connection === 'reconnecting'
+            ? '실행 로그 재연결 중'
+            : run.runId === undefined ? '명령 시작 실패' : '실행 실패'}
         />
       )}
 
       {run.pendingInput !== undefined && (
-        <RunInputPrompt key={`${run.runId}:${run.pendingInput.id}`} run={run} submit={submit} />
+        <RunInputPrompt
+          isConnected={isConnected}
+          key={`${run.runId}:${run.pendingInput.id}`}
+          run={run}
+          submit={submit}
+        />
       )}
 
       {run.testResult?.status === 'failed' && (
@@ -307,7 +345,9 @@ function RunResult({ run, submit }: { run: ScenarioRun; submit(run: ScenarioRun,
         />
       )}
 
-      {run.suiteResult !== undefined && <SuiteRunSummary result={run.suiteResult} />}
+      {run.suiteResult !== undefined && (
+        <SuiteRunSummary onOpenReport={onOpenReport} result={run.suiteResult} />
+      )}
 
       {log === '' ? (
         <Text color="secondary" type="supporting">로그 기다리는 중…</Text>
@@ -326,64 +366,47 @@ function RunResult({ run, submit }: { run: ScenarioRun; submit(run: ScenarioRun,
   );
 }
 
-function SuiteRunSummary({ result }: { result: UiSuiteRunResult }) {
+function SuiteRunSummary({
+  onOpenReport,
+  result,
+}: {
+  onOpenReport?: (reportId: string) => void;
+  result: UiSuiteRunResult;
+}) {
   const passedScenarios = result.scenarios.filter((scenario) => scenario.status === 'passed').length;
   const passedSteps = result.scenarios.reduce((sum, scenario) => sum + scenario.passedSteps, 0);
   const totalSteps = result.scenarios.reduce((sum, scenario) => sum + scenario.totalSteps, 0);
+  const reportId = reportIdFromPath(result.reportPath);
 
   return (
-    <VStack gap={3}>
-      <HStack gap={3} wrap="wrap">
-        <Text color="secondary" type="supporting">
-          시나리오 {passedScenarios}/{result.scenarios.length}
+    <HStack gap={3} wrap="wrap">
+      <Text color="secondary" type="supporting">
+        시나리오 {passedScenarios}/{result.scenarios.length}
+      </Text>
+      <Text color="secondary" type="supporting">단계 {passedSteps}/{totalSteps}</Text>
+      {result.reportPath !== undefined && (
+        <Text color="secondary" hasTruncateTooltip maxLines={1} type="code">
+          {result.reportPath}
         </Text>
-        <Text color="secondary" type="supporting">단계 {passedSteps}/{totalSteps}</Text>
-        {result.reportPath !== undefined && (
-          <Text color="secondary" hasTruncateTooltip maxLines={1} type="code">
-            {result.reportPath}
-          </Text>
-        )}
-      </HStack>
-
-      <List
-        density="compact"
-        hasDividers
-        header={<Text type="label" weight="semibold">시나리오 결과</Text>}
-      >
-        {result.scenarios.map((scenario) => (
-          <ListItem
-            key={scenario.scenarioKey}
-            description={(
-              <VStack gap={1}>
-                <Text color="secondary" type="supporting">
-                  {formatSuiteScenarioMeta(scenario)}
-                </Text>
-                {formatSuiteFailure(scenario) !== undefined && (
-                  <Text color="secondary" type="supporting">{formatSuiteFailure(scenario)}</Text>
-                )}
-              </VStack>
-            )}
-            endContent={(
-              <HStack gap={1} vAlign="center">
-                <StatusDot
-                  label={scenario.status === 'passed' ? '성공' : '실패'}
-                  variant={scenario.status === 'passed' ? 'success' : 'error'}
-                />
-                <Text type="supporting">{scenario.status === 'passed' ? '성공' : '실패'}</Text>
-              </HStack>
-            )}
-            label={scenario.scenarioName ?? scenario.scenarioKey}
-          />
-        ))}
-      </List>
-    </VStack>
+      )}
+      {reportId !== undefined && onOpenReport !== undefined && (
+        <Button
+          clickAction={() => onOpenReport(reportId)}
+          label="리포트"
+          size="sm"
+          variant="secondary"
+        />
+      )}
+    </HStack>
   );
 }
 
 function RunInputPrompt({
+  isConnected,
   run,
   submit,
 }: {
+  isConnected: boolean;
   run: ScenarioRun;
   submit(run: ScenarioRun, value: string): Promise<void>;
 }) {
@@ -396,7 +419,7 @@ function RunInputPrompt({
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
-    if (input.required && value === '') return;
+    if (!isConnected || (input.required && value === '')) return;
     setError(undefined);
     setIsSubmitting(true);
     try {
@@ -421,6 +444,7 @@ function RunInputPrompt({
         <StackItem size="fill">
           <TextInput
             hasAutoFocus
+            isDisabled={!isConnected}
             isRequired={input.required}
             label={input.label ?? input.name}
             onChange={setValue}
@@ -432,7 +456,7 @@ function RunInputPrompt({
           />
         </StackItem>
         <Button
-          isDisabled={input.required && value === ''}
+          isDisabled={!isConnected || (input.required && value === '')}
           isLoading={isSubmitting}
           label="계속"
           size="sm"
@@ -464,25 +488,6 @@ function formatFailedStep(result: UiRunTestResult): string {
   return [failed.id, failed.error, failed.responseStatus === undefined ? undefined : `HTTP ${failed.responseStatus}`]
     .filter((value): value is string => value !== undefined)
     .join(' · ');
-}
-
-function formatSuiteScenarioMeta(scenario: UiSuiteRunResult['scenarios'][number]): string {
-  return [
-    [scenario.method, scenario.path].filter(Boolean).join(' '),
-    `단계 ${scenario.passedSteps}/${scenario.totalSteps}`,
-    formatDuration(scenario.durationMs),
-  ].filter(Boolean).join(' · ');
-}
-
-function formatSuiteFailure(scenario: UiSuiteRunResult['scenarios'][number]): string | undefined {
-  if (scenario.failedStep === undefined) return scenario.error;
-  return [
-    `실패 단계 ${scenario.failedStep.id}`,
-    [scenario.failedStep.method, scenario.failedStep.path].filter(Boolean).join(' '),
-    scenario.failedStep.responseStatus === undefined ? undefined : `HTTP ${scenario.failedStep.responseStatus}`,
-    scenario.failedStep.condition,
-    scenario.failedStep.error,
-  ].filter((value): value is string => value !== undefined && value !== '').join(' · ');
 }
 
 function formatDuration(value: number): string {

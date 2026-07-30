@@ -1,11 +1,20 @@
 import type { UiScenarioDetail, UiScenarioList } from '../scenarios.js';
+import type { UiReportList } from '../reports.js';
 import type { UiServerCheckResult } from '../server-checks.js';
 import type { UiSuiteDetail, UiSuiteList } from '../suites.js';
+import { normalizeUiReport, type UiReportDetail } from './report-view.js';
 
 export type UiScenarioRunCommand = 'validate' | 'test';
 
 async function requestJson<T>(input: string, init: RequestInit): Promise<T> {
-  const response = await fetch(input, init);
+  let response: Response;
+
+  try {
+    response = await fetch(input, init);
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    throw new UiConnectionError(error instanceof Error ? error.message : String(error));
+  }
 
   if (!response.ok) {
     const payload = await response.json().catch(() => undefined) as { error?: unknown } | undefined;
@@ -17,6 +26,10 @@ async function requestJson<T>(input: string, init: RequestInit): Promise<T> {
   }
 
   return response.json() as Promise<T>;
+}
+
+export class UiConnectionError extends Error {
+  override name = 'UiConnectionError';
 }
 
 export function loadUiScenarios(signal?: AbortSignal): Promise<UiScenarioList> {
@@ -33,6 +46,18 @@ export function loadUiSuites(signal?: AbortSignal): Promise<UiSuiteList> {
 
 export function loadUiSuite(id: string, signal?: AbortSignal): Promise<UiSuiteDetail> {
   return requestJson(`/api/suite?suite=${encodeURIComponent(id)}`, { signal });
+}
+
+export function loadUiReports(signal?: AbortSignal): Promise<UiReportList> {
+  return requestJson('/api/reports', { signal });
+}
+
+export async function loadUiReport(id: string, signal?: AbortSignal): Promise<UiReportDetail> {
+  return normalizeUiReport(await requestJson(`/api/report?report=${encodeURIComponent(id)}`, { signal }));
+}
+
+export async function probeUiServer(signal?: AbortSignal): Promise<void> {
+  await requestJson('/api/scenarios', { signal });
 }
 
 export function checkUiServers(signal?: AbortSignal): Promise<UiServerCheckResult> {
@@ -71,4 +96,8 @@ export function submitUiRunInput(
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ name, value }),
   });
+}
+
+function isAbortError(error: unknown): boolean {
+  return error !== null && typeof error === 'object' && 'name' in error && error.name === 'AbortError';
 }

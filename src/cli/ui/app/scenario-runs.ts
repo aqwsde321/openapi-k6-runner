@@ -22,7 +22,7 @@ export interface UiRun {
   runId?: string;
   status: ScenarioRunStatus;
   connection: ScenarioRunConnection;
-  chunks: UiRunChunk[];
+  log: string;
   testResult?: UiRunTestResult;
   suiteResult?: UiSuiteRunResult;
   pendingInput?: UiRunInputRequest;
@@ -87,6 +87,30 @@ export function selectScenarioRun(
   return selectUiRun(state, { kind: 'scenario', id: scenario }, command);
 }
 
+export function selectLatestUiRun(state: UiRuns, target: UiRunTarget): UiRun | undefined {
+  const validate = selectUiRun(state, target, 'validate');
+  const test = selectUiRun(state, target, 'test');
+  if (validate === undefined) return test;
+  if (test === undefined) return validate;
+  return validate.requestedAt > test.requestedAt ? validate : test;
+}
+
+export function selectLatestSuiteReportRun(state: UiRuns): UiRun | undefined {
+  let latest: UiRun | undefined;
+  for (const slots of state.values()) {
+    for (const run of [slots.validate, slots.test]) {
+      if (
+        run?.target.kind === 'suite' &&
+        run.suiteResult?.reportPath !== undefined &&
+        (latest === undefined || run.requestedAt > latest.requestedAt)
+      ) {
+        latest = run;
+      }
+    }
+  }
+  return latest;
+}
+
 export function reduceUiRuns(state: UiRuns, action: UiRunsAction): UiRuns {
   switch (action.type) {
     case 'requested':
@@ -95,7 +119,7 @@ export function reduceUiRuns(state: UiRuns, action: UiRunsAction): UiRuns {
         command: action.command,
         status: 'starting',
         connection: 'connecting',
-        chunks: [],
+        log: '',
         requestedAt: action.at,
       });
     case 'started': {
@@ -106,7 +130,7 @@ export function reduceUiRuns(state: UiRuns, action: UiRunsAction): UiRuns {
         runId: action.runId,
         status: 'running',
         connection: 'connecting',
-        chunks: [],
+        log: '',
         requestedAt: current?.requestedAt ?? action.at,
         startedAt: action.at,
       });
@@ -118,7 +142,7 @@ export function reduceUiRuns(state: UiRuns, action: UiRunsAction): UiRuns {
         command: action.command,
         status: 'failed',
         connection: 'closed',
-        chunks: [],
+        log: '',
         error: action.error,
         requestedAt: current?.requestedAt ?? action.at,
         finishedAt: action.at,
@@ -139,7 +163,7 @@ export function reduceUiRuns(state: UiRuns, action: UiRunsAction): UiRuns {
     case 'chunk':
       return updateActiveRun(state, action, (run) => ({
         ...run,
-        chunks: [...run.chunks, action.chunk],
+        log: appendUiRunLog(run.log, action.chunk.chunk),
       }));
     case 'test-result':
       return updateActiveRun(state, action, (run) => ({ ...run, testResult: action.result }));
@@ -189,4 +213,14 @@ function setUiRun(
 
 function formatTargetKey(target: UiRunTarget): string {
   return `${target.kind}\0${target.id}`;
+}
+
+const UI_RUN_LOG_LIMIT = 100_000;
+const UI_RUN_LOG_TRUNCATED = '[이전 실행 로그 생략]\n';
+
+function appendUiRunLog(current: string, chunk: string): string {
+  const next = current + chunk;
+  return next.length <= UI_RUN_LOG_LIMIT
+    ? next
+    : UI_RUN_LOG_TRUNCATED + next.slice(-(UI_RUN_LOG_LIMIT - UI_RUN_LOG_TRUNCATED.length));
 }

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { UiRunTestResult, UiSuiteRunResult } from '../src/cli/ui/run-state.js';
 import {
   reduceUiRuns,
+  selectLatestSuiteReportRun,
+  selectLatestUiRun,
   selectUiRun,
   type UiRuns,
   type UiRunsAction,
@@ -67,7 +69,7 @@ describe('React UI scenario runs', () => {
     expect(selectUiRun(state, { kind: 'scenario', id: 'smoke' }, 'test')).toMatchObject({
       runId: 'current',
       status: 'running',
-      chunks: [],
+      log: '',
     });
   });
 
@@ -84,10 +86,7 @@ describe('React UI scenario runs', () => {
 
     expect(selectUiRun(state, { kind: 'scenario', id: 'smoke' }, 'test')).toMatchObject({
       connection: 'connected',
-      chunks: [
-        expect.objectContaining({ chunk: 'before\n' }),
-        expect.objectContaining({ chunk: 'after\n' }),
-      ],
+      log: 'before\nafter\n',
       error: undefined,
     });
   });
@@ -181,6 +180,42 @@ describe('React UI scenario runs', () => {
     expect(selectUiRun(state, { kind: 'scenario', id: 'smoke' }, 'test')).toBeUndefined();
   });
 
+  it('탐색 행에는 validate와 test 중 마지막 실행 상태를 선택한다', () => {
+    const state = reduce([
+      { type: 'requested', kind: 'scenario', id: 'smoke', command: 'test', at: '2026-07-30T00:00:00.000Z' },
+      { type: 'requested', kind: 'scenario', id: 'smoke', command: 'validate', at: '2026-07-30T00:00:01.000Z' },
+    ]);
+
+    expect(selectLatestUiRun(state, { kind: 'scenario', id: 'smoke' })?.command).toBe('validate');
+  });
+
+  it('선택과 무관하게 마지막 스위트 리포트 실행을 찾는다', () => {
+    const state = reduce([
+      { type: 'requested', kind: 'suite', id: 'first', command: 'test', at: '2026-07-30T00:00:00.000Z' },
+      { type: 'started', kind: 'suite', id: 'first', command: 'test', runId: 'first-run', at: '2026-07-30T00:00:01.000Z' },
+      {
+        type: 'suite-result',
+        kind: 'suite',
+        id: 'first',
+        command: 'test',
+        runId: 'first-run',
+        result: suiteResult('first.json'),
+      },
+      { type: 'requested', kind: 'suite', id: 'second', command: 'test', at: '2026-07-30T00:00:02.000Z' },
+      { type: 'started', kind: 'suite', id: 'second', command: 'test', runId: 'second-run', at: '2026-07-30T00:00:03.000Z' },
+      {
+        type: 'suite-result',
+        kind: 'suite',
+        id: 'second',
+        command: 'test',
+        runId: 'second-run',
+        result: suiteResult('second.json'),
+      },
+    ]);
+
+    expect(selectLatestSuiteReportRun(state)?.suiteResult?.reportPath).toBe('second.json');
+  });
+
   it('suite 재연결 중 input 상태를 유지하고 제출 이벤트로 지운다', () => {
     const state = reduce([
       { type: 'requested', kind: 'suite', id: 'manual', command: 'test', at: '2026-07-30T00:00:00.000Z' },
@@ -219,6 +254,51 @@ describe('React UI scenario runs', () => {
     expect(selectUiRun(submitted, { kind: 'suite', id: 'manual' }, 'test')?.pendingInput).toBeUndefined();
   });
 
+  it('재시작으로 유실된 실행을 종료해 재실행 가능 상태로 만든다', () => {
+    const state = reduce([
+      { type: 'requested', kind: 'scenario', id: 'hold', command: 'test', at: '2026-07-30T00:00:00.000Z' },
+      { type: 'started', kind: 'scenario', id: 'hold', command: 'test', runId: 'lost', at: '2026-07-30T00:00:01.000Z' },
+      { type: 'reconnecting', kind: 'scenario', id: 'hold', command: 'test', runId: 'lost' },
+      {
+        type: 'done',
+        kind: 'scenario',
+        id: 'hold',
+        command: 'test',
+        runId: 'lost',
+        status: 'failed',
+        exitCode: 1,
+        error: 'run was lost',
+        at: '2026-07-30T00:00:02.000Z',
+      },
+    ]);
+
+    expect(selectUiRun(state, { kind: 'scenario', id: 'hold' }, 'test')).toMatchObject({
+      status: 'failed',
+      connection: 'closed',
+      error: 'run was lost',
+      exitCode: 1,
+    });
+  });
+
+  it('큰 실행 로그는 최신 10만 자만 유지한다', () => {
+    const state = reduce([
+      { type: 'requested', kind: 'scenario', id: 'large', command: 'test', at: '2026-07-30T00:00:00.000Z' },
+      { type: 'started', kind: 'scenario', id: 'large', command: 'test', runId: 'large-run', at: '2026-07-30T00:00:01.000Z' },
+      {
+        type: 'chunk',
+        kind: 'scenario',
+        id: 'large',
+        command: 'test',
+        runId: 'large-run',
+        chunk: { stream: 'stdout', chunk: 'x'.repeat(120_000), html: '' },
+      },
+    ]);
+
+    const log = selectUiRun(state, { kind: 'scenario', id: 'large' }, 'test')?.log;
+    expect(log).toHaveLength(100_000);
+    expect(log).toMatch(/^\[이전 실행 로그 생략\]\n+x+$/);
+  });
+
   it('명령 시작 실패를 실행 실패로 기록한다', () => {
     const state = reduce([
       { type: 'requested', kind: 'scenario', id: 'missing', command: 'validate', at: '2026-07-30T00:00:00.000Z' },
@@ -228,7 +308,7 @@ describe('React UI scenario runs', () => {
     expect(selectUiRun(state, { kind: 'scenario', id: 'missing' }, 'validate')).toMatchObject({
       status: 'failed',
       connection: 'closed',
-      chunks: [],
+      log: '',
       error: 'scenario not found',
       requestedAt: '2026-07-30T00:00:00.000Z',
       finishedAt: '2026-07-30T00:00:01.000Z',
@@ -238,4 +318,14 @@ describe('React UI scenario runs', () => {
 
 function reduce(actions: UiRunsAction[]): UiRuns {
   return actions.reduce(reduceUiRuns, new Map());
+}
+
+function suiteResult(reportPath: string): UiSuiteRunResult {
+  return {
+    suite: 'suite',
+    status: 'passed',
+    durationMs: 1,
+    reportPath,
+    scenarios: [],
+  };
 }
