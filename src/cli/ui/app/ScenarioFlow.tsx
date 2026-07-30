@@ -1,13 +1,16 @@
 import { Badge } from '@astryxdesign/core/Badge';
 import { Banner } from '@astryxdesign/core/Banner';
+import { Button } from '@astryxdesign/core/Button';
 import { Code } from '@astryxdesign/core/Code';
 import { CodeBlock } from '@astryxdesign/core/CodeBlock';
 import {
   Collapsible,
   CollapsibleGroup,
 } from '@astryxdesign/core/Collapsible';
+import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Item } from '@astryxdesign/core/Item';
+import { Layout, LayoutContent } from '@astryxdesign/core/Layout';
 import {
   MetadataList,
   MetadataListItem,
@@ -16,6 +19,7 @@ import { Section } from '@astryxdesign/core/Section';
 import { HStack, VStack } from '@astryxdesign/core/Stack';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { Heading, Text } from '@astryxdesign/core/Text';
+import { useState } from 'react';
 
 import type {
   UiScenarioDetail,
@@ -56,6 +60,8 @@ export function ScenarioFlow({
   testResult,
   testStatus,
 }: ScenarioFlowProps) {
+  const [isYamlOpen, setIsYamlOpen] = useState(false);
+
   if (item === undefined) {
     return (
       <VStack padding={6}>
@@ -75,9 +81,19 @@ export function ScenarioFlow({
       <Section dividers={['bottom']} padding={5}>
         <VStack gap={4}>
           <VStack gap={2}>
-            <HStack gap={2} vAlign="center">
-              <Text color="secondary" type="label">시나리오</Text>
-              <Badge label={`${detail?.stepCount ?? item.stepCount ?? 0}단계`} />
+            <HStack gap={2} hAlign="between" vAlign="center">
+              <HStack gap={2} vAlign="center">
+                <Text color="secondary" type="label">시나리오</Text>
+                <Badge label={`${detail?.stepCount ?? item.stepCount ?? 0}단계`} />
+              </HStack>
+              {detail?.definition !== undefined && (
+                <Button
+                  label="YAML 보기"
+                  onClick={() => setIsYamlOpen(true)}
+                  size="sm"
+                  variant="ghost"
+                />
+              )}
             </HStack>
             <Heading level={2} maxLines={2}>{detail?.name ?? item.name}</Heading>
             <Text as="p" color="secondary" type="supporting">
@@ -118,6 +134,39 @@ export function ScenarioFlow({
           testResult={testResult}
           testStatus={testStatus}
         />
+      )}
+      {detail?.definition !== undefined && (
+        <Dialog
+          isOpen={isYamlOpen}
+          maxHeight="90vh"
+          onOpenChange={setIsYamlOpen}
+          purpose="info"
+          width={960}
+        >
+          <Layout
+            header={(
+              <DialogHeader
+                onOpenChange={setIsYamlOpen}
+                subtitle={detail.definition.path}
+                title="시나리오 YAML"
+              />
+            )}
+            content={(
+              <LayoutContent padding={0}>
+                <CodeBlock
+                  code={detail.definition.code}
+                  container="section"
+                  hasLineNumbers
+                  isWrapped
+                  language={detail.definition.path.toLowerCase().endsWith('.json') ? 'json' : 'yaml'}
+                  maxHeight="70vh"
+                  size="sm"
+                  width="100%"
+                />
+              </LayoutContent>
+            )}
+          />
+        </Dialog>
       )}
     </VStack>
   );
@@ -321,18 +370,7 @@ function StepDetail({ result, step }: { result?: UiRunStepResult; step: Scenario
           title="단계 실행 실패"
         />
       )}
-      {step.definition !== undefined && (
-        <CodeBlock
-          code={step.definition.code}
-          container="section"
-          isWrapped
-          language={step.definition.path.toLowerCase().endsWith('.json') ? 'json' : 'yaml'}
-          size="sm"
-          title={step.definition.path}
-          width="100%"
-        />
-      )}
-      {request === undefined && response === undefined && !hasMetadata && step.definition === undefined && (
+      {request === undefined && response === undefined && !hasMetadata && (
         <Text color="secondary" type="supporting">표시할 상세 정보 없음</Text>
       )}
     </VStack>

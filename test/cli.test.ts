@@ -1871,6 +1871,7 @@ describe('openapi-k6 CLI', () => {
         id: string;
         name: string;
         includes: string[];
+        definition?: { path: string; code: string };
         steps: Array<{
           id: string;
           operationId?: string;
@@ -1992,6 +1993,10 @@ describe('openapi-k6 CLI', () => {
         id: 'order/use-login',
         name: 'use-login',
         includes: ['auth/login'],
+        definition: {
+          path: 'openapi-k6/scenarios/order/use-login.yaml',
+          code: expect.stringContaining('- use: auth/login'),
+        },
         steps: [
           expect.objectContaining({
             id: 'health',

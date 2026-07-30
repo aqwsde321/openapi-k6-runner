@@ -1,7 +1,10 @@
 import { parse as parseYaml } from 'yaml';
 import { describe, expect, it } from 'vitest';
 
-import { maskUiYamlDefinitionCode } from '../src/cli/ui/scenarios.js';
+import {
+  maskUiScenarioYamlCode,
+  maskUiYamlDefinitionCode,
+} from '../src/cli/ui/scenarios.js';
 
 describe('UI scenario detail', () => {
   it('YAML 정의의 literal secret을 가리고 template은 유지한다', () => {
@@ -71,5 +74,51 @@ describe('UI scenario detail', () => {
       request: { body: { password: '***' } },
     }]);
     expect(fallback).not.toContain('literal-password');
+  });
+
+  it('전체 시나리오 YAML은 민감값만 가리고 흐름 구조는 유지한다', () => {
+    const code = maskUiScenarioYamlCode([
+      'name: password-reset',
+      'vars:',
+      '  region: kr',
+      '  newPassword: &new-password literal-password',
+      'steps:',
+      '  - id: reset-password',
+      '    api:',
+      '      method: POST',
+      '      path: /password/reset',
+      '    request:',
+      '      headers:',
+      '        Authorization: &authorization Bearer literal-token',
+      '      body:',
+      '        password: "{{vars.newPassword}}"',
+      '        credentialFromVar: *new-password',
+      '        credentialFromHeader: *authorization',
+      '    extract:',
+      '      passwordResetToken:',
+      '        from: $.token',
+      '    condition: status == 200',
+    ].join('\n'));
+
+    expect(parseYaml(code ?? '')).toEqual({
+      name: 'password-reset',
+      vars: { region: 'kr', newPassword: '***' },
+      steps: [{
+        id: 'reset-password',
+        api: { method: 'POST', path: '/password/reset' },
+        request: {
+          headers: { Authorization: '***' },
+          body: {
+            password: '{{vars.newPassword}}',
+            credentialFromVar: '***',
+            credentialFromHeader: '***',
+          },
+        },
+        extract: { passwordResetToken: { from: '$.token' } },
+        condition: 'status == 200',
+      }],
+    });
+    expect(code).not.toContain('literal-password');
+    expect(code).not.toContain('literal-token');
   });
 });

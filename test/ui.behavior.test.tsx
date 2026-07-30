@@ -120,6 +120,10 @@ describe('React UI behavior', () => {
       vars: ['name'],
       includes: [],
       fixtures: [],
+      definition: {
+        path: 'openapi-k6/scenarios/auth/login.yaml',
+        code: 'name: login\nsteps: []',
+      },
       steps: [{
         id: 'create-user',
         source: { kind: 'direct' },
@@ -128,6 +132,10 @@ describe('React UI behavior', () => {
         path: '/users',
         request: { body: { name: '{{vars.name}}' } },
         expectedResponse: { status: '201', source: 'schema', body: { id: 'string' } },
+        definition: {
+          path: 'openapi-k6/scenarios/auth/login.yaml',
+          code: 'STEP_LEVEL_SHOULD_NOT_RENDER',
+        },
       }],
     };
 
@@ -147,6 +155,12 @@ describe('React UI behavior', () => {
     expect(document.body.textContent).toContain('요청 · 예정 구조');
     expect(document.body.textContent).toContain('{{vars.name}}');
     expect(document.body.textContent).toContain('status: 201');
+    expect(document.body.textContent).not.toContain('STEP_LEVEL_SHOULD_NOT_RENDER');
+
+    await click(getButton('YAML 보기'));
+    expect(document.body.textContent).toContain('시나리오 YAML');
+    expect(document.body.textContent).toContain('openapi-k6/scenarios/auth/login.yaml');
+    expect(document.body.textContent).toContain('name: login');
   });
 
   it('starts a run and submits a sensitive input value', async () => {

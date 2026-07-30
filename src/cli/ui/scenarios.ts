@@ -78,6 +78,10 @@ export interface UiScenarioDetail {
   vars: string[];
   includes: string[];
   fixtures: string[];
+  definition?: {
+    path: string;
+    code: string;
+  };
   steps: Array<{
     id: string;
     source: UiScenarioStepSource;
@@ -145,6 +149,7 @@ export async function readUiScenarioDetail(
   const scenarioReader = createUiScenarioReaderContext(context);
   const stepSources = await readUiScenarioStepSources(scenarioReader, scenarioPath);
   const stepDefinitions = await readUiScenarioStepDefinitions(scenarioReader, scenarioPath);
+  const definitionCode = maskUiScenarioYamlCode(await fs.readFile(scenarioPath, 'utf8'));
   let resolvedSteps: ASTStep[] = [];
   let targetModules: string[] = [];
   let requestPreviews: Array<StepRequest | undefined> = [];
@@ -191,6 +196,14 @@ export async function readUiScenarioDetail(
     vars: analysis.vars,
     includes: await readScenarioIncludes(scenarioPath),
     fixtures: await readTopLevelStringArray(scenarioPath, 'fixtures'),
+    ...(definitionCode === undefined
+      ? {}
+      : {
+          definition: {
+            path: formatDisplayPath(context.cwd, scenarioPath),
+            code: definitionCode,
+          },
+        }),
     steps: scenario.steps.map((step, index) => {
       const resolvedStep = resolvedSteps[index];
       const resolvedApi = resolvedStep && isASTApiStep(resolvedStep) ? resolvedStep : undefined;
@@ -310,6 +323,78 @@ export function maskUiYamlDefinitionCode(code: string, fallbackStep?: unknown): 
   } catch {
     return maskUiYamlFallbackStep(fallbackStep);
   }
+}
+
+export function maskUiScenarioYamlCode(code: string): string | undefined {
+  try {
+    const parsed = parseYaml(code);
+
+    if (!isRecord(parsed)) return undefined;
+
+    const sensitiveValues = collectUiSensitivePreviewValues(parsed.vars);
+    if (Array.isArray(parsed.steps)) {
+      parsed.steps.forEach((step) => {
+        if (isRecord(step) && step.request !== undefined) {
+          collectUiSensitivePreviewValues(step.request, '', false, sensitiveValues);
+        }
+      });
+    }
+    const scenario = maskUiKnownSensitiveValues(parsed, sensitiveValues) as Record<string, unknown>;
+
+    if (scenario.vars !== undefined) {
+      scenario.vars = maskUiPreviewValue(scenario.vars);
+    }
+
+    if (Array.isArray(scenario.steps)) {
+      scenario.steps = scenario.steps.map((step) => (
+        isRecord(step) && step.request !== undefined
+          ? { ...step, request: maskUiPreviewValue(step.request) }
+          : step
+      ));
+    }
+
+    return code.trimStart().startsWith('{')
+      ? JSON.stringify(scenario, null, 2)
+      : stringifyYaml(scenario).trimEnd();
+  } catch {
+    return undefined;
+  }
+}
+
+function collectUiSensitivePreviewValues(
+  value: unknown,
+  fieldName = '',
+  inheritedSensitive = false,
+  values = new Map<unknown, unknown>(),
+): Map<unknown, unknown> {
+  const sensitive = inheritedSensitive || isSensitivePreviewField(fieldName);
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectUiSensitivePreviewValues(item, fieldName, sensitive, values));
+  } else if (isRecord(value)) {
+    Object.entries(value).forEach(([key, item]) => (
+      collectUiSensitivePreviewValues(item, key, sensitive, values)
+    ));
+  } else if (sensitive && value !== null && value !== undefined) {
+    const masked = maskUiSensitivePreviewValue(value);
+    if (masked !== value) values.set(value, masked);
+  }
+
+  return values;
+}
+
+function maskUiKnownSensitiveValues(value: unknown, values: Map<unknown, unknown>): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => maskUiKnownSensitiveValues(item, values));
+  }
+
+  if (isRecord(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, maskUiKnownSensitiveValues(item, values)]),
+    );
+  }
+
+  return values.has(value) ? values.get(value) : value;
 }
 
 function maskUiYamlFallbackStep(step: unknown): string | undefined {
