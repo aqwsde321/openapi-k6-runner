@@ -18,5 +18,6 @@
 
 ## 보존 문서
 
+- [React/Astryx UI 재작성 계획](./planning/react-ui-rewrite-plan.md): 목표 화면, 사용자 흐름, 단계별 전환·검증·롤백 기준
 - [작업 계획](./planning/work-plan.md): P 단계별 구현 이력과 남은 후속 후보
 - [참조 프로젝트 분석](./reference/reference-projects.md): 설계 초기에 참고한 프로젝트와 채택/제외 판단
