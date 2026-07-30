@@ -108,9 +108,6 @@ export function reduceScenarioRuns(state: ScenarioRuns, action: ScenarioRunsActi
       return updateActiveRun(state, action, (run) => ({
         ...run,
         connection: 'connected',
-        chunks: [],
-        testResult: undefined,
-        pendingInput: undefined,
         error: undefined,
       }));
     case 'reconnecting':

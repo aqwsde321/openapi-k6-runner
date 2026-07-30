@@ -213,7 +213,7 @@ async function runUiCliCommand(
             includeValues: payload.showValues,
           }));
         },
-      })
+      }, run)
     : state.context.testReporter;
 
   try {
@@ -281,7 +281,7 @@ async function runUiSuiteCliCommand(
       interactive: false,
       captureRequestResponseValues: payload.showValues,
       inputProvider: (request) => requestUiRunInput(run, request),
-      testReporter: createUiScenarioReporter(stdout, state.context.testReporter),
+      testReporter: createUiScenarioReporter(stdout, state.context.testReporter, undefined, run),
     });
 
     writeSuiteTestSummary(stdout, result, state.cwd);

@@ -27,6 +27,7 @@ export interface UiRunRecord {
   pendingInput?: UiRunPendingInput;
   events: UiRunEvent[];
   nextEventId: number;
+  secretValues: Set<string>;
   clients: Set<ServerResponse>;
   ansiHtmlState: AnsiHtmlState;
 }
@@ -162,6 +163,7 @@ export function createUiRunRecord(options: {
     chunks: [],
     events: [],
     nextEventId: 1,
+    secretValues: new Set(),
     clients: new Set(),
     ansiHtmlState: createAnsiHtmlState(),
   };
@@ -178,7 +180,7 @@ export function createUiRunWritable(run: UiRunRecord, stream: 'stdout' | 'stderr
 }
 
 export function appendUiRunChunk(run: UiRunRecord, stream: 'stdout' | 'stderr', chunk: string): void {
-  const maskedChunk = maskUiRunText(chunk, []);
+  const maskedChunk = maskUiRunText(chunk, [...run.secretValues]);
   const event = {
     stream,
     chunk: maskedChunk,
@@ -319,11 +321,16 @@ export function createUiScenarioReporter(
   stdout: WritableLike,
   injectedReporter: ScenarioExecutionReporter | undefined,
   resultReporter?: ScenarioExecutionReporter,
+  run?: UiRunRecord,
 ): ScenarioExecutionReporter {
   let reporter = createScenarioConsoleReporter(stdout, {
     color: true,
     live: false,
   });
+
+  if (run !== undefined) {
+    reporter = teeScenarioReporters(createUiRunSecretReporter(run), reporter);
+  }
 
   if (injectedReporter !== undefined) {
     reporter = teeScenarioReporters(reporter, injectedReporter);
@@ -334,9 +341,26 @@ export function createUiScenarioReporter(
     : teeScenarioReporters(reporter, resultReporter);
 }
 
+function createUiRunSecretReporter(run: UiRunRecord): ScenarioExecutionReporter {
+  const remember = (values: string[]) => {
+    for (const value of values) {
+      if (value !== '') run.secretValues.add(value);
+    }
+  };
+
+  return {
+    onScenarioStart: (event) => remember(event.secretValues),
+    onStepStart: (event) => remember(event.secretValues),
+    onStepRequest: (event) => remember(event.secretValues),
+    onStepEnd: (event) => remember(event.secretValues),
+    onScenarioEnd: (result) => remember(result.secretValues),
+  };
+}
+
 export function finishUiRun(run: UiRunRecord, status: 'passed' | 'failed', exitCode: number): void {
   run.status = status;
   run.exitCode = exitCode;
+  run.secretValues.clear();
   writeUiRunEvent(run, 'done', {
     status,
     exitCode,
@@ -566,7 +590,12 @@ function maskUiRunText(value: string, secretValues: string[]): string {
 }
 
 function maskUiRunSecrets(value: string, secretValues: string[]): string {
-  return secretValues.reduce((text, secret) => text.split(secret).join('***'), value);
+  return secretValues.reduce((text, secret) => {
+    const encoded = encodeURIComponent(secret);
+    const formEncoded = encoded.replace(/%20/g, '+');
+    return [...new Set([secret, encoded, formEncoded])]
+      .reduce((masked, variant) => masked.split(variant).join('***'), text);
+  }, value);
 }
 
 function maskEncodedUiRunUrlPart(value: string, secretValues: string[]): string | undefined {

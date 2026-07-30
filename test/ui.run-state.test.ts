@@ -8,6 +8,8 @@ import {
   appendUiRunTestResult,
   createUiRunRecord,
   createUiRunTestResult,
+  createUiRunWritable,
+  createUiScenarioReporter,
   finishUiRun,
   requestUiRunInput,
   streamUiRunEvents,
@@ -171,6 +173,27 @@ describe('UI run state', () => {
 
     expect(run.chunks[0]?.chunk).toBe('response {"token":"***"}\n');
     expect(JSON.stringify(run.events)).not.toContain('literal-token');
+  });
+
+  it('console URL의 percent-encoded secret도 저장하지 않는다', async () => {
+    const run = createUiRunRecord({ id: 'encoded-log', command: 'test', scenario: 'smoke' });
+    const reporter = createUiScenarioReporter(createUiRunWritable(run, 'stdout'), undefined, undefined, run);
+
+    await reporter.onStepRequest?.({
+      scenario: 'smoke',
+      index: 0,
+      totalSteps: 1,
+      id: 'callback',
+      method: 'GET',
+      path: '/callback',
+      url: 'https://api.test.local/callback?safe=a%2Fb',
+      secretValues: ['a/b'],
+    });
+
+    expect(run.chunks.map((chunk) => chunk.chunk).join('')).toContain('safe=***');
+    expect(JSON.stringify(run.events)).not.toContain('a%2Fb');
+    finishUiRun(run, 'passed', 0);
+    expect(run.secretValues.size).toBe(0);
   });
 });
 

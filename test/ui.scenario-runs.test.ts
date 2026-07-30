@@ -69,6 +69,27 @@ describe('React UI scenario runs', () => {
     });
   });
 
+  it('SSE 재연결 뒤 Last-Event-ID 이후 로그를 이어 붙인다', () => {
+    const state = reduce([
+      { type: 'requested', scenario: 'smoke', command: 'test', at: '2026-07-30T00:00:00.000Z' },
+      { type: 'started', scenario: 'smoke', command: 'test', runId: 'test-1', at: '2026-07-30T00:00:01.000Z' },
+      { type: 'connected', scenario: 'smoke', command: 'test', runId: 'test-1' },
+      { type: 'chunk', scenario: 'smoke', command: 'test', runId: 'test-1', chunk: { stream: 'stdout', chunk: 'before\n', html: 'before\n' } },
+      { type: 'reconnecting', scenario: 'smoke', command: 'test', runId: 'test-1', error: 'disconnected' },
+      { type: 'connected', scenario: 'smoke', command: 'test', runId: 'test-1' },
+      { type: 'chunk', scenario: 'smoke', command: 'test', runId: 'test-1', chunk: { stream: 'stdout', chunk: 'after\n', html: 'after\n' } },
+    ]);
+
+    expect(selectScenarioRun(state, 'smoke', 'test')).toMatchObject({
+      connection: 'connected',
+      chunks: [
+        expect.objectContaining({ chunk: 'before\n' }),
+        expect.objectContaining({ chunk: 'after\n' }),
+      ],
+      error: undefined,
+    });
+  });
+
   it('첫 실패에서 끝난 test 결과를 그대로 보존한다', () => {
     const result: UiRunTestResult = {
       scenario: 'smoke',
