@@ -10,5 +10,5 @@
     "types": ["node", "vite/client"],
     "noEmit": true
   },
-  "include": ["src/cli/ui/app/**/*.ts", "src/cli/ui/app/**/*.tsx", "vite.ui.config.ts"]
+  "include": ["src/cli/ui/app/**/*.ts", "src/cli/ui/app/**/*.tsx", "test/ui.behavior.test.tsx", "vite.ui.config.ts"]
 }
