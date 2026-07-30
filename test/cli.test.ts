@@ -1734,6 +1734,36 @@ describe('openapi-k6 CLI', () => {
 
   it('serves a local UI for listing scenarios and streaming validate output', async () => {
     await writeRunFixtures();
+    const previewOpenApiPath = path.join(workspace, 'openapi-k6/openapi/app.openapi.yaml');
+    const previewOpenApi = await readFile(previewOpenApiPath, 'utf8');
+    await writeFile(
+      previewOpenApiPath,
+      previewOpenApi.replace('      responses:\n', [
+        '      parameters:',
+        '        - name: Authorization',
+        '          in: header',
+        '          schema:',
+        '            type: string',
+        '        - name: limit',
+        '          in: query',
+        '          schema:',
+        '            type: integer',
+        '            default: 10',
+        '      requestBody:',
+        '        content:',
+        '          application/json:',
+        '            schema:',
+        '              type: object',
+        '              properties:',
+        '                username:',
+        '                  type: string',
+        '                password:',
+        '                  type: string',
+        '      responses:',
+        '',
+      ].join('\n')),
+      'utf8',
+    );
     await mkdir(path.join(workspace, 'openapi-k6/scenarios/partials'), { recursive: true });
     await writeFile(
       path.join(workspace, 'openapi-k6/scenarios/partials/login.yaml'),
@@ -2161,7 +2191,17 @@ describe('openapi-k6 CLI', () => {
             targetModule: 'app',
             method: 'GET',
             path: '/app-health',
-            request: { headers: { 'X-Preview': 'preview-header' } },
+            request: {
+              headers: {
+                Authorization: '{{env.AUTHORIZATION}}',
+                'X-Preview': 'preview-header',
+              },
+              query: { limit: 10 },
+              body: {
+                username: '<username>',
+                password: '{{env.PASSWORD}}',
+              },
+            },
             expectedResponse: {
               status: '200',
               contentType: 'application/json',

@@ -14,6 +14,7 @@ import {
   type StepRequest,
 } from '../../core/types.js';
 import {
+  buildOpenApiRequestPreview,
   buildOpenApiResponsePreview,
   type OpenApiResponsePreview,
 } from '../../openapi/openapi.catalog.js';
@@ -146,6 +147,7 @@ export async function readUiScenarioDetail(
   const stepDefinitions = await readUiScenarioStepDefinitions(scenarioReader, scenarioPath);
   let resolvedSteps: ASTStep[] = [];
   let targetModules: string[] = [];
+  let requestPreviews: Array<StepRequest | undefined> = [];
   let expectedResponses: Array<OpenApiResponsePreview | undefined> = [];
 
   try {
@@ -163,13 +165,15 @@ export async function readUiScenarioDetail(
     resolvedSteps = buildAst(scenario, openApiContext.registrySource, registryOptions).steps;
     targetModules = openApiContext.moduleNames ??
       (openApiContext.moduleName === undefined ? [] : [openApiContext.moduleName]);
-    expectedResponses = scenario.steps.map((step) => {
+    expectedResponses = scenario.steps.map((step, index) => {
       if (isInputStep(step)) {
         return undefined;
       }
 
       const { registry } = resolveStepRegistry(step, openApiContext.registrySource, registryOptions);
-      return buildOpenApiResponsePreview(resolveApiOperation(registry, step.api, step.id).responses);
+      const operation = resolveApiOperation(registry, step.api, step.id);
+      requestPreviews[index] = buildOpenApiRequestPreview(operation);
+      return buildOpenApiResponsePreview(operation.responses);
     });
   } catch {
     // Keep scenario details available when an OpenAPI snapshot is missing or invalid.
@@ -193,7 +197,13 @@ export async function readUiScenarioDetail(
       const definition = stepDefinitions[index];
       const definitionCode = definition === undefined
         ? undefined
-        : maskUiYamlDefinitionCode(definition.code);
+        : maskUiYamlDefinitionCode(definition.code, step);
+      const requestPreview = isInputStep(step)
+        ? undefined
+        : mergeUiRequestPreview(
+            requestPreviews[index],
+            step.request === undefined ? undefined : resolvedApi?.request ?? step.request,
+          );
 
       return {
         id: step.id,
@@ -217,9 +227,9 @@ export async function readUiScenarioDetail(
                     ...(step.api.path === undefined ? {} : { path: step.api.path }),
                   }
                 : { method: resolvedApi.method, path: resolvedApi.path }),
-              ...(step.request === undefined && resolvedApi?.request === undefined
+              ...(requestPreview === undefined
                 ? {}
-                : { request: maskUiPreviewValue(resolvedApi?.request ?? step.request) as StepRequest }),
+                : { request: maskUiPreviewValue(requestPreview) as StepRequest }),
               ...(expectedResponses[index] === undefined
                 ? {}
                 : { expectedResponse: maskUiResponsePreview(expectedResponses[index]) }),
@@ -234,18 +244,58 @@ export async function readUiScenarioDetail(
   };
 }
 
-export function maskUiYamlDefinitionCode(code: string): string | undefined {
+function mergeUiRequestPreview(
+  openApi: StepRequest | undefined,
+  scenario: StepRequest | undefined,
+): StepRequest | undefined {
+  if (openApi === undefined) return scenario;
+  if (scenario === undefined) return openApi;
+
+  return {
+    ...mergeUiRequestRecord('headers', openApi.headers, scenario.headers),
+    ...mergeUiRequestRecord('query', openApi.query, scenario.query),
+    ...mergeUiRequestRecord('pathParams', openApi.pathParams, scenario.pathParams),
+    ...(openApi.body === undefined && scenario.body === undefined
+      ? {}
+      : { body: mergeUiRequestBody(openApi.body, scenario.body) }),
+    ...(scenario.multipart !== undefined
+      ? { multipart: scenario.multipart }
+      : openApi.multipart === undefined ? {} : { multipart: openApi.multipart }),
+  };
+}
+
+function mergeUiRequestRecord(
+  key: 'headers' | 'pathParams' | 'query',
+  openApi: Record<string, unknown> | undefined,
+  scenario: Record<string, unknown> | undefined,
+): Partial<StepRequest> {
+  if (openApi === undefined && scenario === undefined) return {};
+  return { [key]: { ...openApi, ...scenario } };
+}
+
+function mergeUiRequestBody(openApi: unknown, scenario: unknown): unknown {
+  if (scenario === undefined) return openApi;
+  if (!isRecord(openApi) || !isRecord(scenario)) return scenario;
+
+  return Object.fromEntries([...new Set([...Object.keys(openApi), ...Object.keys(scenario)])]
+    .map((key) => [
+      key,
+      key in scenario ? mergeUiRequestBody(openApi[key], scenario[key]) : openApi[key],
+    ]));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+export function maskUiYamlDefinitionCode(code: string, fallbackStep?: unknown): string | undefined {
   try {
     const parsed = parseYaml(code);
-
-    if (!Array.isArray(parsed) || parsed.length !== 1) {
-      return undefined;
-    }
-
-    const step = parsed[0];
+    const isSequence = Array.isArray(parsed);
+    const step = isSequence && parsed.length === 1 ? parsed[0] : parsed;
 
     if (!step || typeof step !== 'object' || Array.isArray(step)) {
-      return undefined;
+      return maskUiYamlFallbackStep(fallbackStep);
     }
 
     const record = step as Record<string, unknown>;
@@ -254,10 +304,26 @@ export function maskUiYamlDefinitionCode(code: string): string | undefined {
       record.request = maskUiPreviewValue(record.request);
     }
 
-    return stringifyYaml(parsed).trimEnd();
+    return code.trimStart().startsWith('{')
+      ? JSON.stringify(record, null, 2)
+      : stringifyYaml(isSequence ? [record] : record).trimEnd();
   } catch {
+    return maskUiYamlFallbackStep(fallbackStep);
+  }
+}
+
+function maskUiYamlFallbackStep(step: unknown): string | undefined {
+  if (!step || typeof step !== 'object' || Array.isArray(step)) {
     return undefined;
   }
+
+  const record = { ...step as Record<string, unknown> };
+
+  if (record.request !== undefined) {
+    record.request = maskUiPreviewValue(record.request);
+  }
+
+  return stringifyYaml([record]).trimEnd();
 }
 
 async function listUiScenarioFiles(directoryPath: string): Promise<string[]> {
@@ -326,8 +392,8 @@ function maskUiPreviewValue(value: unknown, fieldName = '', inheritedSensitive =
     );
   }
 
-  if (sensitive && !containsTemplateReference(value)) {
-    return '***';
+  if (sensitive) {
+    return maskUiSensitivePreviewValue(value);
   }
 
   return value;
@@ -337,6 +403,20 @@ function isSensitivePreviewField(fieldName: string): boolean {
   return /(password|secret|token|api[-_]?key|authorization|cookie)/i.test(fieldName);
 }
 
-function containsTemplateReference(value: unknown): boolean {
-  return typeof value === 'string' && /\{\{[^{}]+\}\}/.test(value);
+function maskUiSensitivePreviewValue(value: unknown): unknown {
+  if (typeof value !== 'string') return '***';
+  const templates = value.match(/\{\{[^{}]+\}\}/g);
+
+  if (templates === null) return '***';
+
+  const normalized = value.trim();
+
+  if (
+    /^\{\{[^{}]+\}\}$/.test(normalized) ||
+    /^(?:Bearer|Basic)\s+\{\{[^{}]+\}\}$/i.test(normalized)
+  ) {
+    return normalized;
+  }
+
+  return templates.join(' ');
 }

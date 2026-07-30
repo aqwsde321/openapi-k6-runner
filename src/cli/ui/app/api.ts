@@ -1,4 +1,4 @@
-import type { UiScenarioList } from '../scenarios.js';
+import type { UiScenarioDetail, UiScenarioList } from '../scenarios.js';
 import type { UiServerCheckResult } from '../server-checks.js';
 import type { UiSuiteList } from '../suites.js';
 
@@ -19,6 +19,10 @@ async function requestJson<T>(input: string, init: RequestInit): Promise<T> {
 
 export function loadUiScenarios(signal?: AbortSignal): Promise<UiScenarioList> {
   return requestJson('/api/scenarios', { signal });
+}
+
+export function loadUiScenario(id: string, signal?: AbortSignal): Promise<UiScenarioDetail> {
+  return requestJson(`/api/scenario?scenario=${encodeURIComponent(id)}`, { signal });
 }
 
 export function loadUiSuites(signal?: AbortSignal): Promise<UiSuiteList> {

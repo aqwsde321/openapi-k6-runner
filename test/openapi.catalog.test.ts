@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   buildOpenApiCatalog,
+  buildOpenApiRequestPreview,
   buildOpenApiResponsePreview,
   syncOpenApiSnapshot,
 } from '../src/openapi/openapi.catalog.js';
@@ -262,6 +263,38 @@ describe('OpenAPI snapshot and catalog', () => {
       contentType: 'application/json',
       source: 'example',
       body: { id: 'order-1' },
+    });
+  });
+
+  it('builds request parameters and body from OpenAPI examples and schema', () => {
+    expect(buildOpenApiRequestPreview({
+      method: 'POST',
+      path: '/orders/{orderId}',
+      parameters: [
+        { name: 'orderId', in: 'path', schema: { type: 'string' } },
+        { name: 'limit', in: 'query', schema: { type: 'integer', default: 10 } },
+        { name: 'Authorization', in: 'header', schema: { type: 'string' } },
+        { name: 'ignored', in: 'cookie', schema: { type: 'string' } },
+      ],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['sku'],
+              properties: {
+                sku: { type: 'string' },
+                quantity: { type: 'integer', example: 2 },
+              },
+            },
+          },
+        },
+      },
+    })).toEqual({
+      headers: { Authorization: '{{env.AUTHORIZATION}}' },
+      query: { limit: 10 },
+      pathParams: { orderId: '<orderId>' },
+      body: { sku: '<sku>', quantity: 2 },
     });
   });
 

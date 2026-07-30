@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import {
+  formatRequestPreview,
+  formatResponsePreview,
+  resolveScenarioTargetNames,
+} from '../src/cli/ui/app/scenario-flow-format.js';
 import { resolveActiveModule } from '../src/cli/ui/app/active-module.js';
 import { groupExplorerItems } from '../src/cli/ui/app/explorer-groups.js';
 
@@ -45,5 +50,31 @@ describe('React UI explorer', () => {
       configPath: 'config.yaml',
       modules: [module('only')],
     }, undefined)).toBe('only');
+  });
+
+  it('실행 전 요청과 예상 응답을 읽기 쉬운 텍스트로 만든다', () => {
+    expect(formatRequestPreview({})).toBeUndefined();
+    expect(formatRequestPreview({ body: {} })).toBe('body:\n{}');
+    expect(formatRequestPreview({
+      headers: { authorization: '***' },
+      body: { loginId: '{{vars.loginId}}' },
+    })).toBe([
+      'headers:',
+      '{\n  "authorization": "***"\n}',
+      '',
+      'body:',
+      '{\n  "loginId": "{{vars.loginId}}"\n}',
+    ].join('\n'));
+    expect(formatResponsePreview({ status: '200' })).toBe('status: 200');
+  });
+
+  it('input 단계는 API 실행 대상으로 집계하지 않는다', () => {
+    expect(resolveScenarioTargetNames({
+      targetModules: ['app'],
+      steps: [{ input: { name: 'otp', required: true } }],
+    }, undefined, 'app')).toEqual([]);
+    expect(resolveScenarioTargetNames({
+      steps: [{ module: 'vendor' }, { input: { name: 'otp', required: true } }],
+    }, undefined, 'app')).toEqual(['vendor']);
   });
 });

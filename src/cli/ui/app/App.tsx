@@ -10,20 +10,24 @@ import { TopNav, TopNavHeading } from '@astryxdesign/core/TopNav';
 import { useMediaQuery } from '@astryxdesign/core/hooks';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { UiScenarioList } from '../scenarios.js';
+import type { UiScenarioDetail, UiScenarioList } from '../scenarios.js';
 import type { UiServerCheckResult } from '../server-checks.js';
 import type { UiSuiteList } from '../suites.js';
 import {
   ScenarioExplorer,
   type ExplorerMode,
 } from './ScenarioExplorer';
+import { ScenarioFlow } from './ScenarioFlow';
 import { UiShell, type MobileView } from './UiShell';
 import { resolveActiveModule } from './active-module';
-import { checkUiServers, loadUiScenarios, loadUiSuites } from './api';
+import {
+  checkUiServers,
+  loadUiScenario,
+  loadUiScenarios,
+  loadUiSuites,
+} from './api';
 
-type ScenarioItem = UiScenarioList['scenarios'][number];
 type SuiteItem = UiSuiteList['suites'][number];
-type ModuleCheck = UiServerCheckResult['modules'][number];
 
 export function App() {
   const [mode, setMode] = useState<ExplorerMode>('scenario');
@@ -33,6 +37,9 @@ export function App() {
   const [serverChecks, setServerChecks] = useState<UiServerCheckResult>();
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>();
   const [selectedSuiteId, setSelectedSuiteId] = useState<string>();
+  const [scenarioDetail, setScenarioDetail] = useState<UiScenarioDetail>();
+  const [scenarioDetailLoading, setScenarioDetailLoading] = useState(false);
+  const [scenarioDetailError, setScenarioDetailError] = useState<string>();
   const [scenarioLoading, setScenarioLoading] = useState(true);
   const [suiteLoading, setSuiteLoading] = useState(true);
   const [scenarioError, setScenarioError] = useState<string>();
@@ -105,12 +112,40 @@ export function App() {
     return () => loadController.current?.abort();
   }, [reload]);
 
+  useEffect(() => {
+    if (mode !== 'scenario' || selectedScenarioId === undefined) {
+      setScenarioDetail(undefined);
+      setScenarioDetailError(undefined);
+      setScenarioDetailLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setScenarioDetail(undefined);
+    setScenarioDetailError(undefined);
+    setScenarioDetailLoading(true);
+    void loadUiScenario(selectedScenarioId, controller.signal)
+      .then((detail) => {
+        if (!controller.signal.aborted) setScenarioDetail(detail);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setScenarioDetailError(toErrorMessage(error));
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setScenarioDetailLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [mode, scenarios, selectedScenarioId]);
+
   const selectedId = mode === 'scenario' ? selectedScenarioId : selectedSuiteId;
-  const selectedItem = useMemo(
-    () => mode === 'scenario'
-      ? scenarios?.scenarios.find((item) => item.id === selectedScenarioId)
-      : suites?.suites.find((item) => item.id === selectedSuiteId),
-    [mode, scenarios, selectedScenarioId, selectedSuiteId, suites],
+  const selectedScenario = useMemo(
+    () => scenarios?.scenarios.find((item) => item.id === selectedScenarioId),
+    [scenarios, selectedScenarioId],
+  );
+  const selectedSuite = useMemo(
+    () => suites?.suites.find((item) => item.id === selectedSuiteId),
+    [selectedSuiteId, suites],
   );
   const configPath = serverChecks?.configPath ?? scenarios?.configPath;
   const activeModule = resolveActiveModule(serverChecks, scenarios?.defaultModule);
@@ -142,12 +177,16 @@ export function App() {
         />
       )}
       flow={(
-        <SelectionPreview
-          defaultModule={activeModule}
-          item={selectedItem}
-          mode={mode}
-          modules={serverChecks?.modules ?? []}
-        />
+        mode === 'scenario' ? (
+          <ScenarioFlow
+            defaultModule={activeModule}
+            detail={scenarioDetail?.id === selectedScenarioId ? scenarioDetail : undefined}
+            error={scenarioDetailError}
+            item={selectedScenario}
+            loading={scenarioDetailLoading}
+            modules={serverChecks?.modules ?? []}
+          />
+        ) : <SuitePreview item={selectedSuite} />
       )}
       header={(
         <TopNav
@@ -185,17 +224,7 @@ export function App() {
   );
 }
 
-function SelectionPreview({
-  defaultModule,
-  item,
-  mode,
-  modules,
-}: {
-  defaultModule?: string;
-  item?: ScenarioItem | SuiteItem;
-  mode: ExplorerMode;
-  modules: ModuleCheck[];
-}) {
+function SuitePreview({ item }: { item?: SuiteItem }) {
   if (item === undefined) {
     return (
       <VStack padding={6}>
@@ -208,23 +237,13 @@ function SelectionPreview({
     );
   }
 
-  const count = mode === 'scenario'
-    ? (item as ScenarioItem).stepCount
-    : (item as SuiteItem).scenarioCount;
-  const scenario = mode === 'scenario' ? item as ScenarioItem : undefined;
-  const targetNames = scenario?.modules?.length
-    ? scenario.modules
-    : scenario !== undefined && defaultModule ? [defaultModule] : [];
-
   return (
     <VStack gap={5} padding={6}>
       <VStack gap={2}>
         <HStack gap={2} vAlign="center">
-          <Text color="secondary" type="label">
-            {mode === 'scenario' ? '시나리오' : '스위트'}
-          </Text>
-          {count !== undefined && (
-            <Badge label={`${count}${mode === 'scenario' ? '단계' : '개'}`} />
+          <Text color="secondary" type="label">스위트</Text>
+          {item.scenarioCount !== undefined && (
+            <Badge label={`${item.scenarioCount}개`} />
           )}
         </HStack>
         <Heading level={2} maxLines={2}>{item.name}</Heading>
@@ -240,15 +259,6 @@ function SelectionPreview({
           status="error"
           title="YAML 파싱 오류"
         />
-      ) : mode === 'scenario' ? (
-        <VStack gap={2}>
-          <Text type="label" weight="semibold">실행 대상</Text>
-          {targetNames.length === 0 ? (
-            <Text color="secondary" type="supporting">대상 모듈 정보 없음</Text>
-          ) : targetNames.map((name) => (
-            <TargetRow key={name} module={modules.find((candidate) => candidate.name === name)} name={name} />
-          ))}
-        </VStack>
       ) : (
         <Text color="secondary" type="supporting">
           실행 대상은 포함된 시나리오별로 결정됩니다.
@@ -256,31 +266,11 @@ function SelectionPreview({
       )}
 
       <EmptyState
-        description="다음 단계에서 endpoint 순서와 요청·응답 미리보기를 연결합니다."
+        description="스위트 구성과 실행은 5단계에서 연결합니다."
         isCompact
-        title="단계 흐름 준비 중"
+        title="스위트 상세 준비 중"
       />
     </VStack>
-  );
-}
-
-function TargetRow({ module, name }: { module?: ModuleCheck; name: string }) {
-  const status = module?.status ?? 'unknown';
-  const label = status === 'reachable' ? '연결됨' : status === 'failed' ? '실패' : '미확인';
-
-  return (
-    <HStack gap={2} vAlign="center">
-      <StatusDot
-        label={`${name} ${label}`}
-        tooltip={`${name} ${label}`}
-        variant={status === 'reachable' ? 'success' : status === 'failed' ? 'error' : 'neutral'}
-      />
-      <Text type="label">{name}</Text>
-      <Text color="secondary" hasTruncateTooltip maxLines={1} type="code">
-        {module?.baseUrl ?? 'URL 미설정'}
-      </Text>
-      <Text color="secondary" type="supporting">{label}</Text>
-    </HStack>
   );
 }
 

@@ -13,6 +13,7 @@ describe('UI scenario detail', () => {
       '  request:',
       '    headers:',
       '      Authorization: Bearer literal-auth',
+      '      X-Mixed-Token: Bearer literal-mixed {{env.ACCESS_TOKEN}}',
       '    body:',
       '      username: tester',
       '      password:',
@@ -27,7 +28,10 @@ describe('UI scenario detail', () => {
       id: 'login',
       api: { method: 'POST', path: '/login' },
       request: {
-        headers: { Authorization: '***' },
+        headers: {
+          Authorization: '***',
+          'X-Mixed-Token': '{{env.ACCESS_TOKEN}}',
+        },
         body: {
           username: 'tester',
           password: {
@@ -42,5 +46,30 @@ describe('UI scenario detail', () => {
     expect(code).not.toContain('literal-password');
     expect(code).not.toContain('literal-token');
     expect(maskUiYamlDefinitionCode('[invalid')).toBeUndefined();
+  });
+
+  it('JSON 정의와 외부 anchor fallback도 안전한 상세로 유지한다', () => {
+    const json = maskUiYamlDefinitionCode(JSON.stringify({
+      id: 'json-login',
+      api: { method: 'POST', path: '/login' },
+      request: { body: { password: 'literal-password' } },
+    }));
+    const fallback = maskUiYamlDefinitionCode('request: *shared', {
+      id: 'anchor-login',
+      api: { method: 'POST', path: '/login' },
+      request: { body: { password: 'literal-password' } },
+    });
+
+    expect(JSON.parse(json ?? '')).toEqual({
+      id: 'json-login',
+      api: { method: 'POST', path: '/login' },
+      request: { body: { password: '***' } },
+    });
+    expect(parseYaml(fallback ?? '')).toEqual([{
+      id: 'anchor-login',
+      api: { method: 'POST', path: '/login' },
+      request: { body: { password: '***' } },
+    }]);
+    expect(fallback).not.toContain('literal-password');
   });
 });

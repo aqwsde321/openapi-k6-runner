@@ -9,6 +9,8 @@ import type {
   ApiCatalogOperation,
   ApiCatalogRequestBodyFieldHint,
   ApiCatalogRequestBodyHint,
+  ApiOperation,
+  StepRequest,
 } from '../core/types.js';
 import { HTTP_METHOD_ORDER, OpenApiParseError } from './openapi.parser.js';
 
@@ -183,6 +185,65 @@ export function buildOpenApiResponsePreview(
   const preview = buildResponseMediaPreview(response.content);
 
   return preview === undefined ? { status } : { status, ...preview };
+}
+
+export function buildOpenApiRequestPreview(operation: ApiOperation): StepRequest | undefined {
+  const headers: Record<string, unknown> = {};
+  const query: Record<string, unknown> = {};
+  const pathParams: Record<string, unknown> = {};
+
+  for (const parameter of operation.parameters) {
+    if (!isRecord(parameter)) continue;
+    const name = normalizeOptionalString(parameter.name);
+    const location = normalizeOptionalString(parameter.in)?.toLowerCase();
+
+    if (name === undefined || location === undefined) continue;
+
+    const target = location === 'header'
+      ? headers
+      : location === 'query'
+        ? query
+        : location === 'path'
+          ? pathParams
+          : undefined;
+
+    if (target !== undefined) {
+      target[name] = buildOpenApiParameterPreview(parameter, name);
+    }
+  }
+
+  const bodyHint = renderRequestBodyHint(operation.requestBody);
+  const body = 'requestBodyHint' in bodyHint && bodyHint.requestBodyHint !== undefined
+    ? bodyHint.requestBodyHint.example
+    : undefined;
+  const multipart = body === undefined && hasRequestContentType(operation.requestBody, 'multipart/form-data')
+    ? { fields: {}, files: {} }
+    : undefined;
+  const request = {
+    ...(Object.keys(headers).length === 0 ? {} : { headers }),
+    ...(Object.keys(query).length === 0 ? {} : { query }),
+    ...(Object.keys(pathParams).length === 0 ? {} : { pathParams }),
+    ...(body === undefined ? {} : { body }),
+    ...(multipart === undefined ? {} : { multipart }),
+  };
+
+  return Object.keys(request).length === 0 ? undefined : request;
+}
+
+function buildOpenApiParameterPreview(parameter: Record<string, unknown>, name: string): unknown {
+  const explicitExample = readMediaTypeExample(parameter);
+
+  if (explicitExample !== undefined) {
+    return normalizeCatalogHintValue(explicitExample, 0);
+  }
+
+  return createCatalogHintFromSchema(parameter.schema, name, 0) ?? `<${name}>`;
+}
+
+function hasRequestContentType(requestBody: unknown, contentType: string): boolean {
+  if (!isRecord(requestBody) || !isRecord(requestBody.content)) return false;
+  return Object.keys(requestBody.content)
+    .some((candidate) => candidate.toLowerCase().includes(contentType));
 }
 
 function renderRequestBodyContentTypes(requestBody: unknown): Pick<ApiCatalogOperation, 'requestBodyContentTypes'> | Record<string, never> {
