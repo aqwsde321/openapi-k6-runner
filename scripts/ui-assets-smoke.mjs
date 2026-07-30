@@ -128,6 +128,7 @@ try {
 
   const eventsResponse = await fetch(`${ui.url}/api/runs/${run.runId}/events`, {
     headers: { accept: 'text/event-stream' },
+    signal: AbortSignal.timeout(30_000),
   });
   const events = await eventsResponse.text();
   if (eventsResponse.status !== 200 || !events.includes('event: done\n') ||

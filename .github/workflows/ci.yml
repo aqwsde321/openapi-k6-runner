@@ -41,6 +41,9 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      - name: Packed React UI smoke test
+        run: pnpm run smoke:ui-assets
+
       - name: Local backend E2E smoke test
         run: pnpm run smoke:e2e
 
