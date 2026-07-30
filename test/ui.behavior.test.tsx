@@ -113,7 +113,7 @@ describe('React UI behavior', () => {
       id: item.id,
       name: item.name,
       path: item.path,
-      stepCount: 1,
+      stepCount: 2,
       modules: ['app'],
       targetModules: ['app'],
       env: [],
@@ -124,26 +124,36 @@ describe('React UI behavior', () => {
         path: 'openapi-k6/scenarios/auth/login.yaml',
         code: 'name: login\nsteps: []',
       },
-      steps: [{
-        id: 'create-user',
-        source: {
-          kind: 'use',
-          reference: 'auth/session',
-          lineage: [
-            { kind: 'use', reference: 'auth/session' },
-            { kind: 'use', reference: 'auth/login' },
-          ],
+      steps: [
+        {
+          id: 'create-user',
+          source: {
+            kind: 'use',
+            reference: 'auth/session',
+            lineage: [
+              { kind: 'use', reference: 'auth/session' },
+              { kind: 'use', reference: 'auth/login' },
+            ],
+          },
+          targetModule: 'app',
+          method: 'POST',
+          path: '/users',
+          request: { body: { name: '{{vars.name}}' } },
+          expectedResponse: { status: '201', source: 'schema', body: { id: 'string' } },
+          definition: {
+            path: 'openapi-k6/scenarios/auth/login.yaml',
+            code: 'STEP_LEVEL_SHOULD_NOT_RENDER',
+          },
         },
-        targetModule: 'app',
-        method: 'POST',
-        path: '/users',
-        request: { body: { name: '{{vars.name}}' } },
-        expectedResponse: { status: '201', source: 'schema', body: { id: 'string' } },
-        definition: {
-          path: 'openapi-k6/scenarios/auth/login.yaml',
-          code: 'STEP_LEVEL_SHOULD_NOT_RENDER',
+        {
+          id: 'yaml-only',
+          source: { kind: 'direct' },
+          definition: {
+            path: 'openapi-k6/scenarios/auth/yaml-only.yaml',
+            code: 'id: yaml-only',
+          },
         },
-      }],
+      ],
     };
 
     await render(
@@ -164,6 +174,15 @@ describe('React UI behavior', () => {
     expect(document.body.textContent).toContain('{{vars.name}}');
     expect(document.body.textContent).toContain('status: 201');
     expect(document.body.textContent).not.toContain('STEP_LEVEL_SHOULD_NOT_RENDER');
+
+    await click(getButtonContaining('yaml-only'));
+    expect(document.body.textContent).not.toContain('표시할 상세 정보 없음');
+
+    await click(getButtonContaining('openapi-k6/scenarios/auth/login.yaml'));
+    expect(document.body.textContent).toContain('단계 YAML');
+    expect(document.body.textContent).toContain('STEP_LEVEL_SHOULD_NOT_RENDER');
+    const closeDialog = document.body.querySelector<HTMLButtonElement>('button[aria-label="Close"]');
+    await click(expectElement(closeDialog));
 
     await click(getButton('YAML 보기'));
     expect(document.body.textContent).toContain('시나리오 YAML');

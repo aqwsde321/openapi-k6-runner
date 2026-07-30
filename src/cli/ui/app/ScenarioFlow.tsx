@@ -38,6 +38,11 @@ import {
 type ScenarioItem = UiScenarioList['scenarios'][number];
 type ScenarioStep = UiScenarioDetail['steps'][number];
 type ModuleCheck = UiServerCheckResult['modules'][number];
+type YamlDefinition = NonNullable<UiScenarioDetail['definition']>;
+
+interface YamlPreview extends YamlDefinition {
+  title: string;
+}
 
 export interface ScenarioFlowProps {
   defaultModule?: string;
@@ -60,7 +65,7 @@ export function ScenarioFlow({
   testResult,
   testStatus,
 }: ScenarioFlowProps) {
-  const [isYamlOpen, setIsYamlOpen] = useState(false);
+  const [yamlPreview, setYamlPreview] = useState<YamlPreview>();
 
   if (item === undefined) {
     return (
@@ -75,6 +80,7 @@ export function ScenarioFlow({
   }
 
   const targetNames = resolveScenarioTargetNames(detail, item.modules, defaultModule);
+  const scenarioDefinition = detail?.definition;
 
   return (
     <VStack gap={0}>
@@ -86,10 +92,13 @@ export function ScenarioFlow({
                 <Text color="secondary" type="label">시나리오</Text>
                 <Badge label={`${detail?.stepCount ?? item.stepCount ?? 0}단계`} />
               </HStack>
-              {detail?.definition !== undefined && (
+              {scenarioDefinition !== undefined && (
                 <Button
                   label="YAML 보기"
-                  onClick={() => setIsYamlOpen(true)}
+                  onClick={() => setYamlPreview({
+                    ...scenarioDefinition,
+                    title: '시나리오 YAML',
+                  })}
                   size="sm"
                   variant="ghost"
                 />
@@ -131,34 +140,42 @@ export function ScenarioFlow({
         <ScenarioSteps
           defaultModule={defaultModule}
           detail={detail}
+          onOpenYaml={(definition) => setYamlPreview({
+            ...definition,
+            title: '단계 YAML',
+          })}
           testResult={testResult}
           testStatus={testStatus}
         />
       )}
-      {detail?.definition !== undefined && (
+      {yamlPreview !== undefined && (
         <Dialog
-          isOpen={isYamlOpen}
+          isOpen
           maxHeight="90vh"
-          onOpenChange={setIsYamlOpen}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) setYamlPreview(undefined);
+          }}
           purpose="info"
           width={960}
         >
           <Layout
             header={(
               <DialogHeader
-                onOpenChange={setIsYamlOpen}
-                subtitle={detail.definition.path}
-                title="시나리오 YAML"
+                onOpenChange={(isOpen) => {
+                  if (!isOpen) setYamlPreview(undefined);
+                }}
+                subtitle={yamlPreview.path}
+                title={yamlPreview.title}
               />
             )}
             content={(
               <LayoutContent padding={0}>
                 <CodeBlock
-                  code={detail.definition.code}
+                  code={yamlPreview.code}
                   container="section"
                   hasLineNumbers
                   isWrapped
-                  language={detail.definition.path.toLowerCase().endsWith('.json') ? 'json' : 'yaml'}
+                  language={yamlPreview.path.toLowerCase().endsWith('.json') ? 'json' : 'yaml'}
                   maxHeight="70vh"
                   size="sm"
                   width="100%"
@@ -175,11 +192,13 @@ export function ScenarioFlow({
 function ScenarioSteps({
   defaultModule,
   detail,
+  onOpenYaml,
   testResult,
   testStatus,
 }: {
   defaultModule?: string;
   detail: UiScenarioDetail;
+  onOpenYaml: (definition: YamlDefinition) => void;
   testResult?: UiRunTestResult;
   testStatus?: 'starting' | UiRunStatus;
 }) {
@@ -233,6 +252,7 @@ function ScenarioSteps({
             value={String(index)}
           >
             <StepDetail
+              onOpenYaml={onOpenYaml}
               result={testResult?.steps.find((candidate) => candidate.index === index)}
               step={step}
             />
@@ -292,7 +312,15 @@ function StepRow({
   );
 }
 
-function StepDetail({ result, step }: { result?: UiRunStepResult; step: ScenarioStep }) {
+function StepDetail({
+  onOpenYaml,
+  result,
+  step,
+}: {
+  onOpenYaml: (definition: YamlDefinition) => void;
+  result?: UiRunStepResult;
+  step: ScenarioStep;
+}) {
   const actualRequest = formatRunRequest(result?.url, result?.request);
   const actualResponse = formatRunResponse(result?.response);
   const request = actualRequest ?? formatRequestPreview(step.request);
@@ -300,6 +328,7 @@ function StepDetail({ result, step }: { result?: UiRunStepResult; step: Scenario
   const hasMetadata = step.input !== undefined || result?.input !== undefined ||
     step.condition !== undefined || result?.condition !== undefined ||
     step.extract !== undefined || (result?.extracts.length ?? 0) > 0;
+  const definition = step.definition;
 
   return (
     <VStack gap={4} paddingBlock={2}>
@@ -373,7 +402,20 @@ function StepDetail({ result, step }: { result?: UiRunStepResult; step: Scenario
           title="단계 실행 실패"
         />
       )}
-      {request === undefined && response === undefined && !hasMetadata && (
+      {definition !== undefined && (
+        <Item
+          density="compact"
+          description="단계 원본 YAML"
+          endContent={<Text color="secondary" type="supporting">보기</Text>}
+          label={(
+            <Text color="secondary" hasTruncateTooltip maxLines={1} type="code">
+              {definition.path}
+            </Text>
+          )}
+          onClick={() => onOpenYaml(definition)}
+        />
+      )}
+      {request === undefined && response === undefined && !hasMetadata && definition === undefined && (
         <Text color="secondary" type="supporting">표시할 상세 정보 없음</Text>
       )}
     </VStack>
