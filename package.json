@@ -47,6 +47,9 @@
   },
   "dependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
+    "@astryxdesign/cli": "^0.1.9",
+    "@astryxdesign/core": "^0.1.9",
+    "@astryxdesign/theme-neutral": "^0.1.9",
     "commander": "^12.1.0",
     "dotenv": "^16.4.7",
     "yaml": "^2.8.3"
