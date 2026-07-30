@@ -56,6 +56,10 @@ try {
     }
   }
 
+  if (packedFiles.has('dist/cli/ui/html.js')) {
+    throw new Error('Legacy UI implementation remains in the npm package.');
+  }
+
   const tarballPath = path.join(packDir, packResult.filename);
   await access(tarballPath);
   await writeFile(path.join(installDir, 'package.json'), '{"private":true}\n', 'utf8');
@@ -99,6 +103,12 @@ try {
   }
   if (await indexResponse.text() !== installedHtml) {
     throw new Error('Served React UI index differs from the installed package.');
+  }
+
+  for (const removedPath of ['/next', '/next/', '/legacy', '/legacy/']) {
+    if ((await fetch(`${ui.url}${removedPath}`)).status !== 404) {
+      throw new Error(`${removedPath} must not serve a removed UI route.`);
+    }
   }
 
   for (const assetPath of installedAssetPaths) {

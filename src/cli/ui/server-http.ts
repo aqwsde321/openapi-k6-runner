@@ -4,8 +4,6 @@ import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { UI_HTML } from './html.js';
-
 const DEFAULT_UI_APP_DIR = fileURLToPath(new URL('./app/', import.meta.url));
 const UI_ASSET_PREFIX = '/ui-assets/';
 const UI_APP_CONTENT_TYPES = new Map([
@@ -34,14 +32,6 @@ export async function readUiJsonBody(request: IncomingMessage): Promise<unknown>
   }
 
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
-}
-
-export function writeUiHtml(response: ServerResponse): void {
-  response.writeHead(200, {
-    'content-type': 'text/html; charset=utf-8',
-    'cache-control': 'no-cache',
-  });
-  response.end(UI_HTML);
 }
 
 export async function writeUiAppFile(
@@ -185,8 +175,7 @@ function listenUiServerOnce(server: Server, host: string, port: number): Promise
 }
 
 function resolveUiAppRelativePath(pathname: string): string | undefined {
-  if (pathname === '/' || pathname === '/index.html' ||
-      pathname === '/next' || pathname === '/next/' || pathname === '/next/index.html') {
+  if (pathname === '/' || pathname === '/index.html') {
     return 'index.html';
   }
 

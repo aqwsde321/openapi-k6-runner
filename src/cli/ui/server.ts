@@ -19,7 +19,6 @@ import {
   parseUiPort,
   readUiJsonBody,
   writeUiAppFile,
-  writeUiHtml,
   writeUiJson,
 } from './server-http.js';
 import {
@@ -185,15 +184,6 @@ async function handleUiRequest(
   response: ServerResponse,
 ): Promise<void> {
   const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
-
-  if (request.method === 'GET' && (
-    requestUrl.pathname === '/legacy' ||
-    requestUrl.pathname === '/legacy/' ||
-    requestUrl.pathname === '/legacy/index.html'
-  )) {
-    writeUiHtml(response);
-    return;
-  }
 
   if (request.method === 'GET' && await writeUiAppFile(response, requestUrl.pathname, state.uiAppDir)) {
     return;

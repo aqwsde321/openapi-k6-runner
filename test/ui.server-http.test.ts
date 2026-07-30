@@ -47,7 +47,7 @@ describe('React UI asset server', () => {
   });
 
   it('serves the preview and only approved built assets', async () => {
-    for (const pathname of ['/', '/index.html', '/next', '/next/', '/next/index.html']) {
+    for (const pathname of ['/', '/index.html']) {
       const response = await fetch(`${ui?.url}${pathname}`);
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
@@ -80,10 +80,16 @@ describe('React UI asset server', () => {
       expect(await response.text()).not.toContain('outside sentinel');
     }
 
-    for (const pathname of ['/legacy', '/legacy/', '/legacy/index.html']) {
-      const legacy = await fetch(`${ui?.url}${pathname}`);
-      expect(legacy.status).toBe(200);
-      expect(await legacy.text()).toContain('openapi-k6 UI');
+    for (const pathname of [
+      '/next',
+      '/next/',
+      '/next/index.html',
+      '/legacy',
+      '/legacy/',
+      '/legacy/index.html',
+    ]) {
+      const removedRoute = await fetch(`${ui?.url}${pathname}`);
+      expect(removedRoute.status).toBe(404);
     }
 
     for (const pathname of ['/', '/next/', '/legacy/']) {
