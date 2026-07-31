@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -7,6 +7,7 @@ import type { LoadTestConfig } from '../src/config/load-test.config.js';
 import {
   formatUiScenarioOption,
   resolveLoadTestDir,
+  resolveUiEditableScenarioPath,
   resolveUiScenarioPath,
 } from '../src/cli/ui/scenario-paths.js';
 
@@ -55,5 +56,26 @@ describe('UI scenario paths', () => {
       { cwd: workspace, config },
       path.join(config.dir, 'scenarios', 'fixtures', 'users.yaml'),
     )).toThrow('scenario must be inside openapi-k6/scenarios');
+  });
+
+  it('rejects editable scenario symlinks that leave the scenario directory', async () => {
+    const outsidePath = path.join(workspace, 'outside.yaml');
+    await writeFile(outsidePath, 'name: outside\nsteps: []\n', 'utf8');
+    await symlink(outsidePath, path.join(config.dir, 'scenarios', 'auth', 'outside.yaml'));
+
+    await expect(resolveUiEditableScenarioPath({ cwd: workspace, config }, 'auth/outside'))
+      .rejects.toThrow('scenario must be inside openapi-k6/scenarios');
+  });
+
+  it('edits only regular scenario files', async () => {
+    const textPath = path.join(config.dir, 'scenarios', 'auth', 'notes.txt');
+    await writeFile(textPath, 'not a scenario\n', 'utf8');
+
+    await expect(resolveUiEditableScenarioPath({ cwd: workspace, config }, textPath))
+      .rejects.toThrow('scenario must be inside openapi-k6/scenarios');
+    await expect(resolveUiEditableScenarioPath(
+      { cwd: workspace, config },
+      path.join(config.dir, 'scenarios', 'auth'),
+    )).rejects.toThrow('scenario must be inside openapi-k6/scenarios');
   });
 });

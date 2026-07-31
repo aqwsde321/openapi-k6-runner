@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { lstat, realpath } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { LoadTestConfig } from '../../config/load-test.config.js';
@@ -36,6 +37,33 @@ export function resolveUiScenarioPath(context: UiScenarioPathContext, value: str
     relative === '' ||
     relative.startsWith('..') ||
     path.isAbsolute(relative) ||
+    relative.split(path.sep).includes('partials') ||
+    relative.split(path.sep).includes('fixtures')
+  ) {
+    throw new Error(`scenario must be inside ${formatDisplayPath(context.cwd, scenarioDir)}`);
+  }
+
+  return scenarioPath;
+}
+
+export async function resolveUiEditableScenarioPath(
+  context: UiScenarioPathContext,
+  value: string,
+): Promise<string> {
+  const scenarioDir = path.join(resolveLoadTestDir(context.cwd, context.config), 'scenarios');
+  const scenarioPath = resolveUiScenarioPath(context, value);
+  const [realScenarioDir, realScenarioPath, scenarioFile] = await Promise.all([
+    realpath(scenarioDir),
+    realpath(scenarioPath),
+    lstat(scenarioPath),
+  ]);
+  const relative = path.relative(realScenarioDir, realScenarioPath);
+
+  if (
+    scenarioFile.isSymbolicLink() ||
+    !scenarioFile.isFile() ||
+    !['.yaml', '.yml', '.json'].includes(path.extname(scenarioPath).toLowerCase()) ||
+    !isLocalRelativePath(relative) ||
     relative.split(path.sep).includes('partials') ||
     relative.split(path.sep).includes('fixtures')
   ) {

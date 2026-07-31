@@ -423,6 +423,27 @@ describe('scenario parser', () => {
       .rejects.toThrowError('steps[0].use must be relative to the scenario root directory');
   });
 
+  it('validates unsaved source against the entry file path', async () => {
+    const scenarioRootDir = path.join(workspace, 'scenarios');
+    const scenarioPath = path.join(scenarioRootDir, 'entry.yaml');
+    await mkdir(scenarioRootDir, { recursive: true });
+    await writeFile(
+      scenarioPath,
+      'name: entry\nsteps:\n  - id: health\n    api:\n      operationId: health\n',
+      'utf8',
+    );
+    await writeFile(
+      path.join(scenarioRootDir, 'nested.yaml'),
+      'steps:\n  - use: entry\n',
+      'utf8',
+    );
+
+    await expect(parseScenarioFile(scenarioPath, {
+      scenarioRootDir,
+      source: 'name: edited\nsteps:\n  - use: nested\n',
+    })).rejects.toThrowError('include cycle detected');
+  });
+
   it('fails clearly when an included file is missing', async () => {
     const scenarioPath = path.join(workspace, 'smoke.yaml');
     await writeFile(

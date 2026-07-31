@@ -269,12 +269,14 @@ export function App() {
         flow={(
           mode === 'scenario' ? (
             <ScenarioFlow
+              key={selectedScenarioId}
               defaultModule={activeModule}
               detail={scenarioDetail?.id === selectedScenarioId ? scenarioDetail : undefined}
               error={scenarioDetailError}
               item={selectedScenario}
               loading={scenarioDetailLoading}
               modules={serverChecks?.modules ?? []}
+              onScenarioSaved={reload}
               testResult={selectedScenarioTestRun?.testResult}
               testStatus={selectedScenarioTestRun?.status}
             />

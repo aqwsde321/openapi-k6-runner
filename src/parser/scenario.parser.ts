@@ -12,6 +12,7 @@ interface ParsedStepEntry {
 
 export interface ScenarioParseOptions {
   scenarioRootDir?: string;
+  source?: string;
 }
 
 interface ScenarioFileParseContext {
@@ -47,6 +48,7 @@ export async function parseScenarioFile(
       stack: [resolvedPath],
     },
     true,
+    options.source,
   );
 
   if (parsed.name === undefined) {
@@ -116,23 +118,28 @@ async function parseScenarioFileInternal(
   filePath: string,
   context: ScenarioFileParseContext,
   requireName: boolean,
+  sourceOverride?: string,
 ): Promise<{ name?: string; description?: string; vars?: Record<string, unknown>; steps: ParsedStepEntry[] }> {
   let source: string;
   let document: unknown;
 
-  try {
-    source = await fs.readFile(filePath, 'utf8');
-  } catch (error) {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      error.code === 'ENOENT'
-    ) {
-      throw new ScenarioParseError(`${filePath}: scenario file was not found`);
-    }
+  if (sourceOverride === undefined) {
+    try {
+      source = await fs.readFile(filePath, 'utf8');
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        error.code === 'ENOENT'
+      ) {
+        throw new ScenarioParseError(`${filePath}: scenario file was not found`);
+      }
 
-    throw error;
+      throw error;
+    }
+  } else {
+    source = sourceOverride;
   }
 
   try {

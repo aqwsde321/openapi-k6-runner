@@ -10,7 +10,7 @@ import {
 import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Item } from '@astryxdesign/core/Item';
-import { Layout, LayoutContent } from '@astryxdesign/core/Layout';
+import { Layout, LayoutContent, LayoutFooter } from '@astryxdesign/core/Layout';
 import {
   MetadataList,
   MetadataListItem,
@@ -20,6 +20,7 @@ import { HStack, VStack } from '@astryxdesign/core/Stack';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { Tab, TabList } from '@astryxdesign/core/TabList';
 import { Heading, Text } from '@astryxdesign/core/Text';
+import { TextArea } from '@astryxdesign/core/TextArea';
 import { githubDark } from '@astryxdesign/core/theme/syntax';
 import { useState } from 'react';
 
@@ -29,6 +30,10 @@ import type {
 } from '../scenarios.js';
 import type { UiRunStatus, UiRunStepResult, UiRunTestResult } from '../run-state.js';
 import type { UiServerCheckResult } from '../server-checks.js';
+import {
+  saveUiScenarioSource,
+  validateUiScenarioSource,
+} from './api';
 import {
   formatRequestPreview,
   formatResponsePreview,
@@ -51,6 +56,14 @@ interface IncludedYamlDefinition extends YamlDefinition {
   source: string;
 }
 
+interface YamlEditState {
+  code: string;
+  isSaving?: boolean;
+  revision: string;
+  validatedCode?: string;
+  status?: { type: 'error' | 'success' | 'warning'; message: string };
+}
+
 export interface ScenarioFlowProps {
   defaultModule?: string;
   detail?: UiScenarioDetail;
@@ -58,6 +71,7 @@ export interface ScenarioFlowProps {
   item?: ScenarioItem;
   loading: boolean;
   modules: ModuleCheck[];
+  onScenarioSaved: () => Promise<void> | void;
   testResult?: UiRunTestResult;
   testStatus?: 'starting' | UiRunStatus;
 }
@@ -69,10 +83,12 @@ export function ScenarioFlow({
   item,
   loading,
   modules,
+  onScenarioSaved,
   testResult,
   testStatus,
 }: ScenarioFlowProps) {
   const [yamlPreview, setYamlPreview] = useState<YamlPreview>();
+  const [yamlEdit, setYamlEdit] = useState<YamlEditState>();
 
   if (item === undefined) {
     return (
@@ -95,6 +111,67 @@ export function ScenarioFlow({
       ? includedDefinitions.find((definition) => definition.path === yamlPreview.path) ??
         includedDefinitions[0]
       : scenarioDefinition;
+  const closeYamlPreview = () => {
+    setYamlPreview(undefined);
+    setYamlEdit(undefined);
+  };
+  const validateYamlEdit = async () => {
+    if (detail === undefined || yamlEdit === undefined || yamlEdit.isSaving) return;
+    const code = yamlEdit.code;
+
+    try {
+      const result = await validateUiScenarioSource(detail.id, code);
+      setYamlEdit((current) => current?.code === code
+        ? {
+            ...current,
+            validatedCode: code,
+            status: {
+              type: result.warnings.length === 0 ? 'success' : 'warning',
+              message: `검증 완료 · ${result.stepCount}단계${result.warnings.length === 0
+                ? ''
+                : ` · 경고 ${result.warnings.length}개`}`,
+            },
+          }
+        : current);
+    } catch (error) {
+      setYamlEdit((current) => current?.code === code
+        ? {
+            ...current,
+            validatedCode: undefined,
+            status: { type: 'error', message: toErrorMessage(error) },
+          }
+        : current);
+    }
+  };
+  const saveYamlEdit = async () => {
+    if (
+      detail === undefined ||
+      yamlEdit === undefined ||
+      yamlEdit.isSaving ||
+      yamlEdit.validatedCode !== yamlEdit.code
+    ) {
+      return;
+    }
+    const code = yamlEdit.code;
+    setYamlEdit((current) => current?.code === code
+      ? { ...current, isSaving: true }
+      : current);
+
+    try {
+      await saveUiScenarioSource(detail.id, code, yamlEdit.revision);
+      await onScenarioSaved();
+      closeYamlPreview();
+    } catch (error) {
+      setYamlEdit((current) => current === undefined
+        ? current
+        : {
+            ...current,
+            isSaving: false,
+            validatedCode: undefined,
+            status: { type: 'error', message: toErrorMessage(error) },
+          });
+    }
+  };
 
   return (
     <VStack gap={0}>
@@ -161,81 +238,161 @@ export function ScenarioFlow({
           isOpen
           maxHeight="90vh"
           onOpenChange={(isOpen) => {
-            if (!isOpen) setYamlPreview(undefined);
+            if (!isOpen && yamlEdit === undefined) closeYamlPreview();
           }}
-          purpose="info"
+          purpose={yamlEdit === undefined ? 'info' : 'required'}
           width={960}
         >
           <Layout
             header={(
               <DialogHeader
-                onOpenChange={(isOpen) => {
-                  if (!isOpen) setYamlPreview(undefined);
-                }}
+                onOpenChange={yamlEdit === undefined
+                  ? (isOpen) => {
+                      if (!isOpen) closeYamlPreview();
+                    }
+                  : undefined}
                 subtitle={previewDefinition.path}
-                title={yamlPreview.kind === 'step' ? '단계 YAML' : '시나리오 YAML'}
+                title={yamlEdit !== undefined
+                  ? '시나리오 YAML 편집'
+                  : yamlPreview.kind === 'step' ? '단계 YAML' : '시나리오 YAML'}
+                endContent={yamlEdit === undefined && yamlPreview.kind === 'scenario' &&
+                  scenarioDefinition?.editable && scenarioDefinition.revision !== undefined
+                  ? (
+                      <Button
+                        label="편집"
+                        onClick={() => setYamlEdit({
+                          code: scenarioDefinition.code,
+                          revision: scenarioDefinition.revision!,
+                        })}
+                        size="sm"
+                        variant="ghost"
+                      />
+                    )
+                  : yamlEdit === undefined
+                    ? (
+                        <Text color="secondary" type="supporting">
+                          {yamlPreview.kind === 'scenario'
+                            ? '편집 비활성 · --show-sensitive-values 필요'
+                            : '읽기 전용'}
+                        </Text>
+                      )
+                    : undefined}
               />
             )}
             content={(
               <LayoutContent padding={0}>
                 <VStack gap={0}>
-                  {yamlPreview.kind !== 'step' && includedDefinitions.length > 0 && (
-                    <TabList
-                      aria-label="YAML 범위"
-                      hasDivider
-                      layout="fill"
-                      onChange={(value) => setYamlPreview(value === 'included'
-                        ? { kind: 'included', path: includedDefinitions[0]!.path }
-                        : { kind: 'scenario' })}
-                      size="sm"
-                      value={yamlPreview.kind}
-                    >
-                      <Tab label="현재 YAML" value="scenario" />
-                      <Tab
-                        endContent={<Badge label={includedDefinitions.length} />}
-                        label="포함 YAML"
-                        value="included"
-                      />
-                    </TabList>
-                  )}
-                  {yamlPreview.kind === 'included' && includedDefinitions.length > 1 && (
-                    <Section dividers={['bottom']} padding={0}>
-                      <VStack gap={0}>
-                        {includedDefinitions.map((definition) => (
-                          <Item
-                            key={definition.path}
-                            density="compact"
-                            description={definition.source}
-                            isSelected={definition.path === previewDefinition.path}
-                            label={(
-                              <Text hasTruncateTooltip maxLines={1} type="code">
-                                {definition.path}
-                              </Text>
-                            )}
-                            onClick={() => setYamlPreview({
-                              kind: 'included',
-                              path: definition.path,
+                  {yamlEdit !== undefined ? (
+                    <VStack padding={4}>
+                      <TextArea
+                        disabledMessage="저장 중입니다."
+                        hasAutoFocus
+                        hasSpellCheck={false}
+                        isDisabled={yamlEdit.isSaving}
+                        isLabelHidden
+                        label="시나리오 YAML"
+                        onChange={(code) => setYamlEdit((current) => current === undefined
+                          ? current
+                          : {
+                              ...current,
+                              code,
+                              validatedCode: undefined,
+                              status: undefined,
                             })}
+                        rows={24}
+                        size="sm"
+                        status={yamlEdit.status}
+                        value={yamlEdit.code}
+                      />
+                    </VStack>
+                  ) : (
+                    <>
+                      {yamlPreview.kind !== 'step' && includedDefinitions.length > 0 && (
+                        <TabList
+                          aria-label="YAML 범위"
+                          hasDivider
+                          layout="fill"
+                          onChange={(value) => setYamlPreview(value === 'included'
+                            ? { kind: 'included', path: includedDefinitions[0]!.path }
+                            : { kind: 'scenario' })}
+                          size="sm"
+                          value={yamlPreview.kind}
+                        >
+                          <Tab label="현재 YAML" value="scenario" />
+                          <Tab
+                            endContent={<Badge label={includedDefinitions.length} />}
+                            label="포함 YAML"
+                            value="included"
                           />
-                        ))}
-                      </VStack>
-                    </Section>
+                        </TabList>
+                      )}
+                      {yamlPreview.kind === 'included' && includedDefinitions.length > 1 && (
+                        <Section dividers={['bottom']} padding={0}>
+                          <VStack gap={0}>
+                            {includedDefinitions.map((definition) => (
+                              <Item
+                                key={definition.path}
+                                density="compact"
+                                description={definition.source}
+                                isSelected={definition.path === previewDefinition.path}
+                                label={(
+                                  <Text hasTruncateTooltip maxLines={1} type="code">
+                                    {definition.path}
+                                  </Text>
+                                )}
+                                onClick={() => setYamlPreview({
+                                  kind: 'included',
+                                  path: definition.path,
+                                })}
+                              />
+                            ))}
+                          </VStack>
+                        </Section>
+                      )}
+                      <CodeBlock
+                        code={previewDefinition.code}
+                        container="section"
+                        hasLineNumbers
+                        highlightLines={findScenarioReferenceLines(previewDefinition.code)}
+                        isWrapped
+                        language={previewDefinition.path.toLowerCase().endsWith('.json')
+                          ? 'json'
+                          : 'yaml'}
+                        maxHeight="70vh"
+                        size="sm"
+                        width="100%"
+                      />
+                    </>
                   )}
-                  <CodeBlock
-                    code={previewDefinition.code}
-                    container="section"
-                    hasLineNumbers
-                    highlightLines={findScenarioReferenceLines(previewDefinition.code)}
-                    isWrapped
-                    language={previewDefinition.path.toLowerCase().endsWith('.json')
-                      ? 'json'
-                      : 'yaml'}
-                    maxHeight="70vh"
-                    size="sm"
-                    width="100%"
-                  />
                 </VStack>
               </LayoutContent>
+            )}
+            footer={yamlEdit === undefined ? undefined : (
+              <LayoutFooter hasDivider>
+                <HStack gap={2} hAlign="end" padding={3}>
+                  <Button
+                    isDisabled={yamlEdit.isSaving}
+                    label="취소"
+                    onClick={() => setYamlEdit(undefined)}
+                    size="sm"
+                    variant="ghost"
+                  />
+                  <Button
+                    clickAction={validateYamlEdit}
+                    isDisabled={yamlEdit.isSaving}
+                    label="검증"
+                    size="sm"
+                    variant="secondary"
+                  />
+                  <Button
+                    clickAction={saveYamlEdit}
+                    isDisabled={yamlEdit.isSaving || yamlEdit.validatedCode !== yamlEdit.code}
+                    label="저장"
+                    size="sm"
+                    variant="primary"
+                  />
+                </HStack>
+              </LayoutFooter>
             )}
           />
         </Dialog>
@@ -577,6 +734,10 @@ function findScenarioReferenceLines(code: string): number[] {
   return code.split('\n').flatMap((line, index) => (
     /^\s*-\s+(?:use|include)\s*:/.test(line) ? [index + 1] : []
   ));
+}
+
+function toErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function formatStepEndpoint(step: ScenarioStep): string {

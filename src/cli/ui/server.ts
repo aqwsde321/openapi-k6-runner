@@ -24,6 +24,9 @@ import {
 import {
   listUiScenarios,
   readUiScenarioDetail,
+  saveUiScenarioSource,
+  UiScenarioSourceError,
+  validateUiScenarioSource,
 } from './scenarios.js';
 import {
   listUiSuites,
@@ -201,6 +204,62 @@ async function handleUiRequest(
     return;
   }
 
+  if (request.method === 'POST' && requestUrl.pathname === '/api/scenario/validate') {
+    if (!state.options.showSensitiveValues) {
+      writeUiJson(response, 403, {
+        error: 'YAML 편집은 --show-sensitive-values 옵션으로 UI를 시작했을 때만 사용할 수 있습니다.',
+      });
+      return;
+    }
+
+    let body: { scenario: string; code: string };
+
+    try {
+      body = parseUiScenarioSourceBody(await readUiJsonBody(request), false);
+    } catch (error) {
+      writeUiJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
+      return;
+    }
+
+    try {
+      writeUiJson(response, 200, await validateUiScenarioSource(state, body.scenario, body.code));
+    } catch (error) {
+      if (!(error instanceof UiScenarioSourceError)) throw error;
+      writeUiJson(response, error.statusCode, { error: error.message });
+    }
+    return;
+  }
+
+  if (request.method === 'PUT' && requestUrl.pathname === '/api/scenario') {
+    if (!state.options.showSensitiveValues) {
+      writeUiJson(response, 403, {
+        error: 'YAML 편집은 --show-sensitive-values 옵션으로 UI를 시작했을 때만 사용할 수 있습니다.',
+      });
+      return;
+    }
+
+    let body: { scenario: string; code: string; revision: string };
+
+    try {
+      body = parseUiScenarioSourceBody(await readUiJsonBody(request), true);
+    } catch (error) {
+      writeUiJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
+      return;
+    }
+
+    try {
+      writeUiJson(
+        response,
+        200,
+        await saveUiScenarioSource(state, body.scenario, body.code, body.revision),
+      );
+    } catch (error) {
+      if (!(error instanceof UiScenarioSourceError)) throw error;
+      writeUiJson(response, error.statusCode, { error: error.message });
+    }
+    return;
+  }
+
   if (request.method === 'GET' && requestUrl.pathname === '/api/suites') {
     writeUiJson(response, 200, await listUiSuites(state));
     return;
@@ -355,4 +414,40 @@ function writeDownloadResponse(
 
 function escapeHeaderFileName(value: string): string {
   return value.replace(/["\\\r\n]/g, '_');
+}
+
+function parseUiScenarioSourceBody(
+  value: unknown,
+  requireRevision: false,
+): { scenario: string; code: string };
+function parseUiScenarioSourceBody(
+  value: unknown,
+  requireRevision: true,
+): { scenario: string; code: string; revision: string };
+function parseUiScenarioSourceBody(
+  value: unknown,
+  requireRevision: boolean,
+): { scenario: string; code: string; revision?: string } {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('request body must be an object');
+  }
+
+  const body = value as Record<string, unknown>;
+  if (typeof body.scenario !== 'string' || body.scenario.trim() === '') {
+    throw new Error('scenario must be a non-empty string');
+  }
+  if (typeof body.code !== 'string') {
+    throw new Error('code must be a string');
+  }
+  if (requireRevision && (
+    typeof body.revision !== 'string' || !/^[a-f\d]{64}$/.test(body.revision)
+  )) {
+    throw new Error('revision must be a SHA-256 hash');
+  }
+
+  return {
+    scenario: body.scenario,
+    code: body.code,
+    ...(typeof body.revision === 'string' ? { revision: body.revision } : {}),
+  };
 }

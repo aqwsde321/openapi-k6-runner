@@ -105,6 +105,18 @@ export function parseWorkspaceScenarioFile(
   });
 }
 
+export function parseWorkspaceScenarioSource(
+  cwd: string,
+  config: LoadTestConfig | undefined,
+  scenarioPath: string,
+  source: string,
+): Promise<Scenario> {
+  return parseScenarioFile(scenarioPath, {
+    scenarioRootDir: resolveScenarioRootDir(cwd, config),
+    source,
+  });
+}
+
 export function parseWorkspaceSuiteFile(
   _cwd: string,
   _config: LoadTestConfig | undefined,

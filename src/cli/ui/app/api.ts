@@ -1,4 +1,9 @@
-import type { UiScenarioDetail, UiScenarioList } from '../scenarios.js';
+import type {
+  UiScenarioDetail,
+  UiScenarioList,
+  UiScenarioSourceSave,
+  UiScenarioSourceValidation,
+} from '../scenarios.js';
 import type { UiReportList } from '../reports.js';
 import type { UiServerCheckResult } from '../server-checks.js';
 import type { UiSuiteDetail, UiSuiteList } from '../suites.js';
@@ -38,6 +43,29 @@ export function loadUiScenarios(signal?: AbortSignal): Promise<UiScenarioList> {
 
 export function loadUiScenario(id: string, signal?: AbortSignal): Promise<UiScenarioDetail> {
   return requestJson(`/api/scenario?scenario=${encodeURIComponent(id)}`, { signal });
+}
+
+export function validateUiScenarioSource(
+  scenario: string,
+  code: string,
+): Promise<UiScenarioSourceValidation> {
+  return requestJson('/api/scenario/validate', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ scenario, code }),
+  });
+}
+
+export function saveUiScenarioSource(
+  scenario: string,
+  code: string,
+  revision: string,
+): Promise<UiScenarioSourceSave> {
+  return requestJson('/api/scenario', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ scenario, code, revision }),
+  });
 }
 
 export function loadUiSuites(signal?: AbortSignal): Promise<UiSuiteList> {

@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from 'node:crypto';
 import type { Dirent } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -20,6 +21,8 @@ import {
 } from '../../openapi/openapi.catalog.js';
 import { resolveApiOperation } from '../../openapi/openapi.resolver.js';
 import { loadScenarioOpenApiContext } from '../scenario-openapi.js';
+import { validateScenarioOpenApi } from '../scenario-script.js';
+import { parseWorkspaceScenarioSource } from '../workspace-paths.js';
 import { formatDisplayPath } from './paths.js';
 import type { UiScenarioStepSource } from './run-state.js';
 import { analyzeUiScenario } from './scenario-analysis.js';
@@ -36,6 +39,7 @@ import {
   parseWorkspaceScenarioFile,
   resolveLoadTestDir,
   resolveScenarioName,
+  resolveUiEditableScenarioPath,
   resolveUiScenarioPath,
 } from './scenario-paths.js';
 
@@ -82,6 +86,8 @@ export interface UiScenarioDetail {
   definition?: {
     path: string;
     code: string;
+    editable?: boolean;
+    revision?: string;
   };
   steps: Array<{
     id: string;
@@ -99,6 +105,25 @@ export interface UiScenarioDetail {
     definition?: UiScenarioStepDefinition;
   }>;
 }
+
+export interface UiScenarioSourceValidation {
+  scenarioName: string;
+  stepCount: number;
+  warnings: string[];
+}
+
+export interface UiScenarioSourceSave extends UiScenarioSourceValidation {
+  definition: NonNullable<UiScenarioDetail['definition']>;
+}
+
+export class UiScenarioSourceError extends Error {
+  constructor(message: string, readonly statusCode: 400 | 409 = 400) {
+    super(message);
+    this.name = 'UiScenarioSourceError';
+  }
+}
+
+const uiScenarioSaveQueues = new Map<string, Promise<void>>();
 
 export async function listUiScenarios(context: UiScenarioContext): Promise<UiScenarioList> {
   const scenarioDir = path.join(resolveLoadTestDir(context.cwd, context.config), 'scenarios');
@@ -207,6 +232,12 @@ export async function readUiScenarioDetail(
           definition: {
             path: formatDisplayPath(context.cwd, scenarioPath),
             code: definitionCode,
+            ...(showSensitiveValues
+              ? {
+                  editable: true,
+                  revision: createUiScenarioRevision(rawDefinitionCode),
+                }
+              : {}),
           },
         }),
     steps: scenario.steps.map((step, index) => {
@@ -275,6 +306,141 @@ export async function readUiScenarioDetail(
       };
     }),
   };
+}
+
+export async function validateUiScenarioSource(
+  context: UiScenarioContext,
+  scenarioOption: string,
+  source: string,
+): Promise<UiScenarioSourceValidation> {
+  try {
+    const scenarioPath = await resolveUiEditableScenarioPath(context, scenarioOption);
+    const scenario = await parseWorkspaceScenarioSource(
+      context.cwd,
+      context.config,
+      scenarioPath,
+      source,
+    );
+    const openApiContext = await loadScenarioOpenApiContext({
+      cwd: context.cwd,
+      config: context.config,
+      scenario,
+      cliModuleName: context.options?.module,
+      commandName: 'validate',
+      requireBaseUrl: false,
+    });
+    const validation = validateScenarioOpenApi(scenario, openApiContext);
+
+    return {
+      scenarioName: validation.scenarioName,
+      stepCount: validation.stepCount,
+      warnings: validation.warnings,
+    };
+  } catch (error) {
+    if (error instanceof UiScenarioSourceError) throw error;
+    throw new UiScenarioSourceError(error instanceof Error ? error.message : String(error));
+  }
+}
+
+export async function saveUiScenarioSource(
+  context: UiScenarioContext,
+  scenarioOption: string,
+  source: string,
+  revision: string,
+): Promise<UiScenarioSourceSave> {
+  let scenarioPath: string;
+
+  try {
+    scenarioPath = await resolveUiEditableScenarioPath(context, scenarioOption);
+  } catch (error) {
+    throw new UiScenarioSourceError(error instanceof Error ? error.message : String(error));
+  }
+
+  const saveKey = await fs.realpath(scenarioPath);
+  const previousSave = uiScenarioSaveQueues.get(saveKey) ?? Promise.resolve();
+  let releaseSave!: () => void;
+  const saveLock = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  const queuedSave = previousSave.then(() => saveLock);
+  uiScenarioSaveQueues.set(saveKey, queuedSave);
+  await previousSave;
+
+  try {
+    return await saveUiScenarioSourceUnlocked(
+      context,
+      scenarioOption,
+      scenarioPath,
+      source,
+      revision,
+    );
+  } finally {
+    releaseSave();
+    if (uiScenarioSaveQueues.get(saveKey) === queuedSave) {
+      uiScenarioSaveQueues.delete(saveKey);
+    }
+  }
+}
+
+async function saveUiScenarioSourceUnlocked(
+  context: UiScenarioContext,
+  scenarioOption: string,
+  scenarioPath: string,
+  source: string,
+  revision: string,
+): Promise<UiScenarioSourceSave> {
+
+  assertUiScenarioRevision(await fs.readFile(scenarioPath, 'utf8'), revision);
+  const validation = await validateUiScenarioSource(context, scenarioOption, source);
+  const currentSource = await fs.readFile(scenarioPath, 'utf8');
+  assertUiScenarioRevision(currentSource, revision);
+
+  if (currentSource !== source) {
+    const temporaryPath = path.join(
+      path.dirname(scenarioPath),
+      `.${path.basename(scenarioPath)}.${randomUUID()}.tmp`,
+    );
+
+    try {
+      const file = await fs.stat(scenarioPath);
+      await fs.writeFile(temporaryPath, source, {
+        encoding: 'utf8',
+        flag: 'wx',
+        mode: file.mode & 0o777,
+      });
+      assertUiScenarioRevision(await fs.readFile(scenarioPath, 'utf8'), revision);
+      await fs.rename(temporaryPath, scenarioPath);
+    } finally {
+      try {
+        await fs.unlink(temporaryPath);
+      } catch (error) {
+        if (!isNodeErrorCode(error, 'ENOENT')) throw error;
+      }
+    }
+  }
+
+  return {
+    ...validation,
+    definition: {
+      path: formatDisplayPath(context.cwd, scenarioPath),
+      code: source,
+      editable: true,
+      revision: createUiScenarioRevision(source),
+    },
+  };
+}
+
+function createUiScenarioRevision(source: string): string {
+  return createHash('sha256').update(source).digest('hex');
+}
+
+function assertUiScenarioRevision(source: string, revision: string): void {
+  if (createUiScenarioRevision(source) !== revision) {
+    throw new UiScenarioSourceError(
+      '시나리오 파일이 외부에서 변경되었습니다. 다시 불러온 뒤 편집하세요.',
+      409,
+    );
+  }
 }
 
 function attachUiScenarioSourceDefinitions(

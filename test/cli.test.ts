@@ -2185,8 +2185,9 @@ describe('openapi-k6 CLI', () => {
 
   it('shows sensitive scenario, request, response, and log values only when explicitly enabled', async () => {
     await writeRunFixtures();
+    const scenarioPath = path.join(workspace, 'openapi-k6/scenarios/smoke.yaml');
     await writeFile(
-      path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'),
+      scenarioPath,
       [
         'name: visible-secrets',
         'steps:',
@@ -2218,9 +2219,72 @@ describe('openapi-k6 CLI', () => {
 
     try {
       const detail = await (await fetch(`${ui.url}/api/scenario?scenario=smoke`)).json() as {
-        definition?: { code: string };
+        definition?: { code: string; editable?: boolean; revision?: string };
         steps: Array<{ request?: { headers?: Record<string, string> } }>;
       };
+      expect(detail.definition).toMatchObject({
+        editable: true,
+        revision: expect.stringMatching(/^[a-f\d]{64}$/),
+      });
+
+      const invalidValidation = await fetch(`${ui.url}/api/scenario/validate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          scenario: 'smoke',
+          code: 'name: invalid\nsteps:\n  - use: smoke\n',
+        }),
+      });
+      const invalidValidationPayload = await invalidValidation.json();
+      expect(invalidValidation.status, JSON.stringify(invalidValidationPayload)).toBe(400);
+      expect(invalidValidationPayload).toMatchObject({
+        error: expect.stringContaining('include cycle detected'),
+      });
+      expect(await readFile(scenarioPath, 'utf8')).toBe(detail.definition?.code);
+
+      const editedSource = detail.definition!.code.replace('visible-secrets', 'edited-secrets');
+      const validation = await fetch(`${ui.url}/api/scenario/validate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ scenario: 'smoke', code: editedSource }),
+      });
+      expect(validation.status).toBe(200);
+      expect(await validation.json()).toMatchObject({ scenarioName: 'edited-secrets', stepCount: 1 });
+
+      const competingSource = editedSource.replace('edited-secrets', 'competing-secrets');
+      const saveResponses = await Promise.all([editedSource, competingSource].map((code) => (
+        fetch(`${ui.url}/api/scenario`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            scenario: 'smoke',
+            code,
+            revision: detail.definition!.revision,
+          }),
+        })
+      )));
+      expect(saveResponses.map((response) => response.status).sort()).toEqual([200, 409]);
+      const savedIndex = saveResponses.findIndex((response) => response.status === 200);
+      const savedSource = [editedSource, competingSource][savedIndex]!;
+      const saved = await saveResponses[savedIndex]!.json() as {
+        definition: { revision: string };
+      };
+      expect(await readFile(scenarioPath, 'utf8')).toBe(savedSource);
+
+      const externalSource = savedSource.replace(/^name: .+$/m, 'name: external-secrets');
+      await writeFile(scenarioPath, externalSource, 'utf8');
+      const staleSave = await fetch(`${ui.url}/api/scenario`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          scenario: 'smoke',
+          code: savedSource,
+          revision: saved.definition.revision,
+        }),
+      });
+      expect(staleSave.status).toBe(409);
+      expect(await readFile(scenarioPath, 'utf8')).toBe(externalSource);
+
       const run = await (await fetch(`${ui.url}/api/run`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },

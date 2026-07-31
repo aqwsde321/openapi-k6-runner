@@ -123,6 +123,8 @@ describe('React UI behavior', () => {
       definition: {
         path: 'openapi-k6/scenarios/account/main.yaml',
         code: 'name: main\nsteps:\n  - use: auth/session\n  - include: ./legacy.yaml',
+        editable: true,
+        revision: 'a'.repeat(64),
       },
       steps: [
         {
@@ -183,6 +185,24 @@ describe('React UI behavior', () => {
         },
       ],
     };
+    const onScenarioSaved = vi.fn(async () => undefined);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const code = JSON.parse(String(init?.body)) as { code: string };
+      return new Response(JSON.stringify(String(input).endsWith('/validate')
+        ? { scenarioName: 'main', stepCount: 2, warnings: ['warning'] }
+        : {
+            scenarioName: 'edited',
+            stepCount: 2,
+            warnings: [],
+            definition: {
+              path: 'openapi-k6/scenarios/account/main.yaml',
+              code: code.code,
+              editable: true,
+              revision: 'b'.repeat(64),
+            },
+          }), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
 
     await render(
       <ScenarioFlow
@@ -191,6 +211,7 @@ describe('React UI behavior', () => {
         item={item}
         loading={false}
         modules={[]}
+        onScenarioSaved={onScenarioSaved}
       />,
     );
     const stepButton = getButtonContaining('create-user');
@@ -244,15 +265,34 @@ describe('React UI behavior', () => {
     expect(currentYaml?.querySelector<HTMLElement>('[data-line="4"]')?.className)
       .not.toBe(regularLineClass);
     expect(getButton('현재 YAML').getAttribute('aria-current')).toBe('page');
+    expect(findButton('편집')).not.toBeUndefined();
     const includedYamlTab = getButtonContaining('포함 YAML');
     expect(includedYamlTab.textContent).toContain('2');
     await click(includedYamlTab);
+    expect(findButton('편집')).toBeUndefined();
+    expect(document.body.textContent).toContain('읽기 전용');
     expect(document.body.textContent).toContain('openapi-k6/scenarios/auth/session.yaml');
     expect(document.body.textContent).toContain('name: session');
     await click(getButtonContaining('시나리오 사용 · auth/login'));
     expect(document.body.textContent).toContain('name: login');
     await click(getButton('현재 YAML'));
     expect(document.body.textContent).toContain('name: main');
+
+    await click(getButton('편집'));
+    const editor = expectElement(document.body.querySelector<HTMLTextAreaElement>('textarea'));
+    await changeTextArea(editor, editor.value.replace('name: main', 'name: edited'));
+    expect(getButton('저장').disabled).toBe(true);
+    await click(getButton('검증'));
+    await flushUi();
+    expect(document.body.querySelector('[data-status="warning"]')).not.toBeNull();
+    expect(getButton('저장').disabled).toBe(false);
+    await click(getButton('저장'));
+    await flushUi();
+    expect(onScenarioSaved).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+      '/api/scenario/validate',
+      '/api/scenario',
+    ]);
   });
 
   it('starts a run and submits a sensitive input value', async () => {
@@ -453,11 +493,28 @@ async function changeInput(input: HTMLInputElement, value: string): Promise<void
   });
 }
 
+async function changeTextArea(input: HTMLTextAreaElement, value: string): Promise<void> {
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
+async function flushUi(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 function getButton(label: string): HTMLButtonElement {
-  const button = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find((candidate) => (
+  return expectElement(findButton(label));
+}
+
+function findButton(label: string): HTMLButtonElement | undefined {
+  return [...document.body.querySelectorAll<HTMLButtonElement>('button')].find((candidate) => (
     normalizeText(candidate.textContent).startsWith(label)
   ));
-  return expectElement(button);
 }
 
 function getButtonContaining(label: string): HTMLButtonElement {

@@ -108,5 +108,12 @@ describe('React UI asset server', () => {
     expect(await missingRunStream.text()).toContain(
       'data: {"status":"failed","exitCode":1,"error":"UI 서버가 재시작되어 진행 중이던 실행을 이어갈 수 없습니다."}',
     );
+
+    const editResponse = await fetch(`${ui?.url}/api/scenario`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ scenario: 'smoke', code: '', revision: '0'.repeat(64) }),
+    });
+    expect(editResponse.status).toBe(403);
   });
 });
