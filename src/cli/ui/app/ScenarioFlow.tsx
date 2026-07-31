@@ -20,7 +20,7 @@ import { HStack, VStack } from '@astryxdesign/core/Stack';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { Tab, TabList } from '@astryxdesign/core/TabList';
 import { Heading, Text } from '@astryxdesign/core/Text';
-import { oneLight } from '@astryxdesign/core/theme/syntax';
+import { githubDark } from '@astryxdesign/core/theme/syntax';
 import { useState } from 'react';
 
 import type {
@@ -395,12 +395,12 @@ function StepDetail({
       {request !== undefined && (
         <CodeBlock
           code={request}
-          container="section"
+          container="card"
           hasLanguageLabel={false}
           isWrapped
           language="json"
           size="sm"
-          syntaxTheme={oneLight}
+          syntaxTheme={githubDark}
           title={actualRequest === undefined ? '요청 · 예정 구조' : '요청 · 실제'}
           width="100%"
         />
@@ -408,12 +408,12 @@ function StepDetail({
       {response !== undefined && (
         <CodeBlock
           code={response}
-          container="section"
+          container="card"
           hasLanguageLabel={false}
           isWrapped
           language="json"
           size="sm"
-          syntaxTheme={oneLight}
+          syntaxTheme={githubDark}
           title={actualResponse === undefined ? '응답 · 예상 (OpenAPI)' : '응답 · 실제'}
           width="100%"
         />

@@ -205,8 +205,10 @@ describe('React UI behavior', () => {
       'section[aria-label="create-user 단계 상세"]',
     );
     expect(stepDetail).not.toBeNull();
-    expect(stepDetail?.querySelector('[data-astryx-syntax-theme="one-light"]')).not.toBeNull();
-    const requestCode = stepDetail?.querySelector<HTMLElement>('.astryx-codeblock');
+    const codeBlocks = stepDetail?.querySelectorAll<HTMLElement>('.astryx-codeblock') ?? [];
+    expect([...codeBlocks].map((block) => block.dataset.container)).toEqual(['card', 'card']);
+    expect(stepDetail?.querySelectorAll('[data-astryx-syntax-theme="github-dark"]')).toHaveLength(2);
+    const requestCode = codeBlocks[0];
     expect(requestCode?.dataset.language).toBe('json');
     expect([...requestCode?.querySelectorAll('.astryx-token-property') ?? []]
       .map((token) => token.textContent)).toContain('"name"');
