@@ -102,6 +102,7 @@ export interface UiOptions {
   module?: string;
   host?: string;
   port?: string;
+  showSensitiveValues?: boolean;
 }
 
 export interface CatalogOptions {

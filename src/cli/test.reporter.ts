@@ -20,6 +20,7 @@ export interface ScenarioConsoleReporterOptions {
   live?: boolean;
   liveIntervalMs?: number;
   responseBodyLimit?: number;
+  showSensitiveValues?: boolean;
 }
 
 interface AnsiColors {
@@ -45,22 +46,23 @@ export function createScenarioConsoleReporter(
   const live = options.live === true;
   const liveIntervalMs = options.liveIntervalMs ?? DEFAULT_LIVE_INTERVAL_MS;
   const responseBodyLimit = options.responseBodyLimit ?? DEFAULT_RESPONSE_BODY_LIMIT;
+  const showSensitiveValues = options.showSensitiveValues === true;
   let liveState: LiveState | undefined;
 
   return {
     onScenarioStart(event) {
-      writeScenarioStart(stream, event, colors);
+      writeScenarioStart(stream, event, colors, showSensitiveValues);
     },
     onStepStart(event) {
       writeStepStart(stream, event, colors);
     },
     onStepRequest(event) {
-      liveState = writeStepRequest(stream, event, colors, live, liveIntervalMs);
+      liveState = writeStepRequest(stream, event, colors, live, liveIntervalMs, showSensitiveValues);
     },
     onStepEnd(event) {
       finishLiveState(stream, liveState);
       liveState = undefined;
-      writeStepEnd(stream, event, colors, responseBodyLimit);
+      writeStepEnd(stream, event, colors, responseBodyLimit, showSensitiveValues);
     },
     onScenarioEnd(result) {
       finishLiveState(stream, liveState);
@@ -70,9 +72,15 @@ export function createScenarioConsoleReporter(
   };
 }
 
-function writeScenarioStart(stream: WritableLike, event: ScenarioStartEvent, colors: AnsiColors): void {
-  stream.write(formatField('scenario', colors.bold(colors.cyan(maskText(event.scenario, event.secretValues))), 5, colors));
-  stream.write(formatField('base url', colors.cyan(maskText(event.baseUrl, event.secretValues)), 5, colors));
+function writeScenarioStart(
+  stream: WritableLike,
+  event: ScenarioStartEvent,
+  colors: AnsiColors,
+  showSensitiveValues: boolean,
+): void {
+  const secretValues = showSensitiveValues ? [] : event.secretValues;
+  stream.write(formatField('scenario', colors.bold(colors.cyan(maskText(event.scenario, secretValues))), 5, colors));
+  stream.write(formatField('base url', colors.cyan(maskText(event.baseUrl, secretValues)), 5, colors));
   stream.write(formatField('steps', colors.cyan(String(event.totalSteps)), 5, colors));
   stream.write('\n');
 }
@@ -89,8 +97,9 @@ function writeStepRequest(
   colors: AnsiColors,
   live: boolean,
   liveIntervalMs: number,
+  showSensitiveValues: boolean,
 ): LiveState | undefined {
-  stream.write(formatField('url', colors.dim(maskText(event.url, event.secretValues)), 6, colors));
+  stream.write(formatField('url', colors.dim(maskText(event.url, showSensitiveValues ? [] : event.secretValues)), 6, colors));
 
   if (!live) {
     stream.write(formatField('state', colors.cyan('→ running'), 6, colors));
@@ -114,8 +123,10 @@ function writeStepEnd(
   event: StepEndEvent,
   colors: AnsiColors,
   responseBodyLimit: number,
+  showSensitiveValues: boolean,
 ): void {
   const { result } = event;
+  const secretValues = showSensitiveValues ? [] : event.secretValues;
   const hasAssertions = result.condition !== undefined || result.extracts.length > 0;
 
   if (result.input !== undefined) {
@@ -151,17 +162,17 @@ function writeStepEnd(
     const name = extract.name.padEnd(extractNameWidth(result));
     const message = extract.passed
       ? `${formatCheckMark(true, colors)} ${name}`
-      : `${formatCheckMark(false, colors)} ${name} (${maskText(extract.error ?? 'unknown error', event.secretValues)})`;
+      : `${formatCheckMark(false, colors)} ${name} (${maskText(extract.error ?? 'unknown error', secretValues)})`;
     stream.write(formatField('extract', message, 6, colors));
   }
 
   if (result.error !== undefined) {
-    stream.write(formatField('error', `${formatCheckMark(false, colors)} ${colors.red(maskText(result.error, event.secretValues))}`, 6, colors));
+    stream.write(formatField('error', `${formatCheckMark(false, colors)} ${colors.red(maskText(result.error, secretValues))}`, 6, colors));
   }
 
   if (!result.passed && result.response?.body) {
     stream.write(formatField('body', '', 6, colors));
-    stream.write(`${indentBody(truncateText(maskText(result.response.body, event.secretValues), responseBodyLimit))}\n`);
+    stream.write(`${indentBody(truncateText(maskText(result.response.body, secretValues), responseBodyLimit))}\n`);
   }
 
   stream.write('\n');

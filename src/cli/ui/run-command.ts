@@ -74,6 +74,7 @@ export interface UiRunCommandState {
   cwd: string;
   options: {
     module?: string;
+    showSensitiveValues?: boolean;
   };
   context: UiRunCliContext;
   config: LoadTestConfig;
@@ -93,6 +94,7 @@ export async function startUiRun(
     id: runId,
     command: payload.command,
     scenario,
+    showSensitiveValues: state.options.showSensitiveValues,
   });
 
   state.runs.set(runId, run);
@@ -111,6 +113,7 @@ export async function startUiSuiteRun(
     id: runId,
     command: 'suite',
     scenario: payload.suite,
+    showSensitiveValues: state.options.showSensitiveValues,
   });
 
   state.runs.set(runId, run);
@@ -211,6 +214,7 @@ async function runUiCliCommand(
         onScenarioEnd(result) {
           appendUiRunTestResult(run, createUiRunTestResult(result, stepSources, {
             includeValues: payload.showValues,
+            showSensitiveValues: run.showSensitiveValues,
           }));
         },
       }, run)

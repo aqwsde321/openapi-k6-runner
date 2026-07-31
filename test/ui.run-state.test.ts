@@ -167,6 +167,60 @@ describe('UI run state', () => {
     expect(JSON.stringify(masked)).not.toContain('response-token');
   });
 
+  it('명시적으로 허용하면 구조화 결과와 console chunk를 원문으로 유지한다', () => {
+    const result = {
+      scenario: 'visible-secret-run',
+      baseUrl: 'https://api.test.local',
+      durationMs: 12,
+      passed: false,
+      secretValues: ['known-secret'],
+      steps: [{
+        index: 0,
+        id: 'login',
+        method: 'POST',
+        path: '/login/known-secret',
+        url: 'https://api.test.local/login?token=known-secret',
+        durationMs: 10,
+        passed: false,
+        request: {
+          headers: { Authorization: 'Bearer known-secret' },
+          body: JSON.stringify({ password: 'body-password' }),
+        },
+        response: {
+          status: 401,
+          statusText: 'Unauthorized',
+          body: JSON.stringify({ token: 'response-token', message: 'known-secret' }),
+        },
+        extracts: [],
+      }],
+    } satisfies ScenarioExecutionResult;
+    const visible = createUiRunTestResult(result, [{ kind: 'direct' }], {
+      includeValues: true,
+      showSensitiveValues: true,
+    });
+    const run = createUiRunRecord({
+      id: 'visible-secret-log',
+      command: 'test',
+      scenario: 'visible-secret-run',
+      showSensitiveValues: true,
+    });
+
+    appendUiRunChunk(run, 'stderr', 'response {"token":"response-token"} known-secret\n');
+
+    expect(visible.steps[0]).toMatchObject({
+      path: '/login/known-secret',
+      url: 'https://api.test.local/login?token=known-secret',
+      request: {
+        headers: { Authorization: 'Bearer known-secret' },
+        body: '{"password":"body-password"}',
+      },
+      response: {
+        body: '{"token":"response-token","message":"known-secret"}',
+      },
+    });
+    expect(run.chunks[0]?.chunk).toBe('response {"token":"response-token"} known-secret\n');
+  });
+
   it('console chunk도 민감 JSON 값을 저장하지 않는다', () => {
     const run = createUiRunRecord({ id: 'secret-log', command: 'test', scenario: 'smoke' });
     appendUiRunChunk(run, 'stderr', 'response {"token":"literal-token"}\n');

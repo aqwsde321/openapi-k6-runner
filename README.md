@@ -479,6 +479,7 @@ npx --yes openapi-k6 update
   suite `test` 실행 후 상단 `리포트`에서 종합 결과를 열고, 시나리오별 성공 여부와 첫 실패 원인을 확인할 수 있습니다.
   리포트 모달은 새 탭 HTML 보기, HTML 다운로드, JSON 다운로드를 제공합니다.
   최근 실행 결과의 `요청/응답 숨김`/`요청/응답 보기` 버튼으로 step별 실제 요청 URL, headers/body, 응답 status, headers/body 표시를 전환할 수 있습니다.
+  관리자 환경에서 마스킹 없는 요청·응답·YAML·로그가 필요하면 `ui --show-sensitive-values`를 사용합니다. 이 옵션으로 띄운 UI를 외부에 공개하지 마세요.
 - `doctor`: config, module별 baseUrl 출처, snapshot/catalog, scaffold metadata, module env 충돌, k6 설치 여부를 점검합니다.
 - `update`: 기존 `config.yaml`, `.env`, `scenarios/`, `suites/`, snapshot/catalog, `generated/`, `logs/`를 보존하고 scaffold 파일만 갱신합니다.
 

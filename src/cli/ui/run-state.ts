@@ -28,6 +28,7 @@ export interface UiRunRecord {
   events: UiRunEvent[];
   nextEventId: number;
   secretValues: Set<string>;
+  showSensitiveValues: boolean;
   clients: Set<ServerResponse>;
   ansiHtmlState: AnsiHtmlState;
 }
@@ -164,6 +165,7 @@ export function createUiRunRecord(options: {
   id: string;
   command: 'validate' | 'test' | 'suite';
   scenario: string;
+  showSensitiveValues?: boolean;
 }): UiRunRecord {
   return {
     id: options.id,
@@ -174,6 +176,7 @@ export function createUiRunRecord(options: {
     events: [],
     nextEventId: 1,
     secretValues: new Set(),
+    showSensitiveValues: options.showSensitiveValues === true,
     clients: new Set(),
     ansiHtmlState: createAnsiHtmlState(),
   };
@@ -190,7 +193,7 @@ export function createUiRunWritable(run: UiRunRecord, stream: 'stdout' | 'stderr
 }
 
 export function appendUiRunChunk(run: UiRunRecord, stream: 'stdout' | 'stderr', chunk: string): void {
-  const maskedChunk = maskUiRunText(chunk, [...run.secretValues]);
+  const maskedChunk = run.showSensitiveValues ? chunk : maskUiRunText(chunk, [...run.secretValues]);
   const event = {
     stream,
     chunk: maskedChunk,
@@ -261,9 +264,10 @@ export function submitUiRunInput(run: UiRunRecord, body: unknown): { accepted: t
 export function createUiRunTestResult(
   result: ScenarioExecutionResult,
   stepSources: UiScenarioStepSource[],
-  options: { includeValues?: boolean } = {},
+  options: { includeValues?: boolean; showSensitiveValues?: boolean } = {},
 ): UiRunTestResult {
   const includeValues = options.includeValues === true;
+  const showSensitiveValues = options.showSensitiveValues === true;
   const secretValues = [...result.secretValues]
     .filter((value) => value.length > 0)
     .sort((left, right) => right.length - left.length);
@@ -279,27 +283,33 @@ export function createUiRunTestResult(
       durationMs: Math.round(step.durationMs),
       source: stepSources[step.index] ?? { kind: 'direct' },
       method: step.method,
-      path: maskUiRunText(step.path, secretValues),
+      path: showSensitiveValues ? step.path : maskUiRunText(step.path, secretValues),
       extracts: step.extracts.map((extract) => ({
         name: extract.name,
         path: extract.path,
         passed: extract.passed,
-        ...(extract.error === undefined ? {} : { error: maskUiRunText(extract.error, secretValues) }),
+        ...(extract.error === undefined
+          ? {}
+          : { error: showSensitiveValues ? extract.error : maskUiRunText(extract.error, secretValues) }),
       })),
-      ...(includeValues && step.url !== undefined ? { url: maskUiRunUrl(step.url, secretValues) } : {}),
+      ...(includeValues && step.url !== undefined
+        ? { url: showSensitiveValues ? step.url : maskUiRunUrl(step.url, secretValues) }
+        : {}),
       ...(includeValues && step.request !== undefined
-        ? { request: maskUiRunRequest(step.request, secretValues) }
+        ? { request: showSensitiveValues ? step.request : maskUiRunRequest(step.request, secretValues) }
         : {}),
       ...(includeValues && step.response !== undefined
         ? {
-            response: {
-              status: step.response.status,
-              statusText: maskUiRunText(step.response.statusText, secretValues),
-              ...(step.response.headers === undefined
-                ? {}
-                : { headers: maskUiRunHeaders(step.response.headers, secretValues) }),
-              body: maskUiRunBody(step.response.body, secretValues),
-            },
+            response: showSensitiveValues
+              ? step.response
+              : {
+                  status: step.response.status,
+                  statusText: maskUiRunText(step.response.statusText, secretValues),
+                  ...(step.response.headers === undefined
+                    ? {}
+                    : { headers: maskUiRunHeaders(step.response.headers, secretValues) }),
+                  body: maskUiRunBody(step.response.body, secretValues),
+                },
           }
         : {}),
       ...(step.input === undefined
@@ -317,11 +327,15 @@ export function createUiRunTestResult(
         ? {}
         : {
             condition: {
-              expression: maskUiRunText(step.condition.expression, secretValues),
+              expression: showSensitiveValues
+                ? step.condition.expression
+                : maskUiRunText(step.condition.expression, secretValues),
               passed: step.condition.passed,
             },
           }),
-      ...(step.error === undefined ? {} : { error: maskUiRunText(step.error, secretValues) }),
+      ...(step.error === undefined
+        ? {}
+        : { error: showSensitiveValues ? step.error : maskUiRunText(step.error, secretValues) }),
       ...(step.response === undefined ? {} : { responseStatus: step.response.status }),
     })),
   };
@@ -336,6 +350,7 @@ export function createUiScenarioReporter(
   let reporter = createScenarioConsoleReporter(stdout, {
     color: true,
     live: false,
+    showSensitiveValues: run?.showSensitiveValues,
   });
 
   if (run !== undefined) {

@@ -365,6 +365,7 @@ export function createCliProgram(context: CliContext = {}, deps: CliProgramDeps)
     .option('-m, --module <name>', 'Module name from config')
     .option('--host <host>', 'Host to bind (defaults to 127.0.0.1)')
     .option('--port <port>', 'Port to bind (defaults to 3766 and tries nearby ports)')
+    .option('--show-sensitive-values', 'Show unmasked request, response, YAML, and log values')
     .action(async (options: UiOptions) => {
       await runUiCommand(options, context);
     });

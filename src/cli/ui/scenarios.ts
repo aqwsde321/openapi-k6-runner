@@ -44,6 +44,7 @@ export interface UiScenarioContext {
   config: LoadTestConfig;
   options?: {
     module?: string;
+    showSensitiveValues?: boolean;
   };
 }
 
@@ -149,7 +150,11 @@ export async function readUiScenarioDetail(
   const scenarioReader = createUiScenarioReaderContext(context);
   const stepSources = await readUiScenarioStepSources(scenarioReader, scenarioPath);
   const stepDefinitions = await readUiScenarioStepDefinitions(scenarioReader, scenarioPath);
-  const definitionCode = maskUiScenarioYamlCode(await fs.readFile(scenarioPath, 'utf8'));
+  const showSensitiveValues = context.options?.showSensitiveValues === true;
+  const rawDefinitionCode = await fs.readFile(scenarioPath, 'utf8');
+  const definitionCode = showSensitiveValues
+    ? rawDefinitionCode
+    : maskUiScenarioYamlCode(rawDefinitionCode);
   let resolvedSteps: ASTStep[] = [];
   let targetModules: string[] = [];
   let requestPreviews: Array<StepRequest | undefined> = [];
@@ -210,10 +215,13 @@ export async function readUiScenarioDetail(
       const definition = stepDefinitions[index];
       const definitionCode = definition === undefined
         ? undefined
-        : maskUiYamlDefinitionCode(definition.code, step);
+        : showSensitiveValues
+          ? definition.code
+          : maskUiYamlDefinitionCode(definition.code, step);
       const source = attachUiScenarioSourceDefinitions(
         stepSources[index] ?? { kind: 'direct' },
         definition?.lineage ?? [],
+        showSensitiveValues,
       );
       const requestPreview = isInputStep(step)
         ? undefined
@@ -246,10 +254,18 @@ export async function readUiScenarioDetail(
                 : { method: resolvedApi.method, path: resolvedApi.path }),
               ...(requestPreview === undefined
                 ? {}
-                : { request: maskUiPreviewValue(requestPreview) as StepRequest }),
+                : {
+                    request: showSensitiveValues
+                      ? requestPreview
+                      : maskUiPreviewValue(requestPreview) as StepRequest,
+                  }),
               ...(expectedResponses[index] === undefined
                 ? {}
-                : { expectedResponse: maskUiResponsePreview(expectedResponses[index]) }),
+                : {
+                    expectedResponse: showSensitiveValues
+                      ? expectedResponses[index]
+                      : maskUiResponsePreview(expectedResponses[index]),
+                  }),
               ...(step.condition === undefined ? {} : { condition: step.condition }),
               ...(step.extract === undefined ? {} : { extract: Object.keys(step.extract) }),
             }),
@@ -264,6 +280,7 @@ export async function readUiScenarioDetail(
 function attachUiScenarioSourceDefinitions(
   source: UiScenarioStepSource,
   definitions: UiScenarioStepDefinition[],
+  showSensitiveValues: boolean,
 ): UiScenarioStepSource {
   const lineage = source.lineage ?? (
     source.kind === 'direct' || source.reference === undefined
@@ -279,7 +296,9 @@ function attachUiScenarioSourceDefinitions(
       const definition = definitions[index];
       const code = definition === undefined
         ? undefined
-        : maskUiScenarioYamlCode(definition.code);
+        : showSensitiveValues
+          ? definition.code
+          : maskUiScenarioYamlCode(definition.code);
 
       return definition === undefined || code === undefined
         ? reference

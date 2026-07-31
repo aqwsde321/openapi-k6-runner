@@ -2183,6 +2183,65 @@ describe('openapi-k6 CLI', () => {
     }
   });
 
+  it('shows sensitive scenario, request, response, and log values only when explicitly enabled', async () => {
+    await writeRunFixtures();
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'),
+      [
+        'name: visible-secrets',
+        'steps:',
+        '  - id: health',
+        '    api:',
+        '      operationId: getHealth',
+        '    request:',
+        '      headers:',
+        '        Authorization: "Bearer {{env.ACCESS_TOKEN}}"',
+        '        X-Secret-Token: literal-request-token',
+        '    condition: status == 200',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    const ui = await runUiCommand(
+      { port: '0', showSensitiveValues: true },
+      {
+        cwd: workspace,
+        stdout: createSink(),
+        stderr: createSink(),
+        env: { ACCESS_TOKEN: 'literal-env-token' },
+        fetch: async () => new Response(
+          JSON.stringify({ token: 'literal-response-token', message: 'literal-env-token' }),
+          { status: 401, statusText: 'Unauthorized' },
+        ),
+      },
+    );
+
+    try {
+      const detail = await (await fetch(`${ui.url}/api/scenario?scenario=smoke`)).json() as {
+        definition?: { code: string };
+        steps: Array<{ request?: { headers?: Record<string, string> } }>;
+      };
+      const run = await (await fetch(`${ui.url}/api/run`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ command: 'test', scenario: 'smoke' }),
+      })).json() as { runId: string };
+      const events = await (await fetch(`${ui.url}/api/runs/${run.runId}/events`)).text();
+
+      expect(detail.definition?.code).toContain('X-Secret-Token: literal-request-token');
+      expect(detail.steps[0]?.request?.headers).toMatchObject({
+        Authorization: 'Bearer {{env.ACCESS_TOKEN}}',
+        'X-Secret-Token': 'literal-request-token',
+      });
+      expect(events).toContain('Bearer literal-env-token');
+      expect(events).toContain('literal-request-token');
+      expect(events).toContain('literal-response-token');
+      expect(events).toMatch(/event: chunk\ndata: [^\n]*literal-env-token/);
+    } finally {
+      await ui.close();
+    }
+  });
+
   it('lets UI test runs resume after submitting an input step value', async () => {
     await mkdir(path.join(workspace, 'openapi-k6/openapi'), { recursive: true });
     await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
