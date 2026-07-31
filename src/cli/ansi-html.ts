@@ -7,6 +7,13 @@ export interface AnsiHtmlState {
   pendingEscape: string;
 }
 
+export interface AnsiTextSegment {
+  text: string;
+  color?: AnsiHtmlColor;
+  bold: boolean;
+  dim: boolean;
+}
+
 export function createAnsiHtmlState(): AnsiHtmlState {
   return {
     bold: false,
@@ -16,6 +23,13 @@ export function createAnsiHtmlState(): AnsiHtmlState {
 }
 
 export function renderAnsiChunkToHtml(value: string, state: AnsiHtmlState = createAnsiHtmlState()): string {
+  return parseAnsiChunk(value, state).map(wrapAnsiText).join('');
+}
+
+export function parseAnsiChunk(
+  value: string,
+  state: AnsiHtmlState = createAnsiHtmlState(),
+): AnsiTextSegment[] {
   const text = `${state.pendingEscape}${value}`.replace(/\r/g, '');
   state.pendingEscape = '';
 
@@ -24,17 +38,18 @@ export function renderAnsiChunkToHtml(value: string, state: AnsiHtmlState = crea
   state.pendingEscape = text.slice(completeLength);
 
   const pattern = /\u001b\[([0-9;]*)m/g;
-  let html = '';
+  const segments: AnsiTextSegment[] = [];
   let index = 0;
   let match: RegExpExecArray | null;
 
   while ((match = pattern.exec(completeText)) !== null) {
-    html += wrapAnsiText(completeText.slice(index, match.index), state);
+    pushAnsiText(segments, completeText.slice(index, match.index), state);
     applyAnsiCodes(match[1] ?? '', state);
     index = pattern.lastIndex;
   }
 
-  return html + wrapAnsiText(completeText.slice(index), state);
+  pushAnsiText(segments, completeText.slice(index), state);
+  return segments;
 }
 
 function takeCompleteAnsiTextLength(value: string): number {
@@ -53,27 +68,37 @@ function takeCompleteAnsiTextLength(value: string): number {
   return value.length;
 }
 
-function wrapAnsiText(value: string, state: AnsiHtmlState): string {
-  if (value === '') {
-    return '';
-  }
-
+function wrapAnsiText(segment: AnsiTextSegment): string {
   const classes = [];
 
-  if (state.fg !== undefined) {
-    classes.push(`ansi-${state.fg}`);
+  if (segment.color !== undefined) {
+    classes.push(`ansi-${segment.color}`);
   }
 
-  if (state.bold) {
+  if (segment.bold) {
     classes.push('ansi-bold');
   }
 
-  if (state.dim) {
+  if (segment.dim) {
     classes.push('ansi-dim');
   }
 
   const classAttr = classes.length > 0 ? ` class="${classes.join(' ')}"` : '';
-  return `<span${classAttr}>${escapeHtml(value)}</span>`;
+  return `<span${classAttr}>${escapeHtml(segment.text)}</span>`;
+}
+
+function pushAnsiText(
+  segments: AnsiTextSegment[],
+  text: string,
+  state: AnsiHtmlState,
+): void {
+  if (text === '') return;
+  segments.push({
+    text,
+    ...(state.fg === undefined ? {} : { color: state.fg }),
+    bold: state.bold,
+    dim: state.dim,
+  });
 }
 
 function applyAnsiCodes(value: string, state: AnsiHtmlState): void {

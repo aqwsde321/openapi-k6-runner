@@ -10,15 +10,18 @@ import { Tab, TabList } from '@astryxdesign/core/TabList';
 import { Text } from '@astryxdesign/core/Text';
 import { TextInput } from '@astryxdesign/core/TextInput';
 import { Toolbar } from '@astryxdesign/core/Toolbar';
+import { githubDark } from '@astryxdesign/core/theme/syntax';
 import {
   type FormEvent,
   useCallback,
   useEffect,
+  useMemo,
   useReducer,
   useRef,
   useState,
 } from 'react';
 
+import { parseAnsiChunk, type AnsiHtmlColor } from '../../ansi-html.js';
 import type {
   UiRunChunk,
   UiRunInputRequest,
@@ -274,7 +277,7 @@ function RunResult({
   submit(run: ScenarioRun, value: string): Promise<void>;
 }) {
   const status = formatRunStatus(run);
-  const log = stripAnsi(run.log);
+  const log = useMemo(() => formatAnsiLog(run.log), [run.log]);
   const passedSteps = run.testResult?.steps.filter((step) => step.status === 'passed').length
     ?? run.suiteResult?.scenarios.reduce((sum, scenario) => sum + scenario.passedSteps, 0);
   const totalSteps = run.testResult?.steps.length
@@ -349,16 +352,19 @@ function RunResult({
         <SuiteRunSummary onOpenReport={onOpenReport} result={run.suiteResult} />
       )}
 
-      {log === '' ? (
+      {log.code === '' ? (
         <Text color="secondary" type="supporting">로그 기다리는 중…</Text>
       ) : (
         <CodeBlock
-          code={log}
-          container="section"
+          code={log.code}
+          container="card"
+          hasLanguageLabel={false}
           isWrapped
-          language="plaintext"
+          language="ansi"
           size="sm"
+          syntaxTheme={githubDark}
           title="실행 로그"
+          tokenizer={log.tokenizer}
           width="100%"
         />
       )}
@@ -499,8 +505,34 @@ function formatRunTime(value: string): string {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleTimeString();
 }
 
-function stripAnsi(value: string): string {
-  return value.replace(/\u001b\[[0-9;]*m/g, '');
+const ANSI_TOKEN_TYPES: Record<AnsiHtmlColor, string> = {
+  grey: 'comment',
+  cyan: 'string',
+  green: 'tag',
+  yellow: 'type',
+  red: 'keyword',
+};
+
+function formatAnsiLog(value: string) {
+  let code = '';
+  const tokens: Array<{ type: string; start: number; end: number }> = [];
+
+  for (const segment of parseAnsiChunk(value)) {
+    const start = code.length;
+    code += segment.text;
+    const type = segment.color === undefined
+      ? segment.dim ? 'comment' : undefined
+      : ANSI_TOKEN_TYPES[segment.color];
+    if (type !== undefined) {
+      let offset = 0;
+      for (const line of segment.text.split('\n')) {
+        if (line !== '') tokens.push({ type, start: start + offset, end: start + offset + line.length });
+        offset += line.length + 1;
+      }
+    }
+  }
+
+  return { code, tokenizer: () => tokens };
 }
 
 function readEventData<T>(event: Event): T {

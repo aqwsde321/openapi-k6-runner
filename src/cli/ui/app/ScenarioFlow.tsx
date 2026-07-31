@@ -336,13 +336,20 @@ function StepDetail({
   );
 
   return (
-    <VStack gap={4} paddingBlock={2}>
+    <VStack
+      aria-label={`${step.id} 단계 상세`}
+      as="section"
+      gap={4}
+      paddingBlock={3}
+      paddingInline={4}
+    >
       {request !== undefined && (
         <CodeBlock
           code={request}
           container="section"
+          hasLanguageLabel={false}
           isWrapped
-          language="plaintext"
+          language="yaml"
           size="sm"
           title={actualRequest === undefined ? '요청 · 예정 구조' : '요청 · 실제'}
           width="100%"
@@ -352,8 +359,9 @@ function StepDetail({
         <CodeBlock
           code={response}
           container="section"
+          hasLanguageLabel={false}
           isWrapped
-          language="plaintext"
+          language="yaml"
           size="sm"
           title={actualResponse === undefined ? '응답 · 예상 (OpenAPI)' : '응답 · 실제'}
           width="100%"

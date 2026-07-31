@@ -187,6 +187,11 @@ describe('React UI behavior', () => {
     expect(document.body.textContent).toContain('요청 · 예정 구조');
     expect(document.body.textContent).toContain('{{vars.name}}');
     expect(document.body.textContent).toContain('status: 201');
+    expect(document.body.querySelector('.astryx-token-property')?.textContent).toBe('body');
+    const stepDetail = document.body.querySelector<HTMLElement>(
+      'section[aria-label="create-user 단계 상세"]',
+    );
+    expect(stepDetail).not.toBeNull();
     expect(document.body.textContent).not.toContain('STEP_LEVEL_SHOULD_NOT_RENDER');
 
     await click(getButtonContaining('yaml-only'));
@@ -249,6 +254,31 @@ describe('React UI behavior', () => {
       selectUiRun(runs, { kind: 'scenario', id: 'manual' }, 'test'),
       '123456',
     );
+  });
+
+  it('renders k6 ANSI log colors without control sequences', async () => {
+    const runs = ansiLogRuns();
+
+    await render(
+      <ScenarioRunPanel
+        isReady
+        runs={runs}
+        start={async () => undefined}
+        submit={async () => undefined}
+        targetId="manual"
+        targetKind="scenario"
+        targetName="manual"
+      />,
+    );
+
+    const logTheme = document.body.querySelector('[data-astryx-syntax-theme="github-dark"]');
+    expect(logTheme).not.toBeNull();
+    expect(logTheme?.querySelector('pre')?.getAttribute('data-container')).toBe('card');
+    expect([...document.body.querySelectorAll('.astryx-token-tag')].map((token) => (
+      token.textContent
+    ))).toEqual(['PASS', 'NEXT']);
+    expect(document.body.querySelector('.astryx-token-keyword')?.textContent).toBe('FAIL');
+    expect(document.body.textContent).not.toContain('\u001b');
   });
 
   it('filters report failures and keeps download actions', async () => {
@@ -449,6 +479,37 @@ function pendingInputRuns(): UiRuns {
       label: 'SMS 인증번호',
       required: true,
       sensitive: true,
+    },
+  });
+}
+
+function ansiLogRuns(): UiRuns {
+  let runs: UiRuns = new Map();
+  runs = reduceUiRuns(runs, {
+    type: 'requested',
+    kind: 'scenario',
+    id: 'manual',
+    command: 'test',
+    at: '2026-07-30T00:00:00.000Z',
+  });
+  runs = reduceUiRuns(runs, {
+    type: 'started',
+    kind: 'scenario',
+    id: 'manual',
+    command: 'test',
+    runId: 'manual-run',
+    at: '2026-07-30T00:00:01.000Z',
+  });
+  return reduceUiRuns(runs, {
+    type: 'chunk',
+    kind: 'scenario',
+    id: 'manual',
+    command: 'test',
+    runId: 'manual-run',
+    chunk: {
+      stream: 'stdout',
+      chunk: '\u001b[32mPASS\nNEXT\u001b[0m \u001b[91mFAIL\u001b[0m',
+      html: '<span class="ansi-green">PASS\nNEXT</span> <span class="ansi-red">FAIL</span>',
     },
   });
 }
