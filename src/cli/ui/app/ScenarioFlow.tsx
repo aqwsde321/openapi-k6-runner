@@ -19,6 +19,7 @@ import { Section } from '@astryxdesign/core/Section';
 import { HStack, VStack } from '@astryxdesign/core/Stack';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
 import { Heading, Text } from '@astryxdesign/core/Text';
+import { oneLight } from '@astryxdesign/core/theme/syntax';
 import { useState } from 'react';
 
 import type {
@@ -349,8 +350,9 @@ function StepDetail({
           container="section"
           hasLanguageLabel={false}
           isWrapped
-          language="yaml"
+          language="json"
           size="sm"
+          syntaxTheme={oneLight}
           title={actualRequest === undefined ? '요청 · 예정 구조' : '요청 · 실제'}
           width="100%"
         />
@@ -361,8 +363,9 @@ function StepDetail({
           container="section"
           hasLanguageLabel={false}
           isWrapped
-          language="yaml"
+          language="json"
           size="sm"
+          syntaxTheme={oneLight}
           title={actualResponse === undefined ? '응답 · 예상 (OpenAPI)' : '응답 · 실제'}
           width="100%"
         />

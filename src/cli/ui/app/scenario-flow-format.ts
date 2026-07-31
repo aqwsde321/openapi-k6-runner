@@ -30,62 +30,63 @@ export function resolveScenarioTargetNames(
 
 export function formatRequestPreview(request: StepRequest | undefined): string | undefined {
   if (request === undefined) return undefined;
-  const sections = [
-    formatPreviewSection('headers', request.headers),
-    formatPreviewSection('query', request.query),
-    formatPreviewSection('pathParams', request.pathParams),
-    formatPreviewSection('body', request.body),
-    formatPreviewSection('multipart', request.multipart),
-  ].filter((value): value is string => value !== undefined);
-  return sections.length === 0 ? undefined : sections.join('\n\n');
+  return formatJsonRecord([
+    ['headers', request.headers],
+    ['query', request.query],
+    ['pathParams', request.pathParams],
+    ['body', request.body],
+    ['multipart', request.multipart],
+  ]);
 }
 
 export function formatResponsePreview(response: OpenApiResponsePreview | undefined): string | undefined {
   if (response === undefined) return undefined;
-  const metadata = [
-    `status: ${response.status}`,
-    response.contentType === undefined ? undefined : `content-type: ${response.contentType}`,
-    response.source === undefined ? undefined : `source: ${response.source}`,
-  ].filter((value): value is string => value !== undefined);
-  const body = formatPreviewSection('body', response.body);
-  return [...metadata, body].filter((value): value is string => value !== undefined).join('\n\n');
+  return formatJsonRecord([
+    ['status', response.status],
+    ['content-type', response.contentType],
+    ['source', response.source],
+    ['body', response.body],
+  ]);
 }
 
 export function formatRunRequest(
   url: string | undefined,
   request: UiRunRequestValue | undefined,
 ): string | undefined {
-  const sections = [
-    url === undefined ? undefined : `url: ${url}`,
-    formatPreviewSection('headers', request?.headers),
-    formatPreviewSection('body', request?.body),
-  ].filter((value): value is string => value !== undefined);
-  return sections.length === 0 ? undefined : sections.join('\n\n');
+  return formatJsonRecord([
+    ['url', url],
+    ['headers', request?.headers],
+    ['body', request?.body],
+  ]);
 }
 
 export function formatRunResponse(response: UiRunResponseValue | undefined): string | undefined {
   if (response === undefined) return undefined;
-  const statusText = response.statusText === '' ? '' : ` ${response.statusText}`;
-  return [
-    `status: ${response.status}${statusText}`,
-    formatPreviewSection('headers', response.headers),
-    formatPreviewSection('body', response.body),
-  ].filter((value): value is string => value !== undefined).join('\n\n');
+  return formatJsonRecord([
+    ['status', response.status],
+    ['statusText', response.statusText === '' ? undefined : response.statusText],
+    ['headers', response.headers],
+    ['body', response.body],
+  ]);
 }
 
-function formatPreviewSection(label: string, value: unknown): string | undefined {
-  if (value === undefined) return undefined;
-  return `${label}:\n${formatPreviewValue(value)}`;
-}
-
-function formatPreviewValue(value: unknown): string {
+function normalizeJsonBody(value: unknown): unknown {
   if (typeof value === 'string') {
     try {
-      return JSON.stringify(JSON.parse(value), null, 2);
+      return JSON.parse(value);
     } catch {
       return value;
     }
   }
 
-  return JSON.stringify(value, null, 2) ?? String(value);
+  return value;
+}
+
+function formatJsonRecord(entries: Array<[string, unknown]>): string | undefined {
+  const values = entries
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => [key, key === 'body' ? normalizeJsonBody(value) : value] as const);
+  return values.length === 0
+    ? undefined
+    : JSON.stringify(Object.fromEntries(values), null, 2);
 }

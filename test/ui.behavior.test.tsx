@@ -152,7 +152,13 @@ describe('React UI behavior', () => {
           targetModule: 'app',
           method: 'POST',
           path: '/users',
-          request: { body: { name: '{{vars.name}}' } },
+          request: {
+            body: {
+              active: true,
+              name: '{{vars.name}}',
+              retries: 2,
+            },
+          },
           expectedResponse: { status: '201', source: 'schema', body: { id: 'string' } },
           definition: {
             path: 'openapi-k6/scenarios/auth/login.yaml',
@@ -186,12 +192,22 @@ describe('React UI behavior', () => {
     expect(stepButton.getAttribute('aria-expanded')).toBe('true');
     expect(document.body.textContent).toContain('요청 · 예정 구조');
     expect(document.body.textContent).toContain('{{vars.name}}');
-    expect(document.body.textContent).toContain('status: 201');
-    expect(document.body.querySelector('.astryx-token-property')?.textContent).toBe('body');
+    expect(document.body.textContent).toContain('"status": "201"');
     const stepDetail = document.body.querySelector<HTMLElement>(
       'section[aria-label="create-user 단계 상세"]',
     );
     expect(stepDetail).not.toBeNull();
+    expect(stepDetail?.querySelector('[data-astryx-syntax-theme="one-light"]')).not.toBeNull();
+    const requestCode = stepDetail?.querySelector<HTMLElement>('.astryx-codeblock');
+    expect(requestCode?.dataset.language).toBe('json');
+    expect([...requestCode?.querySelectorAll('.astryx-token-property') ?? []]
+      .map((token) => token.textContent)).toContain('"name"');
+    expect([...requestCode?.querySelectorAll('.astryx-token-string') ?? []]
+      .map((token) => token.textContent)).toContain('"{{vars.name}}"');
+    expect([...requestCode?.querySelectorAll('.astryx-token-number') ?? []]
+      .map((token) => token.textContent)).toContain('2');
+    expect([...requestCode?.querySelectorAll('.astryx-token-constant') ?? []]
+      .map((token) => token.textContent)).toContain('true');
     expect(document.body.textContent).not.toContain('STEP_LEVEL_SHOULD_NOT_RENDER');
 
     await click(getButtonContaining('yaml-only'));
