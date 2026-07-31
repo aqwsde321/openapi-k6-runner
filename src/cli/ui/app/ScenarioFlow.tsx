@@ -18,6 +18,7 @@ import {
 import { Section } from '@astryxdesign/core/Section';
 import { HStack, VStack } from '@astryxdesign/core/Stack';
 import { StatusDot } from '@astryxdesign/core/StatusDot';
+import { Tab, TabList } from '@astryxdesign/core/TabList';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { oneLight } from '@astryxdesign/core/theme/syntax';
 import { useState } from 'react';
@@ -41,8 +42,13 @@ type ScenarioStep = UiScenarioDetail['steps'][number];
 type ModuleCheck = UiServerCheckResult['modules'][number];
 type YamlDefinition = NonNullable<UiScenarioDetail['definition']>;
 
-interface YamlPreview extends YamlDefinition {
-  title: string;
+type YamlPreview =
+  | { kind: 'scenario' }
+  | { kind: 'included'; path: string }
+  | { kind: 'step'; definition: YamlDefinition };
+
+interface IncludedYamlDefinition extends YamlDefinition {
+  source: string;
 }
 
 export interface ScenarioFlowProps {
@@ -82,6 +88,13 @@ export function ScenarioFlow({
 
   const targetNames = resolveScenarioTargetNames(detail, item.modules, defaultModule);
   const scenarioDefinition = detail?.definition;
+  const includedDefinitions = collectIncludedYamlDefinitions(detail, scenarioDefinition?.path);
+  const previewDefinition = yamlPreview?.kind === 'step'
+    ? yamlPreview.definition
+    : yamlPreview?.kind === 'included'
+      ? includedDefinitions.find((definition) => definition.path === yamlPreview.path) ??
+        includedDefinitions[0]
+      : scenarioDefinition;
 
   return (
     <VStack gap={0}>
@@ -96,10 +109,7 @@ export function ScenarioFlow({
               {scenarioDefinition !== undefined && (
                 <Button
                   label="YAML 보기"
-                  onClick={() => setYamlPreview({
-                    ...scenarioDefinition,
-                    title: '시나리오 YAML',
-                  })}
+                  onClick={() => setYamlPreview({ kind: 'scenario' })}
                   size="sm"
                   variant="ghost"
                 />
@@ -141,15 +151,12 @@ export function ScenarioFlow({
         <ScenarioSteps
           defaultModule={defaultModule}
           detail={detail}
-          onOpenYaml={(definition, title) => setYamlPreview({
-            ...definition,
-            title,
-          })}
+          onOpenYaml={(definition) => setYamlPreview({ kind: 'step', definition })}
           testResult={testResult}
           testStatus={testStatus}
         />
       )}
-      {yamlPreview !== undefined && (
+      {yamlPreview !== undefined && previewDefinition !== undefined && (
         <Dialog
           isOpen
           maxHeight="90vh"
@@ -165,22 +172,68 @@ export function ScenarioFlow({
                 onOpenChange={(isOpen) => {
                   if (!isOpen) setYamlPreview(undefined);
                 }}
-                subtitle={yamlPreview.path}
-                title={yamlPreview.title}
+                subtitle={previewDefinition.path}
+                title={yamlPreview.kind === 'step' ? '단계 YAML' : '시나리오 YAML'}
               />
             )}
             content={(
               <LayoutContent padding={0}>
-                <CodeBlock
-                  code={yamlPreview.code}
-                  container="section"
-                  hasLineNumbers
-                  isWrapped
-                  language={yamlPreview.path.toLowerCase().endsWith('.json') ? 'json' : 'yaml'}
-                  maxHeight="70vh"
-                  size="sm"
-                  width="100%"
-                />
+                <VStack gap={0}>
+                  {yamlPreview.kind !== 'step' && includedDefinitions.length > 0 && (
+                    <TabList
+                      aria-label="YAML 범위"
+                      hasDivider
+                      layout="fill"
+                      onChange={(value) => setYamlPreview(value === 'included'
+                        ? { kind: 'included', path: includedDefinitions[0]!.path }
+                        : { kind: 'scenario' })}
+                      size="sm"
+                      value={yamlPreview.kind}
+                    >
+                      <Tab label="현재 YAML" value="scenario" />
+                      <Tab
+                        endContent={<Badge label={includedDefinitions.length} />}
+                        label="포함 YAML"
+                        value="included"
+                      />
+                    </TabList>
+                  )}
+                  {yamlPreview.kind === 'included' && includedDefinitions.length > 1 && (
+                    <Section dividers={['bottom']} padding={0}>
+                      <VStack gap={0}>
+                        {includedDefinitions.map((definition) => (
+                          <Item
+                            key={definition.path}
+                            density="compact"
+                            description={definition.source}
+                            isSelected={definition.path === previewDefinition.path}
+                            label={(
+                              <Text hasTruncateTooltip maxLines={1} type="code">
+                                {definition.path}
+                              </Text>
+                            )}
+                            onClick={() => setYamlPreview({
+                              kind: 'included',
+                              path: definition.path,
+                            })}
+                          />
+                        ))}
+                      </VStack>
+                    </Section>
+                  )}
+                  <CodeBlock
+                    code={previewDefinition.code}
+                    container="section"
+                    hasLineNumbers
+                    isWrapped
+                    language={previewDefinition.path.toLowerCase().endsWith('.json')
+                      ? 'json'
+                      : 'yaml'}
+                    maxHeight="70vh"
+                    size="sm"
+                    width="100%"
+                  />
+                </VStack>
               </LayoutContent>
             )}
           />
@@ -199,7 +252,7 @@ function ScenarioSteps({
 }: {
   defaultModule?: string;
   detail: UiScenarioDetail;
-  onOpenYaml: (definition: YamlDefinition, title: string) => void;
+  onOpenYaml: (definition: YamlDefinition) => void;
   testResult?: UiRunTestResult;
   testStatus?: 'starting' | UiRunStatus;
 }) {
@@ -318,7 +371,7 @@ function StepDetail({
   result,
   step,
 }: {
-  onOpenYaml: (definition: YamlDefinition, title: string) => void;
+  onOpenYaml: (definition: YamlDefinition) => void;
   result?: UiRunStepResult;
   step: ScenarioStep;
 }) {
@@ -330,11 +383,6 @@ function StepDetail({
     step.condition !== undefined || result?.condition !== undefined ||
     step.extract !== undefined || (result?.extracts.length ?? 0) > 0;
   const definition = step.definition;
-  const sourceDefinitions = (step.source.lineage ?? []).filter(
-    (source): source is typeof source & { definition: YamlDefinition } => (
-      source.definition !== undefined
-    ),
-  );
 
   return (
     <VStack
@@ -418,25 +466,6 @@ function StepDetail({
           title="단계 실행 실패"
         />
       )}
-      {sourceDefinitions.length > 0 && (
-        <VStack gap={1}>
-          <Text color="secondary" type="label">포함 시나리오 YAML</Text>
-          {sourceDefinitions.map((source) => (
-            <Item
-              key={`${source.kind}:${source.reference}:${source.definition.path}`}
-              density="compact"
-              description={`${source.kind === 'use' ? '시나리오 사용' : '파일 포함'} · ${source.reference}`}
-              endContent={<Text color="secondary" type="supporting">보기</Text>}
-              label={(
-                <Text color="secondary" hasTruncateTooltip maxLines={1} type="code">
-                  {source.definition.path}
-                </Text>
-              )}
-              onClick={() => onOpenYaml(source.definition, '포함 시나리오 YAML')}
-            />
-          ))}
-        </VStack>
-      )}
       {definition !== undefined && (
         <Item
           density="compact"
@@ -447,11 +476,11 @@ function StepDetail({
               {definition.path}
             </Text>
           )}
-          onClick={() => onOpenYaml(definition, '단계 YAML')}
+          onClick={() => onOpenYaml(definition)}
         />
       )}
       {request === undefined && response === undefined && !hasMetadata &&
-        definition === undefined && sourceDefinitions.length === 0 && (
+        definition === undefined && (
         <Text color="secondary" type="supporting">표시할 상세 정보 없음</Text>
       )}
     </VStack>
@@ -513,6 +542,33 @@ function TargetRow({ module, name }: { module?: ModuleCheck; name: string }) {
       <Text color="secondary" type="supporting">{label}</Text>
     </HStack>
   );
+}
+
+function collectIncludedYamlDefinitions(
+  detail: UiScenarioDetail | undefined,
+  scenarioPath: string | undefined,
+): IncludedYamlDefinition[] {
+  const definitions = new Map<string, IncludedYamlDefinition>();
+
+  detail?.steps.forEach((step) => {
+    step.source.lineage?.forEach((source) => {
+      const definition = source.definition;
+      if (
+        definition === undefined ||
+        definition.path === scenarioPath ||
+        definitions.has(definition.path)
+      ) {
+        return;
+      }
+
+      definitions.set(definition.path, {
+        ...definition,
+        source: `${source.kind === 'use' ? '시나리오 사용' : '파일 포함'} · ${source.reference}`,
+      });
+    });
+  });
+
+  return [...definitions.values()];
 }
 
 function formatStepEndpoint(step: ScenarioStep): string {

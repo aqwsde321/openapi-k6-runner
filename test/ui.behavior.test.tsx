@@ -121,8 +121,8 @@ describe('React UI behavior', () => {
       includes: [],
       fixtures: [],
       definition: {
-        path: 'openapi-k6/scenarios/auth/login.yaml',
-        code: 'name: login\nsteps: []',
+        path: 'openapi-k6/scenarios/account/main.yaml',
+        code: 'name: main\nsteps:\n  - use: auth/session',
       },
       steps: [
         {
@@ -145,6 +145,14 @@ describe('React UI behavior', () => {
                 definition: {
                   path: 'openapi-k6/scenarios/auth/login.yaml',
                   code: 'name: login\nsteps:\n  - id: create-user',
+                },
+              },
+              {
+                kind: 'use',
+                reference: 'auth/session',
+                definition: {
+                  path: 'openapi-k6/scenarios/auth/session.yaml',
+                  code: 'duplicate path',
                 },
               },
             ],
@@ -213,22 +221,28 @@ describe('React UI behavior', () => {
     await click(getButtonContaining('yaml-only'));
     expect(document.body.textContent).not.toContain('표시할 상세 정보 없음');
 
-    await click(getButtonContaining('openapi-k6/scenarios/auth/session.yaml'));
-    expect(document.body.textContent).toContain('포함 시나리오 YAML');
-    expect(document.body.textContent).toContain('name: session');
-    let closeDialog = document.body.querySelector<HTMLButtonElement>('button[aria-label="Close"]');
-    await click(expectElement(closeDialog));
+    expect(document.body.textContent).not.toContain('포함 시나리오 YAML');
 
     await click(getButtonContaining('단계 원본 YAML'));
     expect(document.body.textContent).toContain('단계 YAML');
     expect(document.body.textContent).toContain('STEP_LEVEL_SHOULD_NOT_RENDER');
-    closeDialog = document.body.querySelector<HTMLButtonElement>('button[aria-label="Close"]');
+    let closeDialog = document.body.querySelector<HTMLButtonElement>('button[aria-label="Close"]');
     await click(expectElement(closeDialog));
 
     await click(getButton('YAML 보기'));
     expect(document.body.textContent).toContain('시나리오 YAML');
-    expect(document.body.textContent).toContain('openapi-k6/scenarios/auth/login.yaml');
+    expect(document.body.textContent).toContain('openapi-k6/scenarios/account/main.yaml');
+    expect(document.body.textContent).toContain('name: main');
+    expect(getButton('현재 YAML').getAttribute('aria-current')).toBe('page');
+    const includedYamlTab = getButtonContaining('포함 YAML');
+    expect(includedYamlTab.textContent).toContain('2');
+    await click(includedYamlTab);
+    expect(document.body.textContent).toContain('openapi-k6/scenarios/auth/session.yaml');
+    expect(document.body.textContent).toContain('name: session');
+    await click(getButtonContaining('시나리오 사용 · auth/login'));
     expect(document.body.textContent).toContain('name: login');
+    await click(getButton('현재 YAML'));
+    expect(document.body.textContent).toContain('name: main');
   });
 
   it('starts a run and submits a sensitive input value', async () => {
