@@ -122,7 +122,7 @@ describe('React UI behavior', () => {
       fixtures: [],
       definition: {
         path: 'openapi-k6/scenarios/account/main.yaml',
-        code: 'name: main\nsteps:\n  - use: auth/session',
+        code: 'name: main\nsteps:\n  - use: auth/session\n  - include: ./legacy.yaml',
       },
       steps: [
         {
@@ -235,6 +235,14 @@ describe('React UI behavior', () => {
     expect(document.body.textContent).toContain('시나리오 YAML');
     expect(document.body.textContent).toContain('openapi-k6/scenarios/account/main.yaml');
     expect(document.body.textContent).toContain('name: main');
+    const currentYaml = document.body.querySelector<HTMLElement>(
+      '.astryx-codeblock[data-language="yaml"]',
+    );
+    const regularLineClass = currentYaml?.querySelector<HTMLElement>('[data-line="1"]')?.className;
+    expect(currentYaml?.querySelector<HTMLElement>('[data-line="3"]')?.className)
+      .not.toBe(regularLineClass);
+    expect(currentYaml?.querySelector<HTMLElement>('[data-line="4"]')?.className)
+      .not.toBe(regularLineClass);
     expect(getButton('현재 YAML').getAttribute('aria-current')).toBe('page');
     const includedYamlTab = getButtonContaining('포함 YAML');
     expect(includedYamlTab.textContent).toContain('2');

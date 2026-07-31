@@ -225,6 +225,7 @@ export function ScenarioFlow({
                     code={previewDefinition.code}
                     container="section"
                     hasLineNumbers
+                    highlightLines={findScenarioReferenceLines(previewDefinition.code)}
                     isWrapped
                     language={previewDefinition.path.toLowerCase().endsWith('.json')
                       ? 'json'
@@ -569,6 +570,13 @@ function collectIncludedYamlDefinitions(
   });
 
   return [...definitions.values()];
+}
+
+function findScenarioReferenceLines(code: string): number[] {
+  // ponytail: documented block syntax only; use the YAML AST if alternate forms need highlighting.
+  return code.split('\n').flatMap((line, index) => (
+    /^\s*-\s+(?:use|include)\s*:/.test(line) ? [index + 1] : []
+  ));
 }
 
 function formatStepEndpoint(step: ScenarioStep): string {
