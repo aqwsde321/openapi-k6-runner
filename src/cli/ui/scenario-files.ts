@@ -15,6 +15,7 @@ export interface UiScenarioReaderContext {
 export interface UiScenarioStepDefinition {
   path: string;
   code: string;
+  lineage?: UiScenarioStepDefinition[];
 }
 
 export async function readTopLevelStringArray(filePath: string, key: string): Promise<string[]> {
@@ -196,13 +197,21 @@ async function readUiScenarioStepDefinitionsInternal(
 
     if (useReference !== undefined) {
       const nestedPath = context.resolveScenarioPath(useReference);
-      definitions.push(...await readUiScenarioStepDefinitionsInternal(context, nestedPath, nextStack));
+      const nestedDefinitions = await readUiScenarioStepDefinitionsInternal(context, nestedPath, nextStack);
+      const nestedDefinition = await readUiScenarioDefinition(context, nestedPath);
+      definitions.push(...nestedDefinitions.map((definition) => (
+        prependUiScenarioStepDefinition(definition, nestedDefinition)
+      )));
       continue;
     }
 
     if (includeReference !== undefined) {
       const nestedPath = path.resolve(path.dirname(filePath), includeReference);
-      definitions.push(...await readUiScenarioStepDefinitionsInternal(context, nestedPath, nextStack));
+      const nestedDefinitions = await readUiScenarioStepDefinitionsInternal(context, nestedPath, nextStack);
+      const nestedDefinition = await readUiScenarioDefinition(context, nestedPath);
+      definitions.push(...nestedDefinitions.map((definition) => (
+        prependUiScenarioStepDefinition(definition, nestedDefinition)
+      )));
       continue;
     }
 
@@ -217,6 +226,26 @@ async function readUiScenarioStepDefinitionsInternal(
   }
 
   return definitions;
+}
+
+async function readUiScenarioDefinition(
+  context: UiScenarioReaderContext,
+  filePath: string,
+): Promise<UiScenarioStepDefinition> {
+  return {
+    path: context.formatDisplayPath(filePath),
+    code: await fs.readFile(filePath, 'utf8'),
+  };
+}
+
+function prependUiScenarioStepDefinition(
+  definition: UiScenarioStepDefinition,
+  parent: UiScenarioStepDefinition,
+): UiScenarioStepDefinition {
+  return {
+    ...definition,
+    lineage: [parent, ...(definition.lineage ?? [])],
+  };
 }
 
 function readYamlMapString(node: YAMLMap, key: string): string | undefined {

@@ -1782,6 +1782,7 @@ describe('openapi-k6 CLI', () => {
         '    request:',
         '      headers:',
         '        X-Preview: preview-header',
+        '        X-Secret-Token: literal-lineage-secret',
         '    condition: status == 201',
         '',
       ].join('\n'),
@@ -1880,7 +1881,15 @@ describe('openapi-k6 CLI', () => {
           path?: string;
           request?: { headers?: Record<string, unknown> };
           expectedResponse?: { status: string; contentType?: string; source?: string; body?: unknown };
-          source: { kind: 'direct' | 'use' | 'include'; reference?: string };
+          source: {
+            kind: 'direct' | 'use' | 'include';
+            reference?: string;
+            lineage?: Array<{
+              kind: 'use' | 'include';
+              reference: string;
+              definition?: { path: string; code: string };
+            }>;
+          };
           definition?: { path: string; code: string };
         }>;
       };
@@ -2008,6 +2017,7 @@ describe('openapi-k6 CLI', () => {
               headers: {
                 Authorization: '{{env.AUTHORIZATION}}',
                 'X-Preview': 'preview-header',
+                'X-Secret-Token': '***',
               },
               query: { limit: 10 },
               body: {
@@ -2021,7 +2031,17 @@ describe('openapi-k6 CLI', () => {
               source: 'schema',
               body: { ok: false },
             },
-            source: { kind: 'use', reference: 'auth/login' },
+            source: {
+              kind: 'use',
+              reference: 'auth/login',
+              lineage: [expect.objectContaining({
+                kind: 'use',
+                reference: 'auth/login',
+                definition: expect.objectContaining({
+                  path: 'openapi-k6/scenarios/auth/login.yaml',
+                }),
+              })],
+            },
             definition: expect.objectContaining({
               path: 'openapi-k6/scenarios/auth/login.yaml',
               code: expect.stringContaining('- id: health'),
@@ -2038,6 +2058,8 @@ describe('openapi-k6 CLI', () => {
           }),
         ],
       });
+      expect(useDetail.steps[0]?.source.lineage?.[0]?.definition?.code).toContain('X-Secret-Token: "***"');
+      expect(JSON.stringify(useDetail)).not.toContain('literal-lineage-secret');
       expect(dottedDetail).toMatchObject({
         id: dottedScenarioId,
         name: 'login-v2',

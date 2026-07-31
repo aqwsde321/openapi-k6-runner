@@ -4,7 +4,10 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { readUiScenarioStepSources } from '../src/cli/ui/scenario-files.js';
+import {
+  readUiScenarioStepDefinitions,
+  readUiScenarioStepSources,
+} from '../src/cli/ui/scenario-files.js';
 
 const workspaces: string[] = [];
 
@@ -52,10 +55,13 @@ describe('UI scenario files', () => {
       ].join('\n')),
     ]);
 
-    await expect(readUiScenarioStepSources({
-      resolveScenarioPath: (value) => path.join(workspace, `${value}.yaml`),
-      formatDisplayPath: (filePath) => path.relative(workspace, filePath),
-    }, path.join(workspace, 'root.yaml'))).resolves.toEqual([
+    const context = {
+      resolveScenarioPath: (value: string) => path.join(workspace, `${value}.yaml`),
+      formatDisplayPath: (filePath: string) => path.relative(workspace, filePath),
+    };
+    const rootPath = path.join(workspace, 'root.yaml');
+
+    await expect(readUiScenarioStepSources(context, rootPath)).resolves.toEqual([
       {
         kind: 'use',
         reference: 'flow/middle',
@@ -75,5 +81,18 @@ describe('UI scenario files', () => {
       { kind: 'use', reference: 'flow/middle' },
       { kind: 'direct' },
     ]);
+
+    const definitions = await readUiScenarioStepDefinitions(context, rootPath);
+    expect(definitions.map((definition) => ({
+      path: definition.path,
+      lineage: definition.lineage?.map((item) => item.path),
+    }))).toEqual([
+      { path: 'flow/leaf.yaml', lineage: ['flow/middle.yaml', 'flow/leaf.yaml'] },
+      { path: 'flow/partial.yaml', lineage: ['flow/middle.yaml', 'flow/partial.yaml'] },
+      { path: 'flow/middle.yaml', lineage: ['flow/middle.yaml'] },
+      { path: 'root.yaml', lineage: undefined },
+    ]);
+    expect(definitions[0]?.lineage?.[0]?.code).toContain('name: middle');
+    expect(definitions[0]?.lineage?.[1]?.code).toContain('name: leaf');
   });
 });

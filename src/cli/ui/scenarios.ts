@@ -211,6 +211,10 @@ export async function readUiScenarioDetail(
       const definitionCode = definition === undefined
         ? undefined
         : maskUiYamlDefinitionCode(definition.code, step);
+      const source = attachUiScenarioSourceDefinitions(
+        stepSources[index] ?? { kind: 'direct' },
+        definition?.lineage ?? [],
+      );
       const requestPreview = isInputStep(step)
         ? undefined
         : mergeUiRequestPreview(
@@ -220,7 +224,7 @@ export async function readUiScenarioDetail(
 
       return {
         id: step.id,
-        source: stepSources[index] ?? { kind: 'direct' },
+        source,
         ...(isInputStep(step)
           ? {
               input: {
@@ -251,8 +255,35 @@ export async function readUiScenarioDetail(
             }),
         ...(definition === undefined || definitionCode === undefined
           ? {}
-          : { definition: { ...definition, code: definitionCode } }),
+          : { definition: { path: definition.path, code: definitionCode } }),
       };
+    }),
+  };
+}
+
+function attachUiScenarioSourceDefinitions(
+  source: UiScenarioStepSource,
+  definitions: UiScenarioStepDefinition[],
+): UiScenarioStepSource {
+  const lineage = source.lineage ?? (
+    source.kind === 'direct' || source.reference === undefined
+      ? []
+      : [{ kind: source.kind, reference: source.reference }]
+  );
+
+  if (lineage.length === 0) return source;
+
+  return {
+    ...source,
+    lineage: lineage.map((reference, index) => {
+      const definition = definitions[index];
+      const code = definition === undefined
+        ? undefined
+        : maskUiScenarioYamlCode(definition.code);
+
+      return definition === undefined || code === undefined
+        ? reference
+        : { ...reference, definition: { path: definition.path, code } };
     }),
   };
 }

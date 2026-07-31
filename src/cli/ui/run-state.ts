@@ -154,6 +154,10 @@ export interface UiScenarioStepSource {
 export interface UiScenarioStepSourceReference {
   kind: 'use' | 'include';
   reference: string;
+  definition?: {
+    path: string;
+    code: string;
+  };
 }
 
 export function createUiRunRecord(options: {

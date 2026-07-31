@@ -140,9 +140,9 @@ export function ScenarioFlow({
         <ScenarioSteps
           defaultModule={defaultModule}
           detail={detail}
-          onOpenYaml={(definition) => setYamlPreview({
+          onOpenYaml={(definition, title) => setYamlPreview({
             ...definition,
-            title: '단계 YAML',
+            title,
           })}
           testResult={testResult}
           testStatus={testStatus}
@@ -198,7 +198,7 @@ function ScenarioSteps({
 }: {
   defaultModule?: string;
   detail: UiScenarioDetail;
-  onOpenYaml: (definition: YamlDefinition) => void;
+  onOpenYaml: (definition: YamlDefinition, title: string) => void;
   testResult?: UiRunTestResult;
   testStatus?: 'starting' | UiRunStatus;
 }) {
@@ -317,7 +317,7 @@ function StepDetail({
   result,
   step,
 }: {
-  onOpenYaml: (definition: YamlDefinition) => void;
+  onOpenYaml: (definition: YamlDefinition, title: string) => void;
   result?: UiRunStepResult;
   step: ScenarioStep;
 }) {
@@ -329,6 +329,11 @@ function StepDetail({
     step.condition !== undefined || result?.condition !== undefined ||
     step.extract !== undefined || (result?.extracts.length ?? 0) > 0;
   const definition = step.definition;
+  const sourceDefinitions = (step.source.lineage ?? []).filter(
+    (source): source is typeof source & { definition: YamlDefinition } => (
+      source.definition !== undefined
+    ),
+  );
 
   return (
     <VStack gap={4} paddingBlock={2}>
@@ -402,6 +407,25 @@ function StepDetail({
           title="단계 실행 실패"
         />
       )}
+      {sourceDefinitions.length > 0 && (
+        <VStack gap={1}>
+          <Text color="secondary" type="label">포함 시나리오 YAML</Text>
+          {sourceDefinitions.map((source) => (
+            <Item
+              key={`${source.kind}:${source.reference}:${source.definition.path}`}
+              density="compact"
+              description={`${source.kind === 'use' ? '시나리오 사용' : '파일 포함'} · ${source.reference}`}
+              endContent={<Text color="secondary" type="supporting">보기</Text>}
+              label={(
+                <Text color="secondary" hasTruncateTooltip maxLines={1} type="code">
+                  {source.definition.path}
+                </Text>
+              )}
+              onClick={() => onOpenYaml(source.definition, '포함 시나리오 YAML')}
+            />
+          ))}
+        </VStack>
+      )}
       {definition !== undefined && (
         <Item
           density="compact"
@@ -412,10 +436,11 @@ function StepDetail({
               {definition.path}
             </Text>
           )}
-          onClick={() => onOpenYaml(definition)}
+          onClick={() => onOpenYaml(definition, '단계 YAML')}
         />
       )}
-      {request === undefined && response === undefined && !hasMetadata && definition === undefined && (
+      {request === undefined && response === undefined && !hasMetadata &&
+        definition === undefined && sourceDefinitions.length === 0 && (
         <Text color="secondary" type="supporting">표시할 상세 정보 없음</Text>
       )}
     </VStack>
