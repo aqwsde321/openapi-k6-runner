@@ -520,9 +520,16 @@ function StepRow({
         </HStack>
       )}
       label={(
-        <Text type="code" weight="semibold">
-          {formatStepPath(step)}
-        </Text>
+        <HStack as="span" gap={2} vAlign="center" wrap="wrap">
+          <Text type="code" weight="semibold">
+            {formatStepPath(step)}
+          </Text>
+          {step.openApi?.summary !== undefined && (
+            <Text color="secondary" hasTruncateTooltip maxLines={1} type="supporting">
+              {step.openApi.summary}
+            </Text>
+          )}
+        </HStack>
       )}
       marker={(
         <Text hasTabularNumbers type="supporting">{index + 1}</Text>
@@ -550,9 +557,14 @@ function StepDetail({
   const actualResponse = formatRunResponse(result?.response);
   const request = actualRequest ?? formatRequestPreview(step.request);
   const response = actualResponse ?? formatResponsePreview(step.expectedResponse);
+  const hasOpenApiMetadata = step.openApi !== undefined && (
+    step.openApi.tags.length > 0 ||
+    step.openApi.summary !== undefined ||
+    step.openApi.description !== undefined
+  );
   const hasMetadata = step.input !== undefined || result?.input !== undefined ||
     step.condition !== undefined || result?.condition !== undefined ||
-    step.extract !== undefined || (result?.extracts.length ?? 0) > 0;
+    step.extract !== undefined || (result?.extracts.length ?? 0) > 0 || hasOpenApiMetadata;
   const definition = step.definition;
 
   return (
@@ -591,6 +603,23 @@ function StepDetail({
       )}
       {hasMetadata && (
         <MetadataList label={{ position: 'top' }}>
+          {hasOpenApiMetadata && step.openApi !== undefined && (
+            <MetadataListItem label="OpenAPI">
+              <VStack gap={1}>
+                {step.openApi.tags.length > 0 && (
+                  <HStack gap={1} vAlign="center" wrap="wrap">
+                    {step.openApi.tags.map((tag) => <Badge key={tag} label={tag} variant="teal" />)}
+                  </HStack>
+                )}
+                {step.openApi.summary !== undefined && (
+                  <Text type="supporting">{step.openApi.summary}</Text>
+                )}
+                {step.openApi.description !== undefined && (
+                  <Text color="secondary" type="supporting">{step.openApi.description}</Text>
+                )}
+              </VStack>
+            </MetadataListItem>
+          )}
           {(result?.input ?? step.input) !== undefined && (
             <MetadataListItem label="입력">
               <Text type="supporting">

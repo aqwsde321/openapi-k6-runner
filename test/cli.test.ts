@@ -1861,7 +1861,13 @@ describe('openapi-k6 CLI', () => {
         id: string;
         name: string;
         description?: string;
-        steps: Array<{ id: string; operationId?: string; method?: string; path?: string }>;
+        steps: Array<{
+          id: string;
+          operationId?: string;
+          method?: string;
+          path?: string;
+          openApi?: { tags: string[]; summary?: string; description?: string };
+        }>;
       };
       const nestedDetail = await (await fetch(`${ui.url}/api/scenario?scenario=${encodeURIComponent('auth/login')}`)).json() as {
         id: string;
@@ -1991,6 +1997,11 @@ describe('openapi-k6 CLI', () => {
           operationId: 'getHealth',
           method: 'GET',
           path: '/app-health',
+          openApi: {
+            tags: ['health'],
+            summary: 'Health check',
+            description: 'Checks application health.',
+          },
         })],
       });
       expect(nestedDetail).toMatchObject({
@@ -6610,6 +6621,16 @@ describe('openapi-k6 CLI', () => {
     await mkdir(path.join(workspace, 'openapi-k6/openapi'), { recursive: true });
     await mkdir(path.join(workspace, 'openapi-k6/scenarios'), { recursive: true });
     await writeModuleOpenApi('app.openapi.yaml', '/app-health', 'https://app-openapi.test.local');
+    await writeCatalog('openapi/app.catalog.json', [{
+      method: 'GET',
+      path: '/app-health',
+      operationId: 'getHealth',
+      tags: ['health'],
+      summary: 'Health check',
+      description: 'Checks application health.',
+      parameters: [],
+      hasRequestBody: false,
+    }]);
     await writeFile(
       path.join(workspace, 'openapi-k6/scenarios/smoke.yaml'),
       [

@@ -165,6 +165,11 @@ describe('React UI behavior', () => {
           targetModule: 'app',
           method: 'POST',
           path: '/users',
+          openApi: {
+            tags: ['users'],
+            summary: 'Create user',
+            description: 'Creates a user for the scenario.',
+          },
           request: {
             body: {
               active: true,
@@ -219,11 +224,15 @@ describe('React UI behavior', () => {
     );
     const stepButton = getButtonContaining('create-user');
     expect(stepButton.textContent).toContain('포함 · auth/session › auth/login');
+    expect(stepButton.textContent).toContain('Create user');
     expect(stepButton.querySelector('[data-variant="blue"]')?.textContent).toBe('POST');
     expect(stepButton.getAttribute('aria-expanded')).toBe('false');
     await click(stepButton);
     expect(stepButton.getAttribute('aria-expanded')).toBe('true');
     expect(document.body.textContent).toContain('요청 · 예정 구조');
+    expect(document.body.textContent).toContain('OpenAPI');
+    expect(document.body.textContent).toContain('users');
+    expect(document.body.textContent).toContain('Creates a user for the scenario.');
     expect(document.body.textContent).toContain('{{vars.name}}');
     expect(document.body.textContent).toContain('"status": "201"');
     const stepDetail = document.body.querySelector<HTMLElement>(

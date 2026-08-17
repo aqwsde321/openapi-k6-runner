@@ -5,11 +5,14 @@ import path from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 import { buildAst } from '../../compiler/ast.builder.js';
-import type { LoadTestConfig } from '../../config/load-test.config.js';
+import { resolveConfigFilePath, type LoadTestConfig } from '../../config/load-test.config.js';
 import { resolveStepRegistry } from '../../core/api-registry.js';
 import {
   isASTApiStep,
   isInputStep,
+  type ApiCatalog,
+  type ApiCatalogOperation,
+  type ApiReference,
   type ASTStep,
   type StepInput,
   type StepRequest,
@@ -20,6 +23,7 @@ import {
   type OpenApiResponsePreview,
 } from '../../openapi/openapi.catalog.js';
 import { resolveApiOperation } from '../../openapi/openapi.resolver.js';
+import { readCatalogFile } from '../catalog.js';
 import { loadScenarioOpenApiContext } from '../scenario-openapi.js';
 import { validateScenarioOpenApi } from '../scenario-script.js';
 import { parseWorkspaceScenarioSource } from '../workspace-paths.js';
@@ -97,6 +101,11 @@ export interface UiScenarioDetail {
     operationId?: string;
     method?: string;
     path?: string;
+    openApi?: {
+      tags: string[];
+      summary?: string;
+      description?: string;
+    };
     request?: StepRequest;
     expectedResponse?: OpenApiResponsePreview;
     input?: StepInput;
@@ -184,6 +193,7 @@ export async function readUiScenarioDetail(
   let targetModules: string[] = [];
   let requestPreviews: Array<StepRequest | undefined> = [];
   let expectedResponses: Array<OpenApiResponsePreview | undefined> = [];
+  const catalogs = await readUiScenarioCatalogs(context);
 
   try {
     const openApiContext = await loadScenarioOpenApiContext({
@@ -260,6 +270,13 @@ export async function readUiScenarioDetail(
             requestPreviews[index],
             step.request === undefined ? undefined : resolvedApi?.request ?? step.request,
           );
+      const catalogOperation = isInputStep(step)
+        ? undefined
+        : findUiCatalogOperation(
+            catalogs,
+            step.api,
+            resolvedApi?.moduleName ?? step.api.module ?? resolveUiDefaultModuleName(context),
+          );
 
       return {
         id: step.id,
@@ -283,6 +300,15 @@ export async function readUiScenarioDetail(
                     ...(step.api.path === undefined ? {} : { path: step.api.path }),
                   }
                 : { method: resolvedApi.method, path: resolvedApi.path }),
+              ...(catalogOperation === undefined
+                ? {}
+                : {
+                    openApi: {
+                      tags: catalogOperation.tags,
+                      ...(catalogOperation.summary === undefined ? {} : { summary: catalogOperation.summary }),
+                      ...(catalogOperation.description === undefined ? {} : { description: catalogOperation.description }),
+                    },
+                  }),
               ...(requestPreview === undefined
                 ? {}
                 : {
@@ -306,6 +332,70 @@ export async function readUiScenarioDetail(
       };
     }),
   };
+}
+
+async function readUiScenarioCatalogs(context: UiScenarioContext): Promise<Map<string, ApiCatalog>> {
+  const catalogs = new Map<string, ApiCatalog>();
+
+  for (const [moduleName, moduleConfig] of context.config.modules) {
+    if (moduleConfig.catalog === undefined) {
+      continue;
+    }
+
+    try {
+      catalogs.set(moduleName, await readCatalogFile(
+        resolveConfigFilePath(context.config, moduleConfig.catalog),
+        {
+          cwd: context.cwd,
+          config: context.config,
+          moduleName,
+          openapi: moduleConfig.openapi,
+          options: {},
+        },
+      ));
+    } catch {
+      // The scenario remains usable when catalog is missing or stale.
+    }
+  }
+
+  return catalogs;
+}
+
+function findUiCatalogOperation(
+  catalogs: Map<string, ApiCatalog>,
+  api: ApiReference,
+  moduleName: string | undefined,
+): ApiCatalogOperation | undefined {
+  const operations = moduleName === undefined
+    ? [...catalogs.values()].flatMap((catalog) => catalog.operations)
+    : catalogs.get(moduleName)?.operations ?? [];
+
+  if (api.operationId !== undefined) {
+    return operations.find((operation) => operation.operationId === api.operationId);
+  }
+
+  if (api.method === undefined || api.path === undefined) {
+    return undefined;
+  }
+
+  const method = api.method.toUpperCase();
+  return operations.find((operation) => (
+    operation.method.toUpperCase() === method && operation.path === api.path
+  ));
+}
+
+function resolveUiDefaultModuleName(context: UiScenarioContext): string | undefined {
+  if (context.options?.module !== undefined) {
+    return context.options.module;
+  }
+
+  if (context.config.defaultModule !== undefined) {
+    return context.config.defaultModule;
+  }
+
+  return context.config.modules.size === 1
+    ? [...context.config.modules.keys()][0]
+    : undefined;
 }
 
 export async function validateUiScenarioSource(
