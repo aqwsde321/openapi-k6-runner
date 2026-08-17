@@ -510,7 +510,7 @@ function StepRow({
       density="compact"
       description={(
         <HStack as="span" gap={2} vAlign="center" wrap="wrap">
-          {formatStepEndpoint(step)}
+          <Text color="secondary" type="supporting">{step.id}</Text>
           {showTargetModule && targetModule !== undefined && (
             <Text color="secondary" type="supporting">{targetModule}</Text>
           )}
@@ -519,10 +519,15 @@ function StepRow({
           )}
         </HStack>
       )}
-      label={step.id}
+      label={(
+        <Text type="code" weight="semibold">
+          {formatStepPath(step)}
+        </Text>
+      )}
       marker={(
         <Text hasTabularNumbers type="supporting">{index + 1}</Text>
       )}
+      startContent={formatStepBadge(step)}
       endContent={result !== undefined
         ? <RunStatus status={result.status} />
         : testFinished
@@ -748,36 +753,24 @@ function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function formatStepEndpoint(step: ScenarioStep): ReactNode {
+function formatStepBadge(step: ScenarioStep): ReactNode {
   if (step.input !== undefined) {
-    return (
-      <HStack as="span" gap={1} vAlign="center">
-        <Badge label="입력" variant="purple" />
-        <Text type="code">{step.input.name}</Text>
-      </HStack>
-    );
+    return <Badge label="INPUT" variant="purple" />;
   }
 
-  if (step.method !== undefined && step.path !== undefined) {
+  if (step.method !== undefined) {
     const method = step.method.toUpperCase();
-    return (
-      <HStack as="span" gap={1} vAlign="center">
-        <Badge label={method} variant={httpMethodBadgeVariant(method)} />
-        <Text type="code">{step.path}</Text>
-      </HStack>
-    );
+    return <Badge label={method} variant={httpMethodBadgeVariant(method)} />;
   }
 
-  if (step.operationId !== undefined) {
-    return (
-      <HStack as="span" gap={1} vAlign="center">
-        <Badge label="API" variant="neutral" />
-        <Text type="code">{step.operationId}</Text>
-      </HStack>
-    );
-  }
+  return <Badge label="API" variant="neutral" />;
+}
 
-  return <Text color="secondary" type="supporting">endpoint 미해석</Text>;
+function formatStepPath(step: ScenarioStep): string {
+  if (step.input !== undefined) return step.input.name;
+  if (step.path !== undefined) return step.path;
+  if (step.operationId !== undefined) return `operationId ${step.operationId}`;
+  return 'endpoint 미해석';
 }
 
 function httpMethodBadgeVariant(
