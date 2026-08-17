@@ -860,8 +860,8 @@ function httpMethodBadgeVariant(
   method: string,
 ): 'blue' | 'cyan' | 'green' | 'orange' | 'pink' | 'purple' | 'red' | 'teal' | 'yellow' | 'neutral' {
   switch (method) {
-    case 'GET': return 'green';
-    case 'POST': return 'blue';
+    case 'GET': return 'blue';
+    case 'POST': return 'green';
     case 'PUT': return 'orange';
     case 'PATCH': return 'cyan';
     case 'DELETE': return 'red';
