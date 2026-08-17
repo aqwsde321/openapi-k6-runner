@@ -216,6 +216,7 @@ describe('React UI behavior', () => {
     );
     const stepButton = getButtonContaining('create-user');
     expect(stepButton.textContent).toContain('포함 · auth/session › auth/login');
+    expect(stepButton.querySelector('[data-variant="blue"]')?.textContent).toBe('POST');
     expect(stepButton.getAttribute('aria-expanded')).toBe('false');
     await click(stepButton);
     expect(stepButton.getAttribute('aria-expanded')).toBe('true');

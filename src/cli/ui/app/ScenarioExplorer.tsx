@@ -235,7 +235,6 @@ function buildTreeItems(
                 tooltip={status.label}
                 variant={status.variant}
               />
-              <Text color="secondary" type="supporting">{status.label}</Text>
             </HStack>
           ) : <Badge label="오류" variant="error" />,
           isSelected: item.id === selectedId,

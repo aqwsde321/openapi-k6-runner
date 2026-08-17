@@ -22,6 +22,7 @@ import { Tab, TabList } from '@astryxdesign/core/TabList';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { githubDark } from '@astryxdesign/core/theme/syntax';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import type {
@@ -429,6 +430,9 @@ function ScenarioSteps({
   const unresolved = detail.steps.some((step) => (
     step.input === undefined && (step.method === undefined || step.path === undefined)
   ));
+  const targetModules = resolveScenarioTargetNames(detail, detail.modules, defaultModule);
+  const showTargetModule = targetModules.length > 1;
+  const sourceLabels = detail.steps.map(formatStepSource);
 
   return (
     <Section padding={0}>
@@ -458,6 +462,8 @@ function ScenarioSteps({
                 index={index}
                 result={testResult?.steps.find((candidate) => candidate.index === index)}
                 step={step}
+                showSource={sourceLabels[index] !== undefined && sourceLabels[index] !== sourceLabels[index - 1]}
+                showTargetModule={showTargetModule}
                 testFinished={testStatus === 'passed' || testStatus === 'failed'}
               />
             )}
@@ -480,12 +486,16 @@ function StepRow({
   index,
   result,
   step,
+  showSource,
+  showTargetModule,
   testFinished,
 }: {
   defaultModule?: string;
   index: number;
   result?: UiRunStepResult;
   step: ScenarioStep;
+  showSource: boolean;
+  showTargetModule: boolean;
   testFinished: boolean;
 }) {
   const targetModule = step.input === undefined
@@ -500,14 +510,12 @@ function StepRow({
       density="compact"
       description={(
         <HStack as="span" gap={2} vAlign="center" wrap="wrap">
-          <Text color="secondary" type="code">
-            {formatStepEndpoint(step)}
-          </Text>
-          {targetModule !== undefined && (
+          {formatStepEndpoint(step)}
+          {showTargetModule && targetModule !== undefined && (
             <Text color="secondary" type="supporting">{targetModule}</Text>
           )}
-          {source !== undefined && (
-            <Text color="secondary" type="supporting">{source}</Text>
+          {showSource && source !== undefined && (
+            <Badge label={source} variant="teal" />
           )}
         </HStack>
       )}
@@ -740,11 +748,52 @@ function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function formatStepEndpoint(step: ScenarioStep): string {
-  if (step.input !== undefined) return `입력 ${step.input.name}`;
-  if (step.method !== undefined && step.path !== undefined) return `${step.method} ${step.path}`;
-  if (step.operationId !== undefined) return `operationId ${step.operationId}`;
-  return 'endpoint 미해석';
+function formatStepEndpoint(step: ScenarioStep): ReactNode {
+  if (step.input !== undefined) {
+    return (
+      <HStack as="span" gap={1} vAlign="center">
+        <Badge label="입력" variant="purple" />
+        <Text type="code">{step.input.name}</Text>
+      </HStack>
+    );
+  }
+
+  if (step.method !== undefined && step.path !== undefined) {
+    const method = step.method.toUpperCase();
+    return (
+      <HStack as="span" gap={1} vAlign="center">
+        <Badge label={method} variant={httpMethodBadgeVariant(method)} />
+        <Text type="code">{step.path}</Text>
+      </HStack>
+    );
+  }
+
+  if (step.operationId !== undefined) {
+    return (
+      <HStack as="span" gap={1} vAlign="center">
+        <Badge label="API" variant="neutral" />
+        <Text type="code">{step.operationId}</Text>
+      </HStack>
+    );
+  }
+
+  return <Text color="secondary" type="supporting">endpoint 미해석</Text>;
+}
+
+function httpMethodBadgeVariant(
+  method: string,
+): 'blue' | 'cyan' | 'green' | 'orange' | 'pink' | 'purple' | 'red' | 'teal' | 'yellow' | 'neutral' {
+  switch (method) {
+    case 'GET': return 'green';
+    case 'POST': return 'blue';
+    case 'PUT': return 'orange';
+    case 'PATCH': return 'cyan';
+    case 'DELETE': return 'red';
+    case 'HEAD': return 'purple';
+    case 'OPTIONS': return 'teal';
+    case 'TRACE': return 'pink';
+    default: return 'neutral';
+  }
 }
 
 function formatStepSource(step: ScenarioStep): string | undefined {
