@@ -687,7 +687,12 @@ function OpenApiContract({ step }: { step: ScenarioStep }) {
             <Text type="label">{step.openApi.summary}</Text>
           )}
           {step.openApi.description !== undefined && (
-            <OpenApiDescription value={step.openApi.description} />
+            <Collapsible
+              defaultIsOpen={false}
+              trigger={<Text color="secondary" type="supporting">설명 보기</Text>}
+            >
+              <OpenApiDescription value={step.openApi.description} />
+            </Collapsible>
           )}
         </VStack>
       </MetadataListItem>

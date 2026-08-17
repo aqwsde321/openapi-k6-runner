@@ -236,6 +236,10 @@ describe('React UI behavior', () => {
     expect(document.body.textContent).toContain('Success response');
     expect(document.body.textContent).toContain('•');
     expect(document.body.textContent).not.toContain('<br>');
+    const descriptionButton = getButton('설명 보기');
+    expect(descriptionButton.getAttribute('aria-expanded')).toBe('false');
+    await click(descriptionButton);
+    expect(descriptionButton.getAttribute('aria-expanded')).toBe('true');
     expect(document.body.textContent).toContain('{{vars.name}}');
     expect(document.body.textContent).toContain('"status": "201"');
     const stepDetail = document.body.querySelector<HTMLElement>(
