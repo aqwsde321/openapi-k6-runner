@@ -562,9 +562,9 @@ function StepDetail({
     step.openApi.summary !== undefined ||
     step.openApi.description !== undefined
   );
-  const hasMetadata = step.input !== undefined || result?.input !== undefined ||
+  const hasRuntimeMetadata = step.input !== undefined || result?.input !== undefined ||
     step.condition !== undefined || result?.condition !== undefined ||
-    step.extract !== undefined || (result?.extracts.length ?? 0) > 0 || hasOpenApiMetadata;
+    step.extract !== undefined || (result?.extracts.length ?? 0) > 0;
   const definition = step.definition;
 
   return (
@@ -575,6 +575,7 @@ function StepDetail({
       paddingBlock={3}
       paddingInline={4}
     >
+      {hasOpenApiMetadata && <OpenApiContract step={step} />}
       {request !== undefined && (
         <CodeBlock
           code={request}
@@ -601,25 +602,8 @@ function StepDetail({
           width="100%"
         />
       )}
-      {hasMetadata && (
+      {hasRuntimeMetadata && (
         <MetadataList label={{ position: 'top' }}>
-          {hasOpenApiMetadata && step.openApi !== undefined && (
-            <MetadataListItem label="OpenAPI">
-              <VStack gap={1}>
-                {step.openApi.tags.length > 0 && (
-                  <HStack gap={1} vAlign="center" wrap="wrap">
-                    {step.openApi.tags.map((tag) => <Badge key={tag} label={tag} variant="teal" />)}
-                  </HStack>
-                )}
-                {step.openApi.summary !== undefined && (
-                  <Text type="supporting">{step.openApi.summary}</Text>
-                )}
-                {step.openApi.description !== undefined && (
-                  <Text color="secondary" type="supporting">{step.openApi.description}</Text>
-                )}
-              </VStack>
-            </MetadataListItem>
-          )}
           {(result?.input ?? step.input) !== undefined && (
             <MetadataListItem label="입력">
               <Text type="supporting">
@@ -679,10 +663,75 @@ function StepDetail({
           onClick={() => onOpenYaml(definition)}
         />
       )}
-      {request === undefined && response === undefined && !hasMetadata &&
+      {request === undefined && response === undefined && !hasOpenApiMetadata && !hasRuntimeMetadata &&
         definition === undefined && (
         <Text color="secondary" type="supporting">표시할 상세 정보 없음</Text>
       )}
+    </VStack>
+  );
+}
+
+function OpenApiContract({ step }: { step: ScenarioStep }) {
+  if (step.openApi === undefined) return null;
+
+  return (
+    <MetadataList label={{ position: 'top' }}>
+      <MetadataListItem label="OpenAPI">
+        <VStack gap={2}>
+          {step.openApi.tags.length > 0 && (
+            <HStack gap={1} vAlign="center" wrap="wrap">
+              {step.openApi.tags.map((tag) => <Badge key={tag} label={tag} variant="teal" />)}
+            </HStack>
+          )}
+          {step.openApi.summary !== undefined && (
+            <Text type="label">{step.openApi.summary}</Text>
+          )}
+          {step.openApi.description !== undefined && (
+            <OpenApiDescription value={step.openApi.description} />
+          )}
+        </VStack>
+      </MetadataListItem>
+    </MetadataList>
+  );
+}
+
+function OpenApiDescription({ value }: { value: string }) {
+  const lines = value
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/?(?:p|div|li)>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return (
+    <VStack gap={1}>
+      {lines.map((line, index) => {
+        const isBullet = line.startsWith('- ');
+        const text = (isBullet ? line.slice(2) : line).replace(/\*\*/g, '');
+        const isHeading = !isBullet && line.startsWith('**') && line.endsWith('**');
+
+        if (isBullet) {
+          return (
+            <HStack key={`${index}:${line}`} gap={1} vAlign="start">
+              <Text color="secondary" type="supporting">•</Text>
+              <Text as="p" color="secondary" textWrap="pretty" type="supporting">{text}</Text>
+            </HStack>
+          );
+        }
+
+        return (
+          <Text
+            key={`${index}:${line}`}
+            as="p"
+            color={isHeading ? 'primary' : 'secondary'}
+            textWrap="pretty"
+            type={isHeading ? 'label' : 'supporting'}
+          >
+            {text}
+          </Text>
+        );
+      })}
     </VStack>
   );
 }

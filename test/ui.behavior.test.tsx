@@ -168,7 +168,7 @@ describe('React UI behavior', () => {
           openApi: {
             tags: ['users'],
             summary: 'Create user',
-            description: 'Creates a user for the scenario.',
+            description: 'Creates a user for the scenario.<br><br>**Success response**<br>- Returns the user.',
           },
           request: {
             body: {
@@ -233,6 +233,9 @@ describe('React UI behavior', () => {
     expect(document.body.textContent).toContain('OpenAPI');
     expect(document.body.textContent).toContain('users');
     expect(document.body.textContent).toContain('Creates a user for the scenario.');
+    expect(document.body.textContent).toContain('Success response');
+    expect(document.body.textContent).toContain('•');
+    expect(document.body.textContent).not.toContain('<br>');
     expect(document.body.textContent).toContain('{{vars.name}}');
     expect(document.body.textContent).toContain('"status": "201"');
     const stepDetail = document.body.querySelector<HTMLElement>(
