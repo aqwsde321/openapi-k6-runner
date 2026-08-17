@@ -452,36 +452,38 @@ function ScenarioSteps({
           </Text>
         </Section>
       )}
-      <CollapsibleGroup key={detail.id} density="compact" hasDividers type="multiple">
-        {detail.steps.map((step, index) => (
-          <VStack
-            key={`${index}:${step.id}`}
-            gap={0}
-            padding={0}
-            style={stepSurfaceStyle(step)}
-          >
-            <Collapsible
-              trigger={(
-                <StepRow
-                  defaultModule={defaultModule}
-                  index={index}
+      <CollapsibleGroup key={detail.id} density="compact" type="multiple">
+        <VStack gap={1}>
+          {detail.steps.map((step, index) => (
+            <VStack
+              key={`${index}:${step.id}`}
+              gap={0}
+              padding={0}
+              style={stepSurfaceStyle(step)}
+            >
+              <Collapsible
+                trigger={(
+                  <StepRow
+                    defaultModule={defaultModule}
+                    index={index}
+                    result={testResult?.steps.find((candidate) => candidate.index === index)}
+                    step={step}
+                    showSource={sourceLabels[index] !== undefined && sourceLabels[index] !== sourceLabels[index - 1]}
+                    showTargetModule={showTargetModule}
+                    testFinished={testStatus === 'passed' || testStatus === 'failed'}
+                  />
+                )}
+                value={String(index)}
+              >
+                <StepDetail
+                  onOpenYaml={onOpenYaml}
                   result={testResult?.steps.find((candidate) => candidate.index === index)}
                   step={step}
-                  showSource={sourceLabels[index] !== undefined && sourceLabels[index] !== sourceLabels[index - 1]}
-                  showTargetModule={showTargetModule}
-                  testFinished={testStatus === 'passed' || testStatus === 'failed'}
                 />
-              )}
-              value={String(index)}
-            >
-              <StepDetail
-                onOpenYaml={onOpenYaml}
-                result={testResult?.steps.find((candidate) => candidate.index === index)}
-                step={step}
-              />
-            </Collapsible>
-          </VStack>
-        ))}
+              </Collapsible>
+            </VStack>
+          ))}
+        </VStack>
       </CollapsibleGroup>
     </Section>
   );
@@ -580,7 +582,7 @@ function StepDetail({
       gap={0}
       padding={0}
     >
-      <Section dividers={['start']} padding={4} paddingBlock={3} variant="transparent">
+      <Section dividers={['top']} padding={4} paddingBlock={3} variant="transparent">
         <VStack gap={4}>
           {hasOpenApiMetadata && <OpenApiContract step={step} />}
           {request !== undefined && (
@@ -859,14 +861,23 @@ function formatStepBadge(step: ScenarioStep): ReactNode {
 }
 
 function stepSurfaceStyle(step: ScenarioStep): CSSProperties {
-  if (step.input !== undefined) return {backgroundColor: 'var(--color-background-purple)'};
-  if (step.method !== undefined) {
-    const variant = httpMethodBadgeVariant(step.method.toUpperCase());
+  const variant = step.input !== undefined
+    ? 'purple'
+    : step.method === undefined
+      ? 'neutral'
+      : httpMethodBadgeVariant(step.method.toUpperCase());
+
+  if (variant === 'neutral') {
     return {
-      backgroundColor: `var(--color-background-${variant === 'neutral' ? 'muted' : variant})`,
+      backgroundColor: 'var(--color-background-muted)',
+      border: 'var(--border-width) solid var(--color-border)',
     };
   }
-  return {backgroundColor: 'var(--color-background-muted)'};
+
+  return {
+    backgroundColor: `color-mix(in srgb, var(--color-background-${variant}) 40%, transparent)`,
+    border: `var(--border-width) solid var(--color-border-${variant})`,
+  };
 }
 
 function formatStepPath(step: ScenarioStep): string {
