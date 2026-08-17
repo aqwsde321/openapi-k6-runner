@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-08-17
+
+### Added
+
+- 시나리오 흐름 UI에서 OpenAPI method, path, tag, summary와 접을 수 있는 설명을 Swagger 형식으로 표시합니다.
+- 각 endpoint의 예정·실제 요청과 OpenAPI 예상·실제 응답을 JSON 구문 색상과 함께 확인할 수 있습니다.
+
+### Changed
+
+- endpoint 행을 HTTP method별 연한 배경·테두리와 명확한 method 배지로 정리하고, 펼친 상세도 같은 surface로 연결했습니다.
+- 탐색 트리에서 반복적인 단계 수·미실행 텍스트를 줄여 시나리오 이름을 더 빠르게 읽을 수 있게 했습니다.
+
 ## [0.17.0] - 2026-07-21
 
 ### Changed
@@ -309,7 +321,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.14.0...v0.15.0

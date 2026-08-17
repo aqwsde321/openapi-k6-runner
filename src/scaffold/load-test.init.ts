@@ -53,7 +53,7 @@ const README_TEMPLATE = readFileSync(
   new URL('./templates/openapi-k6.README.md', import.meta.url),
   'utf8',
 );
-export const CURRENT_SCAFFOLD_VERSION = '0.17.0';
+export const CURRENT_SCAFFOLD_VERSION = '0.18.0';
 export const DEFAULT_WORKSPACE_DIR = 'openapi-k6';
 export const SCAFFOLD_METADATA_FILENAME = '.openapi-k6.json';
 
