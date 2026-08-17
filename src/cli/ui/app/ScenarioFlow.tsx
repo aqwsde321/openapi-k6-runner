@@ -571,102 +571,106 @@ function StepDetail({
     <VStack
       aria-label={`${step.id} 단계 상세`}
       as="section"
-      gap={4}
+      gap={0}
+      padding={4}
       paddingBlock={3}
-      paddingInline={4}
     >
-      {hasOpenApiMetadata && <OpenApiContract step={step} />}
-      {request !== undefined && (
-        <CodeBlock
-          code={request}
-          container="card"
-          hasLanguageLabel={false}
-          isWrapped
-          language="json"
-          size="sm"
-          syntaxTheme={githubDark}
-          title={actualRequest === undefined ? '요청 · 예정 구조' : '요청 · 실제'}
-          width="100%"
-        />
-      )}
-      {response !== undefined && (
-        <CodeBlock
-          code={response}
-          container="card"
-          hasLanguageLabel={false}
-          isWrapped
-          language="json"
-          size="sm"
-          syntaxTheme={githubDark}
-          title={actualResponse === undefined ? '응답 · 예상 (OpenAPI)' : '응답 · 실제'}
-          width="100%"
-        />
-      )}
-      {hasRuntimeMetadata && (
-        <MetadataList label={{ position: 'top' }}>
-          {(result?.input ?? step.input) !== undefined && (
-            <MetadataListItem label="입력">
-              <Text type="supporting">
-                {formatInputResult(step, result)}
-              </Text>
-            </MetadataListItem>
+      <Section dividers={['start']} padding={0} variant="muted">
+        <VStack gap={4}>
+          {hasOpenApiMetadata && <OpenApiContract step={step} />}
+          {request !== undefined && (
+            <CodeBlock
+              code={request}
+              container="card"
+              hasLanguageLabel={false}
+              isWrapped
+              language="json"
+              size="sm"
+              syntaxTheme={githubDark}
+              title={actualRequest === undefined ? '요청 · 예정 구조' : '요청 · 실제'}
+              width="100%"
+            />
           )}
-          {(result?.condition ?? step.condition) !== undefined && (
-            <MetadataListItem label="검증">
-              <HStack gap={2} vAlign="center" wrap="wrap">
-                {result?.condition !== undefined && (
-                  <RunStatus status={result.condition.passed ? 'passed' : 'failed'} />
-                )}
-                <Code>{result?.condition?.expression ?? step.condition}</Code>
-              </HStack>
-            </MetadataListItem>
+          {response !== undefined && (
+            <CodeBlock
+              code={response}
+              container="card"
+              hasLanguageLabel={false}
+              isWrapped
+              language="json"
+              size="sm"
+              syntaxTheme={githubDark}
+              title={actualResponse === undefined ? '응답 · 예상 (OpenAPI)' : '응답 · 실제'}
+              width="100%"
+            />
           )}
-          {(result?.extracts.length ?? 0) > 0 ? (
-            <MetadataListItem label="추출">
-              <VStack gap={1}>
-                {result?.extracts.map((extract) => (
-                  <HStack key={extract.name} gap={2} vAlign="center" wrap="wrap">
-                    <RunStatus status={extract.passed ? 'passed' : 'failed'} />
-                    <Text type="code">{extract.name} · {extract.path}</Text>
-                    {extract.error !== undefined && (
-                      <Text color="secondary" type="supporting">{extract.error}</Text>
+          {hasRuntimeMetadata && (
+            <MetadataList label={{ position: 'top' }}>
+              {(result?.input ?? step.input) !== undefined && (
+                <MetadataListItem label="입력">
+                  <Text type="supporting">
+                    {formatInputResult(step, result)}
+                  </Text>
+                </MetadataListItem>
+              )}
+              {(result?.condition ?? step.condition) !== undefined && (
+                <MetadataListItem label="검증">
+                  <HStack gap={2} vAlign="center" wrap="wrap">
+                    {result?.condition !== undefined && (
+                      <RunStatus status={result.condition.passed ? 'passed' : 'failed'} />
                     )}
+                    <Code>{result?.condition?.expression ?? step.condition}</Code>
                   </HStack>
-                ))}
-              </VStack>
-            </MetadataListItem>
-          ) : step.extract !== undefined && (
-            <MetadataListItem label="추출">
-              <Text type="code">{step.extract.join(', ')}</Text>
-            </MetadataListItem>
+                </MetadataListItem>
+              )}
+              {(result?.extracts.length ?? 0) > 0 ? (
+                <MetadataListItem label="추출">
+                  <VStack gap={1}>
+                    {result?.extracts.map((extract) => (
+                      <HStack key={extract.name} gap={2} vAlign="center" wrap="wrap">
+                        <RunStatus status={extract.passed ? 'passed' : 'failed'} />
+                        <Text type="code">{extract.name} · {extract.path}</Text>
+                        {extract.error !== undefined && (
+                          <Text color="secondary" type="supporting">{extract.error}</Text>
+                        )}
+                      </HStack>
+                    ))}
+                  </VStack>
+                </MetadataListItem>
+              ) : step.extract !== undefined && (
+                <MetadataListItem label="추출">
+                  <Text type="code">{step.extract.join(', ')}</Text>
+                </MetadataListItem>
+              )}
+            </MetadataList>
           )}
-        </MetadataList>
-      )}
-      {result?.error !== undefined && (
-        <Banner
-          container="section"
-          description={result.error}
-          status="error"
-          title="단계 실행 실패"
-        />
-      )}
-      {definition !== undefined && (
-        <Item
-          density="compact"
-          description="단계 원본 YAML"
-          endContent={<Text color="secondary" type="supporting">보기</Text>}
-          label={(
-            <Text color="secondary" hasTruncateTooltip maxLines={1} type="code">
-              {definition.path}
-            </Text>
+          {result?.error !== undefined && (
+            <Banner
+              container="section"
+              description={result.error}
+              status="error"
+              title="단계 실행 실패"
+            />
           )}
-          onClick={() => onOpenYaml(definition)}
-        />
-      )}
-      {request === undefined && response === undefined && !hasOpenApiMetadata && !hasRuntimeMetadata &&
-        definition === undefined && (
-        <Text color="secondary" type="supporting">표시할 상세 정보 없음</Text>
-      )}
+          {definition !== undefined && (
+            <Item
+              density="compact"
+              description="단계 원본 YAML"
+              endContent={<Text color="secondary" type="supporting">보기</Text>}
+              label={(
+                <Text color="secondary" hasTruncateTooltip maxLines={1} type="code">
+                  {definition.path}
+                </Text>
+              )}
+              onClick={() => onOpenYaml(definition)}
+            />
+          )}
+          {request === undefined && response === undefined && !hasOpenApiMetadata && !hasRuntimeMetadata &&
+            definition === undefined && (
+            <Text color="secondary" type="supporting">표시할 상세 정보 없음</Text>
+          )}
+        </VStack>
+      </Section>
     </VStack>
   );
 }
