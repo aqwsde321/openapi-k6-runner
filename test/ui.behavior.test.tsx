@@ -94,6 +94,9 @@ describe('React UI behavior', () => {
     }
 
     await render(<ExplorerHarness />);
+    const scenarioRow = getTreeAction('item:scenario:auth/login').closest('[role="treeitem"]');
+    expect(scenarioRow?.querySelector('.astryx-badge')).toBeNull();
+    expect(scenarioRow?.querySelector('.astryx-statusdot')).not.toBeNull();
     await click(getTreeAction('item:scenario:auth/login'));
     expect(selected).toHaveBeenLastCalledWith('scenario', 'auth/login');
 

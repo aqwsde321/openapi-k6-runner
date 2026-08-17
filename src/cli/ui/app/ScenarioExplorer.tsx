@@ -3,7 +3,7 @@ import { Banner } from '@astryxdesign/core/Banner';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Icon } from '@astryxdesign/core/Icon';
 import { IconButton } from '@astryxdesign/core/IconButton';
-import { HStack, Stack, StackItem } from '@astryxdesign/core/Stack';
+import { Stack, StackItem } from '@astryxdesign/core/Stack';
 import { StatusDot, type StatusDotVariant } from '@astryxdesign/core/StatusDot';
 import { Tab, TabList } from '@astryxdesign/core/TabList';
 import { Text } from '@astryxdesign/core/Text';
@@ -206,7 +206,6 @@ function buildTreeItems(
   return groups.map((group) => ({
     id: `group:${mode}:${group.key}`,
     label: <Text type="label" weight="semibold">{group.label}</Text>,
-    endContent: <Badge label={String(group.count)} />,
     isExpanded,
     children: [
       ...buildTreeItems(group.children, mode, selectedId, onSelect, isExpanded, runs),
@@ -226,17 +225,18 @@ function buildTreeItems(
                 description: item.error,
                 startContent: <Icon icon="error" color="error" label="파싱 오류" size="sm" />,
               }),
-          endContent: item.error === undefined ? (
-            <HStack gap={1} vAlign="center">
-              <Badge label={String(getItemCount(item, mode) ?? 0)} />
-              <StatusDot
-                isPulsing={run?.status === 'starting' || run?.status === 'running'}
-                label={status.label}
-                tooltip={status.label}
-                variant={status.variant}
-              />
-            </HStack>
-          ) : <Badge label="오류" variant="error" />,
+          ...(item.error === undefined
+            ? {
+                startContent: (
+                  <StatusDot
+                    isPulsing={run?.status === 'starting' || run?.status === 'running'}
+                    label={status.label}
+                    tooltip={status.label}
+                    variant={status.variant}
+                  />
+                ),
+              }
+            : { endContent: <Badge label="오류" variant="error" /> }),
           isSelected: item.id === selectedId,
           onClick: () => onSelect(item.id),
         };
@@ -261,10 +261,4 @@ function formatItemLabel(item: ExplorerItem): string {
   return item.group !== 'root' && item.name.toLowerCase().startsWith(prefix.toLowerCase())
     ? item.name.slice(prefix.length) || item.name
     : item.name;
-}
-
-function getItemCount(item: ExplorerItem, mode: ExplorerMode): number | undefined {
-  return mode === 'scenario' && 'stepCount' in item ? item.stepCount
-    : mode === 'suite' && 'scenarioCount' in item ? item.scenarioCount
-    : undefined;
 }
