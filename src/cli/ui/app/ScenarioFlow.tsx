@@ -22,7 +22,7 @@ import { Tab, TabList } from '@astryxdesign/core/TabList';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { githubDark } from '@astryxdesign/core/theme/syntax';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useState } from 'react';
 
 import type {
@@ -454,27 +454,33 @@ function ScenarioSteps({
       )}
       <CollapsibleGroup key={detail.id} density="compact" hasDividers type="multiple">
         {detail.steps.map((step, index) => (
-          <Collapsible
+          <VStack
             key={`${index}:${step.id}`}
-            trigger={(
-              <StepRow
-                defaultModule={defaultModule}
-                index={index}
+            gap={0}
+            padding={0}
+            style={stepSurfaceStyle(step)}
+          >
+            <Collapsible
+              trigger={(
+                <StepRow
+                  defaultModule={defaultModule}
+                  index={index}
+                  result={testResult?.steps.find((candidate) => candidate.index === index)}
+                  step={step}
+                  showSource={sourceLabels[index] !== undefined && sourceLabels[index] !== sourceLabels[index - 1]}
+                  showTargetModule={showTargetModule}
+                  testFinished={testStatus === 'passed' || testStatus === 'failed'}
+                />
+              )}
+              value={String(index)}
+            >
+              <StepDetail
+                onOpenYaml={onOpenYaml}
                 result={testResult?.steps.find((candidate) => candidate.index === index)}
                 step={step}
-                showSource={sourceLabels[index] !== undefined && sourceLabels[index] !== sourceLabels[index - 1]}
-                showTargetModule={showTargetModule}
-                testFinished={testStatus === 'passed' || testStatus === 'failed'}
               />
-            )}
-            value={String(index)}
-          >
-            <StepDetail
-              onOpenYaml={onOpenYaml}
-              result={testResult?.steps.find((candidate) => candidate.index === index)}
-              step={step}
-            />
-          </Collapsible>
+            </Collapsible>
+          </VStack>
         ))}
       </CollapsibleGroup>
     </Section>
@@ -572,10 +578,9 @@ function StepDetail({
       aria-label={`${step.id} 단계 상세`}
       as="section"
       gap={0}
-      padding={4}
-      paddingBlock={3}
+      padding={0}
     >
-      <Section dividers={['start']} padding={0} variant="muted">
+      <Section dividers={['start']} padding={4} paddingBlock={3} variant="transparent">
         <VStack gap={4}>
           {hasOpenApiMetadata && <OpenApiContract step={step} />}
           {request !== undefined && (
@@ -851,6 +856,17 @@ function formatStepBadge(step: ScenarioStep): ReactNode {
   }
 
   return <Badge label="API" variant="neutral" />;
+}
+
+function stepSurfaceStyle(step: ScenarioStep): CSSProperties {
+  if (step.input !== undefined) return {backgroundColor: 'var(--color-background-purple)'};
+  if (step.method !== undefined) {
+    const variant = httpMethodBadgeVariant(step.method.toUpperCase());
+    return {
+      backgroundColor: `var(--color-background-${variant === 'neutral' ? 'muted' : variant})`,
+    };
+  }
+  return {backgroundColor: 'var(--color-background-muted)'};
 }
 
 function formatStepPath(step: ScenarioStep): string {
