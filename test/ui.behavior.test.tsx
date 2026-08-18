@@ -356,6 +356,76 @@ describe('React UI behavior', () => {
     );
   });
 
+  it('lists, updates, and removes saved UI input variables', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url === '/api/input-values' && init?.method === undefined) {
+        return new Response(JSON.stringify({
+          values: [{
+            name: 'signupPhoneCode',
+            value: '123456',
+            label: 'SMS 인증번호',
+            sensitive: true,
+          }],
+        }), { headers: { 'content-type': 'application/json' } });
+      }
+
+      if (url === '/api/input-values/signupPhoneCode' && init?.method === 'PUT') {
+        return new Response(JSON.stringify({
+          value: {
+            name: 'signupPhoneCode',
+            value: '654321',
+            label: 'SMS 인증번호',
+            sensitive: true,
+          },
+        }), { headers: { 'content-type': 'application/json' } });
+      }
+
+      if (url === '/api/input-values/signupPhoneCode' && init?.method === 'DELETE') {
+        return new Response(JSON.stringify({ deleted: true }), {
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+
+      throw new Error(`Unexpected request: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await render(
+      <ScenarioRunPanel
+        isReady
+        runs={new Map()}
+        start={async () => undefined}
+        submit={async () => undefined}
+        targetId="manual"
+        targetKind="scenario"
+        targetName="manual"
+      />,
+    );
+    await click(getButton('입력 변수'));
+    await flushUi();
+
+    const value = expectElement(document.body.querySelector<HTMLInputElement>('input[type="text"]'));
+    expect(value.value).toBe('123456');
+    expect(document.body.textContent).toContain('signupPhoneCode');
+    await changeInput(value, '654321');
+    await click(getButton('저장'));
+    await flushUi();
+    await click(getButton('삭제'));
+    await flushUi();
+
+    expect(fetchMock.mock.calls.map(([input, init]) => ({
+      input: String(input),
+      method: (init as RequestInit | undefined)?.method,
+    }))).toEqual([
+      { input: '/api/input-values', method: undefined },
+      { input: '/api/input-values/signupPhoneCode', method: 'PUT' },
+      { input: '/api/input-values/signupPhoneCode', method: 'DELETE' },
+    ]);
+    expect(document.body.textContent).toContain('실행 중 처음 입력한 값이 여기에 저장됩니다');
+  });
+
   it('renders k6 ANSI log colors without control sequences', async () => {
     const runs = ansiLogRuns();
 

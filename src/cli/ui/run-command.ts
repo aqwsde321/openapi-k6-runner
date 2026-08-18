@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import type { LoadTestConfig } from '../../config/load-test.config.js';
 import type {
+  ScenarioInputRequest,
   ScenarioExecutionReporter,
   ScenarioExecutionResult,
   ScenarioInputProvider,
@@ -21,6 +22,7 @@ import {
   finishUiRun,
   requestUiRunInput,
   type UiRunRecord,
+  type UiSessionInputValue,
   type UiRunStatus,
 } from './run-state.js';
 import {
@@ -80,6 +82,7 @@ export interface UiRunCommandState {
   config: LoadTestConfig;
   runCli: (argv: string[], context: UiRunCliContext) => Promise<void>;
   runs: Map<string, UiRunRecord>;
+  inputValues: Map<string, UiSessionInputValue>;
   nextRunId: number;
 }
 
@@ -231,7 +234,7 @@ async function runUiCliCommand(
       interactive: false,
       captureRequestResponseValues: payload.showValues,
       inputProvider: payload.command === 'test'
-        ? (request) => requestUiRunInput(run, request)
+        ? (request) => provideUiRunInput(state, run, request)
         : state.context.inputProvider,
       testReporter,
     });
@@ -284,7 +287,7 @@ async function runUiSuiteCliCommand(
       fetch: state.context.fetch,
       interactive: false,
       captureRequestResponseValues: payload.showValues,
-      inputProvider: (request) => requestUiRunInput(run, request),
+      inputProvider: (request) => provideUiRunInput(state, run, request),
       testReporter: createUiScenarioReporter(stdout, state.context.testReporter, undefined, run),
     });
 
@@ -305,6 +308,15 @@ async function runUiSuiteCliCommand(
 
     finishUiRun(run, 'failed', error instanceof CommanderError ? error.exitCode : 1);
   }
+}
+
+function provideUiRunInput(
+  state: UiRunCommandState,
+  run: UiRunRecord,
+  request: ScenarioInputRequest,
+): Promise<unknown> | unknown {
+  const saved = state.inputValues.get(request.name);
+  return saved === undefined ? requestUiRunInput(run, request) : saved.value;
 }
 
 async function runUiSuiteValidateCommand(

@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import path from 'node:path';
 
 import { loadTestConfig, resolveConfigModule, type LoadTestConfig } from '../../config/load-test.config.js';
+import { formatScenarioVarNameIssue } from '../../core/scenario-vars.js';
 import type { ScenarioExecutionReporter, ScenarioInputProvider } from '../../executor/scenario.executor.js';
 import { DEFAULT_WORKSPACE_DIR } from '../../scaffold/load-test.init.js';
 import {
@@ -9,6 +10,7 @@ import {
   streamUiRunEvents,
   submitUiRunInput,
   type UiRunRecord,
+  type UiSessionInputValue,
 } from './run-state.js';
 import { startUiRun, startUiSuiteRun } from './run-command.js';
 import { checkUiServers } from './server-checks.js';
@@ -149,6 +151,7 @@ export async function runUiServerCommand(
     runCli: deps.runCli,
     uiAppDir: deps.uiAppDir,
     runs: new Map(),
+    inputValues: new Map(),
     nextRunId: 1,
   };
   const server = createServer((request, response) => {
@@ -179,6 +182,7 @@ interface UiState {
   runCli: (argv: string[], context: CliContext) => Promise<void>;
   uiAppDir?: string;
   runs: Map<string, UiRunRecord>;
+  inputValues: Map<string, UiSessionInputValue>;
   nextRunId: number;
 }
 
@@ -276,6 +280,65 @@ async function handleUiRequest(
     return;
   }
 
+  if (request.method === 'GET' && requestUrl.pathname === '/api/input-values') {
+    writeUiJson(response, 200, {
+      values: listUiInputValues(state),
+    });
+    return;
+  }
+
+  if (request.method === 'DELETE' && requestUrl.pathname === '/api/input-values') {
+    state.inputValues.clear();
+    writeUiJson(response, 200, { cleared: true });
+    return;
+  }
+
+  if (requestUrl.pathname.startsWith('/api/input-values/')) {
+    let name: string;
+
+    try {
+      name = decodeURIComponent(requestUrl.pathname.slice('/api/input-values/'.length));
+    } catch {
+      writeUiJson(response, 400, { error: 'input variable name must be URL encoded' });
+      return;
+    }
+
+    const issue = formatScenarioVarNameIssue(name, 'input variable name');
+
+    if (issue !== undefined) {
+      writeUiJson(response, 400, { error: issue });
+      return;
+    }
+
+    if (request.method === 'PUT') {
+      let value: string;
+
+      try {
+        value = parseUiInputValueBody(await readUiJsonBody(request));
+      } catch (error) {
+        writeUiJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
+        return;
+      }
+
+      const previous = state.inputValues.get(name);
+      const inputValue: UiSessionInputValue = {
+        name,
+        value,
+        ...(previous?.label === undefined ? {} : { label: previous.label }),
+        ...(previous?.sensitive === undefined ? {} : { sensitive: previous.sensitive }),
+      };
+      state.inputValues.set(name, inputValue);
+      writeUiJson(response, 200, { value: inputValue });
+      return;
+    }
+
+    if (request.method === 'DELETE') {
+      state.inputValues.delete(name);
+      writeUiJson(response, 200, { deleted: true });
+      return;
+    }
+  }
+
   if (request.method === 'GET' && requestUrl.pathname === '/api/report') {
     const report = requestUrl.searchParams.get('report') ?? '';
     writeUiJson(response, 200, await readUiReport(state, report));
@@ -360,7 +423,15 @@ async function handleUiRequest(
     }
 
     const body = await readUiJsonBody(request);
-    writeUiJson(response, 200, submitUiRunInput(run, body));
+    writeUiJson(response, 200, submitUiRunInput(run, body, (input, value) => {
+      if (typeof value !== 'string') return;
+      state.inputValues.set(input.name, {
+        name: input.name,
+        value,
+        ...(input.label === undefined ? {} : { label: input.label }),
+        ...(input.sensitive === undefined ? {} : { sensitive: input.sensitive }),
+      });
+    }));
     return;
   }
 
@@ -450,4 +521,21 @@ function parseUiScenarioSourceBody(
     code: body.code,
     ...(typeof body.revision === 'string' ? { revision: body.revision } : {}),
   };
+}
+
+function listUiInputValues(state: UiState): UiSessionInputValue[] {
+  return [...state.inputValues.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function parseUiInputValueBody(value: unknown): string {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('request body must be an object');
+  }
+
+  const inputValue = (value as Record<string, unknown>).value;
+  if (typeof inputValue !== 'string') {
+    throw new Error('value must be a string');
+  }
+
+  return inputValue;
 }

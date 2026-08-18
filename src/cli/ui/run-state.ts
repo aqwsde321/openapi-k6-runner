@@ -96,6 +96,13 @@ export interface UiRunInputRequest {
   sensitive?: boolean;
 }
 
+export interface UiSessionInputValue {
+  name: string;
+  value: string;
+  label?: string;
+  sensitive?: boolean;
+}
+
 export interface UiRunStepResult {
   index: number;
   id: string;
@@ -234,7 +241,11 @@ export function requestUiRunInput(run: UiRunRecord, request: ScenarioInputReques
   });
 }
 
-export function submitUiRunInput(run: UiRunRecord, body: unknown): { accepted: true } {
+export function submitUiRunInput(
+  run: UiRunRecord,
+  body: unknown,
+  onSubmitted?: (request: UiRunInputRequest, value: unknown) => void,
+): { accepted: true } {
   if (run.pendingInput === undefined) {
     throw new Error(`run ${JSON.stringify(run.id)} is not waiting for input`);
   }
@@ -252,6 +263,7 @@ export function submitUiRunInput(run: UiRunRecord, body: unknown): { accepted: t
 
   const pending = run.pendingInput;
   run.pendingInput = undefined;
+  onSubmitted?.(pending.request, record.value);
   writeUiRunEvent(run, 'input-submitted', {
     runId: run.id,
     id: pending.request.id,

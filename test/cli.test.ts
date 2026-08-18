@@ -2363,6 +2363,27 @@ describe('openapi-k6 CLI', () => {
       ].join('\n'),
       'utf8',
     );
+    await writeFile(
+      path.join(workspace, 'openapi-k6/scenarios/manual-code-reuse.yaml'),
+      [
+        'name: manual-code-reuse',
+        'steps:',
+        '  - id: enter-phone-code',
+        '    input:',
+        '      name: signupPhoneCode',
+        '      label: SMS 인증번호',
+        '      sensitive: true',
+        '  - id: verify-phone-code',
+        '    api:',
+        '      method: POST',
+        '      path: /phone-verification/verify',
+        '    request:',
+        '      body:',
+        '        code: "{{signupPhoneCode}}"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
     await writeConfig([
       'baseUrl: https://api.test.local',
       'defaultModule: app',
@@ -2407,6 +2428,48 @@ describe('openapi-k6 CLI', () => {
       expect(eventText).toContain('event: test-result');
       expect(eventText).toContain('"status":"passed"');
       expect(eventText).not.toContain('123456');
+
+      const inputValues = await (await fetch(`${ui.url}/api/input-values`)).json() as {
+        values: Array<{ name: string; value: string; label?: string; sensitive?: boolean }>;
+      };
+      expect(inputValues.values).toEqual([{
+        name: 'signupPhoneCode',
+        value: '123456',
+        label: 'SMS 인증번호',
+        sensitive: true,
+      }]);
+
+      const update = await fetch(`${ui.url}/api/input-values/signupPhoneCode`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ value: '654321' }),
+      });
+      expect(update.status).toBe(200);
+
+      const reusedRun = await (await fetch(`${ui.url}/api/run`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ command: 'test', scenario: 'manual-code-reuse' }),
+      })).json() as { runId: string };
+      const reusedEvents = await (await fetch(`${ui.url}/api/runs/${reusedRun.runId}/events`)).text();
+
+      expect(requestBodies.map((body) => JSON.parse(body))).toEqual([
+        { code: '123456' },
+        { code: '654321' },
+      ]);
+      expect(reusedEvents).not.toContain('event: input-request');
+      expect(reusedEvents).toContain('event: test-result');
+
+      const remove = await fetch(`${ui.url}/api/input-values/signupPhoneCode`, { method: 'DELETE' });
+      expect(remove.status).toBe(200);
+      await fetch(`${ui.url}/api/input-values/temp`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ value: 'temporary' }),
+      });
+      const clear = await fetch(`${ui.url}/api/input-values`, { method: 'DELETE' });
+      expect(clear.status).toBe(200);
+      expect(await (await fetch(`${ui.url}/api/input-values`)).json()).toEqual({ values: [] });
     } finally {
       await ui.close();
     }

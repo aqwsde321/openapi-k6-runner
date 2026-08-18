@@ -7,6 +7,7 @@ import type {
 import type { UiReportList } from '../reports.js';
 import type { UiServerCheckResult } from '../server-checks.js';
 import type { UiSuiteDetail, UiSuiteList } from '../suites.js';
+import type { UiSessionInputValue } from '../run-state.js';
 import { normalizeUiReport, type UiReportDetail } from './report-view.js';
 
 export type UiScenarioRunCommand = 'validate' | 'test';
@@ -90,6 +91,31 @@ export async function probeUiServer(signal?: AbortSignal): Promise<void> {
 
 export function checkUiServers(signal?: AbortSignal): Promise<UiServerCheckResult> {
   return requestJson('/api/check-servers', { method: 'POST', signal });
+}
+
+export function loadUiSessionInputValues(): Promise<{ values: UiSessionInputValue[] }> {
+  return requestJson('/api/input-values', {});
+}
+
+export function saveUiSessionInputValue(
+  name: string,
+  value: string,
+): Promise<{ value: UiSessionInputValue }> {
+  return requestJson(`/api/input-values/${encodeURIComponent(name)}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ value }),
+  });
+}
+
+export function deleteUiSessionInputValue(name: string): Promise<{ deleted: true }> {
+  return requestJson(`/api/input-values/${encodeURIComponent(name)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function clearUiSessionInputValues(): Promise<{ cleared: true }> {
+  return requestJson('/api/input-values', { method: 'DELETE' });
 }
 
 export function startUiScenarioRun(

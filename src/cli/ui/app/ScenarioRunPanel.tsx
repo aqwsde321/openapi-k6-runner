@@ -4,6 +4,7 @@ import { CodeBlock } from '@astryxdesign/core/CodeBlock';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Icon } from '@astryxdesign/core/Icon';
 import { ProgressBar } from '@astryxdesign/core/ProgressBar';
+import { Section } from '@astryxdesign/core/Section';
 import { HStack, StackItem, VStack } from '@astryxdesign/core/Stack';
 import { StatusDot, type StatusDotVariant } from '@astryxdesign/core/StatusDot';
 import { Tab, TabList } from '@astryxdesign/core/TabList';
@@ -25,6 +26,7 @@ import { parseAnsiChunk, type AnsiHtmlColor } from '../../ansi-html.js';
 import type {
   UiRunChunk,
   UiRunInputRequest,
+  UiSessionInputValue,
   UiRunStatus,
   UiSuiteRunResult,
   UiRunTestResult,
@@ -39,7 +41,15 @@ import {
   type UiRunTarget,
   type UiRunTargetKind,
 } from './scenario-runs';
-import { startUiScenarioRun, startUiSuiteRun, submitUiRunInput } from './api';
+import {
+  clearUiSessionInputValues,
+  deleteUiSessionInputValue,
+  loadUiSessionInputValues,
+  saveUiSessionInputValue,
+  startUiScenarioRun,
+  startUiSuiteRun,
+  submitUiRunInput,
+} from './api';
 import { reportIdFromPath } from './report-view';
 
 export interface UiRunController {
@@ -167,6 +177,8 @@ export function ScenarioRunPanel({
   targetName: requestedTargetName,
 }: ScenarioRunPanelProps) {
   const [activeCommand, setActiveCommand] = useState<ScenarioRunCommand>('test');
+  const [inputValuesRevision, setInputValuesRevision] = useState(0);
+  const [isInputValuesOpen, setIsInputValuesOpen] = useState(false);
   const targetId = requestedTargetId ?? scenarioId;
   const targetName = requestedTargetName ?? scenarioName;
   const target = targetId === undefined ? undefined : { kind: targetKind, id: targetId };
@@ -189,12 +201,23 @@ export function ScenarioRunPanel({
     await start(target, command);
   };
 
+  const submitInput = async (run: UiRun, value: string) => {
+    await submit(run, value);
+    setInputValuesRevision((revision) => revision + 1);
+  };
+
   return (
     <VStack height="100%">
       <Toolbar
         dividers={['bottom']}
         endContent={(
           <HStack gap={2}>
+            <Button
+              clickAction={() => setIsInputValuesOpen((isOpen) => !isOpen)}
+              label={isInputValuesOpen ? '입력 변수 닫기' : '입력 변수'}
+              size="sm"
+              variant="secondary"
+            />
             <Button
               clickAction={() => run('validate')}
               icon={<Icon icon="check" size="sm" />}
@@ -231,6 +254,12 @@ export function ScenarioRunPanel({
 
       <StackItem isScrollable size="fill">
         <VStack gap={4} padding={4}>
+          {isInputValuesOpen && (
+            <SessionInputValues
+              isConnected={isConnected}
+              refreshKey={inputValuesRevision}
+            />
+          )}
           {!isConnected && (
             <Banner
               container="section"
@@ -256,7 +285,7 @@ export function ScenarioRunPanel({
               isConnected={isConnected}
               onOpenReport={onOpenReport}
               run={activeRun}
-              submit={submit}
+              submit={submitInput}
             />
           )}
         </VStack>
@@ -442,7 +471,7 @@ function RunInputPrompt({
     <Banner
       container="card"
       defaultIsExpanded
-      description={`${input.index + 1}/${input.totalSteps} · ${input.id}`}
+      description={`${input.index + 1}/${input.totalSteps} · ${input.id} · 같은 입력 변수는 이후 실행에 재사용됩니다.`}
       status="warning"
       title="입력 필요"
     >
@@ -471,6 +500,182 @@ function RunInputPrompt({
         />
       </HStack>
     </Banner>
+  );
+}
+
+function SessionInputValues({
+  isConnected,
+  refreshKey,
+}: {
+  isConnected: boolean;
+  refreshKey: number;
+}) {
+  const [inputValues, setInputValues] = useState<UiSessionInputValue[]>();
+  const [error, setError] = useState<string>();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const result = await loadUiSessionInputValues();
+      setInputValues(result.values);
+      setError(undefined);
+    } catch (loadError) {
+      setError(toErrorMessage(loadError));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh, refreshKey]);
+
+  const save = async (name: string, value: string) => {
+    try {
+      const result = await saveUiSessionInputValue(name, value);
+      setInputValues((current) => current?.map((input) => (
+        input.name === name ? result.value : input
+      )) ?? [result.value]);
+      setError(undefined);
+    } catch (saveError) {
+      setError(toErrorMessage(saveError));
+    }
+  };
+
+  const remove = async (name: string) => {
+    try {
+      await deleteUiSessionInputValue(name);
+      setInputValues((current) => current?.filter((input) => input.name !== name) ?? []);
+      setError(undefined);
+    } catch (removeError) {
+      setError(toErrorMessage(removeError));
+    }
+  };
+
+  const clear = async () => {
+    if (!window.confirm('이 UI 세션의 입력 변수를 모두 초기화할까요?')) return;
+
+    try {
+      await clearUiSessionInputValues();
+      setInputValues([]);
+      setError(undefined);
+    } catch (clearError) {
+      setError(toErrorMessage(clearError));
+    }
+  };
+
+  return (
+    <Section dividers={['bottom']} padding={3} variant="muted">
+      <VStack gap={3}>
+        <HStack gap={2} hAlign="between" vAlign="center" wrap="wrap">
+          <VStack gap={1}>
+            <Text type="label" weight="semibold">입력 변수</Text>
+            <Text color="secondary" type="supporting">
+              같은 이름은 이 UI 서버가 실행 중인 동안 재사용됩니다.
+            </Text>
+          </VStack>
+          {(inputValues?.length ?? 0) > 0 && (
+            <Button
+              clickAction={clear}
+              isDisabled={!isConnected}
+              label="전체 초기화"
+              size="sm"
+              variant="destructive"
+            />
+          )}
+        </HStack>
+
+        {error !== undefined && (
+          <Banner
+            container="section"
+            description={error}
+            status="error"
+            title="입력 변수 처리 실패"
+          />
+        )}
+
+        {isLoading && inputValues === undefined ? (
+          <Text color="secondary" type="supporting">입력 변수 불러오는 중…</Text>
+        ) : inputValues === undefined || inputValues.length === 0 ? (
+          <Text color="secondary" type="supporting">
+            실행 중 처음 입력한 값이 여기에 저장됩니다. YAML과 파일은 바꾸지 않습니다.
+          </Text>
+        ) : (
+          <VStack gap={2}>
+            {inputValues.map((input) => (
+              <SessionInputValueRow
+                input={input}
+                isDisabled={!isConnected}
+                key={input.name}
+                onDelete={remove}
+                onSave={save}
+              />
+            ))}
+          </VStack>
+        )}
+      </VStack>
+    </Section>
+  );
+}
+
+function SessionInputValueRow({
+  input,
+  isDisabled,
+  onDelete,
+  onSave,
+}: {
+  input: UiSessionInputValue;
+  isDisabled: boolean;
+  onDelete(name: string): Promise<void>;
+  onSave(name: string, value: string): Promise<void>;
+}) {
+  const [value, setValue] = useState(input.value);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => setValue(input.value), [input.value]);
+
+  const save = async (event: FormEvent) => {
+    event.preventDefault();
+    if (isDisabled || value === input.value) return;
+    setIsSaving(true);
+    try {
+      await onSave(input.name, value);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <HStack as="form" gap={2} onSubmit={save} vAlign="end" wrap="wrap">
+      <StackItem size="fill">
+        <TextInput
+          description={input.label === undefined ? undefined : input.name}
+          isDisabled={isDisabled}
+          label={input.label ?? input.name}
+          onChange={setValue}
+          size="sm"
+          type="text"
+          value={value}
+          width="100%"
+        />
+      </StackItem>
+      <Button
+        isDisabled={isDisabled || value === input.value}
+        isLoading={isSaving}
+        label="저장"
+        size="sm"
+        type="submit"
+        variant="secondary"
+      />
+      <Button
+        clickAction={() => onDelete(input.name)}
+        isDisabled={isDisabled}
+        label="삭제"
+        size="sm"
+        variant="ghost"
+      />
+    </HStack>
   );
 }
 
