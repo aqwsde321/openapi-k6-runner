@@ -6,6 +6,13 @@
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-17
+
+### Added
+
+- UI에서 입력한 변수를 서버 세션 동안 보관하고, 이후 scenario와 suite 실행에서 같은 이름의 입력값을 자동으로 재사용합니다.
+- UI에서 저장된 입력값을 조회·수정·개별 삭제하거나 전체 초기화할 수 있습니다.
+
 ## [0.18.0] - 2026-08-17
 
 ### Added
@@ -321,7 +328,8 @@
 - 패키지명을 `openapi-k6-runner`에서 `openapi-k6`로 바꾸고 npm 공개 배포 가능 형태로 정리했습니다.
 - `load-tests/README.md` scaffold 템플릿을 npm 배포 버전 사용법 중심으로 정리했습니다.
 
-[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/aqwsde321/openapi-k6-runner/compare/v0.15.0...v0.16.0
